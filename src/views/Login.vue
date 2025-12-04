@@ -46,19 +46,13 @@ import { useAuthStore } from '@/stores/authStore.ts'
 import { jwtDecode } from 'jwt-decode'
 import Layout from '@/views/Layout.vue'
 import {
-  getAuthDB,
-  resetAuthDB,
-  ensureAuthStoreReady
-} from '@/utils/indexedDbUtils'
-import { saveSessionData } from '@/utils/AuthDBManager'
-import {
   verifyIndexedDBSetup,
   checkAndRestoreTokens,
   restoreUserInfo,
   isJwtExpired,
   refreshToken
 } from '@/utils/api.ts'
-
+import { saveSessionData } from '@/utils/AuthDBManager'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -66,7 +60,9 @@ const toast = useToast()
 const router = useRouter()
 
 const loading = ref(false)
-const authCheckInProgress = ref(true)
+const postLoginLoading = ref(false)
+
+const auth = useAuthStore()
 
 const initialValues = {
   email: localStorage.getItem("email") || sessionStorage.getItem("email") || "",
@@ -77,41 +73,34 @@ const initialValues = {
 const schema = yup.object({
   email: yup.string().required("L’e-mail est requis").email("Format invalide"),
   password: yup.string().required("Mot de passe requis").min(4, "Min 4 caractères"),
-  botField: yup.string().max(0) // doit rester vide
+  botField: yup.string().max(0)
 })
 
-onMounted(async () => {
-  await verifyIndexedDBSetup()
-  await checkAndRestoreTokens()
-  await restoreUserInfo()
-
-  let jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt")
-
-  if (jwt && !isJwtExpired(jwt)) {
-    router.replace("/dashboard")
-    return
-  }
-
-  const refreshTokenExists = localStorage.getItem("refreshToken") || sessionStorage.getItem("refreshToken")
-
-  if (!jwt || isJwtExpired(jwt)) {
-    if (!refreshTokenExists) {
-      authCheckInProgress.value = false
-      return
-    }
-
+onMounted(() => {
+  (async () => {
     try {
-      jwt = await refreshToken()
-      if (jwt) {
+      await verifyIndexedDBSetup()
+      await checkAndRestoreTokens()
+      await restoreUserInfo()
+
+      let jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt")
+      if (jwt && !isJwtExpired(jwt)) {
         router.replace("/dashboard")
         return
       }
-    } catch (e) {
-      console.error("Refresh échoué", e)
-    }
-  }
 
-  authCheckInProgress.value = false
+      const refreshTokenExists = localStorage.getItem("refreshToken") || sessionStorage.getItem("refreshToken")
+      if (refreshTokenExists && (!jwt || isJwtExpired(jwt))) {
+        const newJwt = await refreshToken()
+        if (newJwt) {
+          router.replace("/dashboard")
+          return
+        }
+      }
+    } catch (e) {
+      console.warn("Session restore error:", e)
+    }
+  })()
 })
 
 async function sha256(text) {
@@ -127,7 +116,6 @@ async function onSubmit(values) {
   }
 
   loading.value = true
-
   try {
     const hashedPassword = await sha256(values.password)
     const deviceInfo = `${navigator.platform} - ${navigator.userAgent}`
@@ -150,38 +138,38 @@ async function onSubmit(values) {
     const data = await response.json()
     if (!data.jwt) throw new Error(data?.message || "Échec de connexion")
 
-    await saveSessionData({
-      jwt: data.jwt,
-      refreshToken: data.refreshToken,
-      sessionId: data.sessionId,
-      userData: {
-        prenom: jwtDecode(data.jwt)?.prenom || '',
-        email: jwtDecode(data.jwt)?.email || ''
-      }
-    })
 
-    const auth = useAuthStore()
-    auth.setUserToken(data.jwt)
-    auth.setRefreshToken(data.refreshToken)
-    auth.setSessionId(data.sessionId)
-    await auth.loadUser()
 
-    toast.success("Connexion réussie 🎉")
-    router.replace("/dashboard")
+   await auth.setSessionData({
+  jwt: data.jwt,
+  refreshToken: data.refreshToken,
+  sessionId: data.sessionId,
+  userData: {
+    prenom: jwtDecode(data.jwt)?.prenom || '',
+    email: jwtDecode(data.jwt)?.email || ''
+  }
+})
+
+
+router.replace("/dashboard") // Redirection immédiate
+
+// 🔁 Lancement du chargement utilisateur en arrière-plan (non bloquant)
+auth.loadUser().catch(err => {
+  console.warn("⚠️ Chargement utilisateur en échec après login :", err)
+})
+
   } catch (error) {
-toast.error(error.message || "Erreur serveur.")
-const card = document.querySelector('.card')
-if (card) {
-  card.classList.add('shake')
-  setTimeout(() => card.classList.remove('shake'), 500)
-}
+    toast.error(error.message || "Erreur serveur.")
+    const card = document.querySelector('.card')
+    if (card) {
+      card.classList.add('shake')
+      setTimeout(() => card.classList.remove('shake'), 500)
+    }
   } finally {
     loading.value = false
   }
 }
 </script>
-
-
 
 
 

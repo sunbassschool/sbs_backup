@@ -461,11 +461,11 @@ async initAuth() {
           console.log(`🕓 Refresh auto prévu dans ${Math.round(timeBeforeRefresh / 1000)} sec`);
           setTimeout(() => {
             console.log("🔄 Refresh anticipé déclenché");
-            this.refreshJwt(); // ✅ remplace l'appel incorrect
+            this.refreshToken();
           }, timeBeforeRefresh);
         } else {
           console.warn("⏱️ Le token expire bientôt → refresh immédiat");
-          this.refreshJwt(); // ✅ aussi ici
+          this.refreshToken();
         }
       } catch (e) {
         console.warn("⚠️ Impossible de décoder le JWT pour planifier le refresh :", e);
@@ -498,15 +498,45 @@ async initAuth() {
 
   } catch (err) {
     console.warn("⚠️ initAuth erreur :", err);
-  } finally {
-    this.authLoading = false;
-    this.isInitDone = true;
-    this.isRefreshingToken = false;
+  } // Ajout d'un flag séparé pour loader non-blockant
+this.authLoading = true;
 
-    if (this.showOverlay !== undefined) this.showOverlay = false;
+try {
+  const token = await getValidToken();
+  if (token) {
+    this.jwt = token;
 
-    this.startAutoRefresh();
+    // Planification refresh anticipé
+    try {
+      const payload = decodeJwt(token);
+      const now = Date.now();
+      const exp = payload.exp * 1000;
+      const timeBeforeRefresh = exp - now - 60000;
+      if (timeBeforeRefresh > 0) {
+        setTimeout(() => this.refreshToken(), timeBeforeRefresh);
+      } else {
+        this.refreshToken();
+      }
+    } catch (e) { console.warn("⚠️ Impossible de décoder JWT:", e); }
+
+    // Chargement utilisateur
+    await this.loadUser().catch(err => console.warn("⚠️ loadUser erreur :", err));
   }
+} catch (err) {
+  console.warn("⚠️ initAuth erreur :", err);
+} finally {
+  // Fin du loader non-blockant
+  this.authLoading = false;
+
+  // L'app est prête à s'afficher même si user n'est pas encore chargé
+  this.isInitDone = true;
+  this.isRefreshingToken = false;
+
+  if (this.showOverlay !== undefined) this.showOverlay = false;
+
+  this.startAutoRefresh();
+}
+
 }
 
 ,

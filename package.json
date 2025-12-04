@@ -38,7 +38,7 @@
     "pinia": "^2.3.1",
     "pitchy": "^4.1.0",
     "shepherd.js": "^14.5.0",
-    "swiper": "^11.2.4",
+    "swiper": "^11.2.10",
     "vee-validate": "^4.15.1",
     "vue": "^3.5.13",
     "vue-cropperjs": "^5.0.0",

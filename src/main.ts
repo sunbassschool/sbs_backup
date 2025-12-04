@@ -1,34 +1,27 @@
-import { createApp, watch } from "vue";
-import "font-awesome/css/font-awesome.min.css";
-import { createPinia } from "pinia";
+import { createApp } from "vue";
 import App from "@/App.vue";
-import router from "./router/index";
+import { createPinia } from "pinia";
+import router from "./router";
+import { useAuthStore } from "@/stores/authStore";
 import Toast from 'vue-toastification';
+
+import "font-awesome/css/font-awesome.min.css";
 import "vue-toastification/dist/index.css";
 import "./assets/main.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "@fortawesome/fontawesome-free/css/all.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
-  const { useAuthStore } = await import("@/stores/authStore.js");
+
+import {
+  verifyIndexedDBSetup,
+  preventIndexedDBCleanup,
+  checkIndexedDBStatus
+} from "@/utils/api.ts";
+
 // ============================================================
-// 🎸 SunBassSchool — Gestion Service Worker + UI Update
+// 🎸 SunBassSchool — Service Worker UI Helpers
 // ============================================================
-const app = createApp(App);
-app.use(Toast, {
-  position: 'bottom-center',         // ✔️ au centre bas
-  timeout: 3000,                     // ⏱️ 3s avant disparition auto
-  closeOnClick: true,
-  pauseOnFocusLoss: true,
-  pauseOnHover: true,
-  draggable: true,
-  hideProgressBar: false,
-  maxToasts: 3,
-  newestOnTop: true,
-  transition: 'Vue-Toastification__fade'
-});
-/* -----------------------------------------------------------
-   🔥 1 — TOAST "Nouvelle version disponible"
------------------------------------------------------------ */
+
 function showUpdateToast(registration: ServiceWorkerRegistration) {
   let toast = document.getElementById("update-toast");
 
@@ -41,7 +34,6 @@ function showUpdateToast(registration: ServiceWorkerRegistration) {
         <button id="update-btn">Mettre à jour</button>
       </div>
     `;
-
     document.body.appendChild(toast);
 
     const style = document.createElement("style");
@@ -72,21 +64,14 @@ function showUpdateToast(registration: ServiceWorkerRegistration) {
   }
 
   toast.style.display = "block";
-
   const btn = document.getElementById("update-btn") as HTMLButtonElement | null;
-  if (!btn) return;
-
-  btn.onclick = () => {
+  btn?.addEventListener("click", () => {
     registration.waiting?.postMessage({ type: "SKIP_WAITING" });
     window.location.reload();
-  };
+  });
 }
 
-/* -----------------------------------------------------------
-   🔥 2 — OVERLAY PREMIUM "Mise à jour en cours"
------------------------------------------------------------ */
 let swInstallStart = 0;
-
 function showInstallingOverlay() {
   let overlay = document.getElementById("sw-install-overlay");
 
@@ -99,7 +84,6 @@ function showInstallingOverlay() {
         <p class="sbs-text">Mise à jour SunBassSchool…</p>
       </div>
     `;
-
     document.body.appendChild(overlay);
 
     if (!document.getElementById("sw-install-style")) {
@@ -150,20 +134,12 @@ function showInstallingOverlay() {
 function hideOverlay() {
   const overlay = document.getElementById("sw-install-overlay");
   if (!overlay) return;
-
   overlay.style.animation = "fadeOutOverlay 0.4s ease-out forwards";
-
-  setTimeout(() => {
-    overlay.remove();
-  }, 400);
+  setTimeout(() => overlay.remove(), 400);
 }
 
-/* -----------------------------------------------------------
-   🔥 3 — EVENT LISTENERS SW
------------------------------------------------------------ */
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
-
     if (event.data?.type === "sw-installing") {
       swInstallStart = Date.now();
       showInstallingOverlay();
@@ -173,42 +149,40 @@ if ("serviceWorker" in navigator) {
       const elapsed = Date.now() - swInstallStart;
       const minVisible = 1200;
       const delay = elapsed < minVisible ? minVisible - elapsed : 0;
-
       setTimeout(() => hideOverlay(), delay);
     }
 
     if (event.data?.type === "sw-update-available") {
-      // si jamais tu veux envoyer un message custom
+      // Optionnel : afficher notification
     }
   });
 
-  // Détection officielle via la registration
-  navigator.serviceWorker.ready.then((reg) => {
-    if (reg.waiting) showUpdateToast(reg);
+  navigator.serviceWorker.ready.then((registration) => {
+    // 🔔 Affiche le toast si une mise à jour est déjà en attente
+    if (registration.waiting) showUpdateToast(registration);
+
+    // 🔄 Détection automatique d'une nouvelle version
+    registration.addEventListener("updatefound", () => {
+      const newSW = registration.installing;
+      newSW?.addEventListener("statechange", () => {
+        if (newSW.state === "installed" && navigator.serviceWorker.controller) {
+          showUpdateToast(registration);
+        }
+      });
+    });
   });
 }
 
-/* -----------------------------------------------------------
-   🔥 4 — INITIALISATION APP
------------------------------------------------------------ */
 
-import { verifyIndexedDBSetup, preventIndexedDBCleanup, checkIndexedDBStatus } from "@/utils/api.ts";
-import { getCache } from "@/utils/cacheManager";
+// ============================================================
+// 🚀 INITIALISATION DE L'APP
+// ============================================================
 
-const loadingScreen = document.getElementById("loading-screen");
-const appContainer = document.getElementById("app");
+export async function initializeApp() {
+  const loadingScreen = document.getElementById("loading-screen");
+  const appContainer = document.getElementById("app");
 
-function finalizeApp() {
-  if (loadingScreen) {
-    loadingScreen.style.opacity = "0";
-    setTimeout(() => loadingScreen.style.display = "none", 600);
-  }
-  if (appContainer) appContainer.classList.add("app-visible");
-}
-
-async function initializeApp() {
   let dbReady = false;
-
   try {
     dbReady = await verifyIndexedDBSetup();
   } catch {}
@@ -225,16 +199,30 @@ async function initializeApp() {
   const pinia = createPinia();
   app.use(pinia);
 
-
   const authStore = useAuthStore();
   await authStore.initAuth();
 
   app.use(router);
+  app.use(Toast, {
+    position: 'bottom-center',
+    timeout: 3000,
+    closeOnClick: true,
+    pauseOnFocusLoss: true,
+    pauseOnHover: true,
+    draggable: true,
+    hideProgressBar: false,
+    maxToasts: 3,
+    newestOnTop: true,
+    transition: 'Vue-Toastification__fade'
+  });
+
   app.mount("#app");
 
   router.isReady().then(() => {
-    requestAnimationFrame(() => setTimeout(() => finalizeApp(), 0));
+    requestAnimationFrame(() => {
+      if (loadingScreen) loadingScreen.style.opacity = "0";
+      setTimeout(() => loadingScreen && (loadingScreen.style.display = "none"), 600);
+      if (appContainer) appContainer.classList.add("app-visible");
+    });
   });
 }
-
-export default initializeApp;

@@ -1,17 +1,31 @@
-// ✅ Import Workbox
 import { precacheAndRoute } from 'workbox-precaching';
 
-// ✅ Injection automatique par vite-plugin-pwa
 precacheAndRoute(self.__WB_MANIFEST);
 
-// ✅ Événements classiques
-self.addEventListener("install", () => {
+// Envoi d'un message aux clients
+function sendMessageToClients(message) {
+  self.clients.matchAll({ type: "window" }).then(clients => {
+    clients.forEach(client => {
+      client.postMessage({ type: message });
+    });
+  });
+}
+
+self.addEventListener("install", (event) => {
   console.log("[SW] install");
+  sendMessageToClients("sw-installing");
   self.skipWaiting();
 });
 
-self.addEventListener("activate", () => {
+self.addEventListener("activate", (event) => {
   console.log("[SW] activate");
+  sendMessageToClients("sw-activated");
   self.clients.claim();
 });
-// maj du 02/11/2025 10:02:00
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    console.log("[SW] skipWaiting forcé");
+    self.skipWaiting();
+  }
+});

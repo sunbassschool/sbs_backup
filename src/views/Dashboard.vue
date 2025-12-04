@@ -1,28 +1,23 @@
+
 <template>
   <Layout>
     <div class="container d-flex flex-column align-items-center justify-content-center">
-      
-   <!-- 🔄 Spinner affiché pendant le chargement principal (pas juste la note) -->
-<div v-if="isLoading && !isNoteLoading" class="logout-container-wrapper">
-  <div class="logout-container">
-    <div class="logout-spinner"></div>
-    <p class="logout-text">Chargement de ton compte...</p>
-  </div>
-</div>
-
-
+      <!-- 🔄 Spinner affiché pendant le chargement principal (pas juste la note) -->
+      <div v-if="isLoading && !isNoteLoading" class="logout-container-wrapper">
+        <div class="logout-container">
+          <div class="logout-spinner"></div>
+          <p class="logout-text">Chargement de ton compte...</p>
+        </div>
+      </div>
 
       <!-- 🔒 Si l'élève n'est pas connecté -->
-  <!-- Plus besoin de condition, Layout gère tout -->
-
+      <!-- Plus besoin de condition, Layout gère tout -->
 
       <!-- ✅ Contenu principal si l'élève est connecté -->
-<div v-if="!isLoading || isNoteLoading" class="content">
-
-
-        <div 
-          v-for="(card, index) in cards" 
-          :key="index" 
+      <div class="content" v-show="!isLoading || cards.length">
+        <div
+          v-for="(card, index) in cards"
+          :key="index"
           class="fade-in position-relative"
           :class="{ 'first-card': index === 0 }"
         >
@@ -31,75 +26,71 @@
             <div>
               <h3 class="h5 mb-1 d-flex align-items-center">
                 {{ card.title }}
-
-                <!-- 🔄 Bouton mise à jour visible uniquement sur la première carte -->
-                
-
-
               </h3>
-             <div class="text-muted mb-0">
-  <component 
-    v-if="card.renderAsComponent" 
-    :is="card.renderAsComponent"
-  />
-  <p v-else v-html="card.text"></p>
-</div>
+              <div class="text-muted mb-0">
+                <component
+                  v-if="card.renderAsComponent"
+                  :is="card.renderAsComponent"
+                />
+                <p v-else v-html="card.text"></p>
+              </div>
+            </div>
+          </div>
 
-            
-            </div> 
-          </div> 
-          
-          <div v-if="index === 1" class="dashboard-card rounded-3 p-4 d-flex flex-column">
+          <div
+            v-if="index === 1"
+            class="dashboard-card rounded-3 p-4 d-flex flex-column"
+          >
             <h3 class="h5 mb-2">🎶 📝 Bloc note</h3>
-           
-      <div v-if="isNoteLoading" class="form-control mt-2 loading-indicator" style="min-height: 150px; display: flex; align-items: center; justify-content: center;">
-  ⏳ Chargement de ta note...
-</div>
-<textarea
-  v-else
-  v-model="note"
-  class="form-control mt-2"
-  placeholder="Écris ta note ici..."
-  rows="5"
-  @input="onNoteInput">
-</textarea>
 
-<div class="d-flex justify-content-end mt-1">
-  <button 
-  class="btn refresh-note-btn d-flex align-items-center gap-2 px-3 py-1"
-  @click="fetchNote(true)"
-  :disabled="isRefreshingNote"
-  :class="{ 'no-border': isRefreshingNote }"
->
-  <span v-if="!isRefreshingNote">📥 Charger la dernière note</span>
-  <span v-else class="custom-spinner" role="status" aria-hidden="true"></span>
-</button>
+            <div
+              v-if="isNoteLoading"
+              class="form-control mt-2 loading-indicator"
+              style="min-height: 150px; display: flex; align-items: center; justify-content: center;"
+            >
+              ⏳ Chargement de ta note...
+            </div>
 
-</div>
+            <textarea
+              v-else
+              v-model="note"
+              class="form-control mt-2"
+              placeholder="Écris ta note ici..."
+              rows="5"
+              @input="onNoteInput"
+            ></textarea>
 
+            <div class="d-flex justify-content-end mt-1">
+              <button
+                class="btn refresh-note-btn d-flex align-items-center gap-2 px-3 py-1"
+                @click="fetchNote(true)"
+                :disabled="isRefreshingNote"
+                :class="{ 'no-border': isRefreshingNote }"
+              >
+                <span v-if="!isRefreshingNote">📥 Charger la dernière note</span>
+                <span
+                  v-else
+                  class="custom-spinner"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+              </button>
+            </div>
 
-
-  
-  <div class="clear-note-container">
-  <i 
-    v-if="note.length" 
-    @click.stop="clearNote" 
-    class="bi bi-x-circle clear-note-btn">
-  </i>
-</div>
-
-
-
-  
-</div>
-         
-          
+            <div class="clear-note-container">
+              <i
+                v-if="note.length"
+                @click.stop="clearNote"
+                class="bi bi-x-circle clear-note-btn"
+              ></i>
+            </div>
+          </div>
         </div>
       </div>
-
     </div>
   </Layout>
 </template>
+
 
 
 <script>
