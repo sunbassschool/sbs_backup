@@ -30,7 +30,7 @@
           class="fade-in position-relative"
           :class="{ 'first-card': index === 0 }"
         >
-          <div class="dashboard-card rounded-3 p-4 d-flex align-items-center">
+          <div class="dashboard-card rounded-3 p- d-flex align-items-center">
             <i :class="card.icon" class="icon me-3"></i>
             <div>
               <h3 class="h5 mb-1 d-flex align-items-center">
@@ -47,10 +47,11 @@
           </div>
 
           <!-- Bloc note -->
-          <div
-            v-if="index === 1"
-            class="dashboard-card rounded-3 p-4 d-flex flex-column"
-          >
+         <div
+  v-if="index === cards.length - 1"
+  class="dashboard-card rounded-3 p-3 d-flex flex-column"
+>
+
             <h3 class="h5 mb-2">🎶 📝 Bloc note</h3>
 
  <div
@@ -358,7 +359,11 @@ async syncNoteWithAPI() {
       localStorage.setItem(key, "");
       this.updateNote();
     },
-
+// méthode pour redirection 
+goToUploads() {
+  this.$router.push("/eleve-uploads")
+}
+,
     // -------------------------
     //  PLANNING / CARDS
     // -------------------------
@@ -445,19 +450,38 @@ const s = rawStatus.toString().toUpperCase().trim();
 
   console.log("🔍 STATUTS REÇUS:", data.planning.map(c => c.status || c.statut));
   console.log("🎯 prochain cours retenu:", prochain);
+this.cards = [
+  {
+    icon: "bi bi-calendar-event",
+    title: "Prochain Cours",
+    text: prochain
+      ? this.renderProchainCours(prochain)
+      : this.renderNoCourse(),
+  },
 
-  this.cards = [
-    {
-      icon: "bi bi-calendar-event",
-      title: "Prochain Cours",
-      text: prochain ? this.renderProchainCours(prochain) : this.renderNoCourse(),
-    },
-    {
-      icon: "bi bi-flag",
-      title: "Objectif actuel",
-      text: this.auth.user?.objectif || "🎯 Aucun objectif défini",
-    }
-  ];
+  {
+    icon: "bi bi-upload",
+    title: "Envoyer un fichier",
+    text: `
+      🎼 Partitions, audio, vidéo…<br>
+      <div
+        onclick="window.vueRouterPush('/mes-uploads')"
+        class="planning-bouton"
+        style="margin-top:8px"
+      >
+        📎 Envoyer un fichier
+      </div>
+    `
+  },
+
+  {
+    icon: "bi bi-flag",
+    title: "Objectif actuel",
+    text: this.auth.user?.objectif || "🎯 Aucun objectif défini",
+  }
+];
+
+
 
   this.isLoading = false;
   this.dashboardReady = true;

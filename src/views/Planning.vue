@@ -95,6 +95,16 @@
       ↻ Reporter ce cours
     </button>
 
+
+<!-- bouton d'envoi pour l'upload -->
+<button
+  class="btn btn-primary w-100 mb-2"
+  @click="openUploadModal"
+>
+  📎 Envoyer un fichier
+</button>
+
+
     <button class="btn btn-secondary w-100" @click="closeCourseMenu">
       Annuler
     </button>
@@ -156,6 +166,44 @@
 >
   {{ toast.message }}
 </div>
+<!-- MODALE UPLOAD FICHIER -->
+<div
+  v-if="showUploadModal"
+  class="sbs-modal"
+  @click.self="closeUploadModal"
+>
+  <div class="sbs-modal-content" @click.stop>
+    <h5 class="mb-3">
+      📎 Fichier pour le cours du {{ selectedCourse?.formattedDate }}
+    </h5>
+
+    <input
+      type="file"
+      class="form-control mb-3"
+      @change="onFileSelected"
+    />
+
+    <div v-if="uploadProgress > 0" class="progress mb-3">
+      <div
+        class="progress-bar"
+        role="progressbar"
+        :style="{ width: uploadProgress + '%' }"
+      ></div>
+    </div>
+
+    <button
+      class="btn btn-primary w-100 mb-2"
+      :disabled="!selectedFile || isUploading"
+      @click="uploadFile"
+    >
+      📤 Envoyer
+    </button>
+
+    <button class="btn btn-secondary w-100" @click="closeUploadModal">
+      Annuler
+    </button>
+  </div>
+</div>
 
 
   </Layout>
@@ -175,11 +223,15 @@ export default {
   name: "Planning",
   components: { Layout },
   setup() {
+    const log = (...args) => {
+  console.log("📎 UPLOAD", ...args)
+}
+
     // === URLs API ===
     const profId = computed(() => auth.user?.prof_id || "");
 
 const routes = {
-  POST: "AKfycbwwOVKRyNhTwaadcUlS_9uKCVGi5meTT_Bxv1xJeGmk8KyDIumIMa2ZcUMsCJ3S8PFUqA/exec"
+  POST: "AKfycbzEy7SsX05sM0XYPaZtEafSn7BuDFMjRFFDyOhUw4R-q2qo53V0DohCf4bXYh2lZd_gMw/exec"
 };
 
 // === Helper POST via proxy ===
@@ -191,6 +243,12 @@ const closeAllModals = () => {
   showCourseMenu.value = false;
   showReportModal.value = false;
 };
+// ====== ref pour upload file ====
+const showUploadModal = ref(false)
+const selectedFile = ref(null)
+const uploadProgress = ref(0)
+const isUploading = ref(false)
+//============================
 // Label affiché
 const statusLabel = (status) => {
   switch (status) {
@@ -299,7 +357,7 @@ const cacheKey = `planning_${email.value}_${profId.value}`;
   profId: profId.value
 });
 
-    const baseURL = "https://script.google.com/macros/s/AKfycbwwOVKRyNhTwaadcUlS_9uKCVGi5meTT_Bxv1xJeGmk8KyDIumIMa2ZcUMsCJ3S8PFUqA/exec";
+    const baseURL = "https://script.google.com/macros/s/AKfycbxY657E4WaUA-WB-hDABee5I5LY3oWfHkiWoZfIqSNAyh_cBSVje_a20UtEd0z9Qnl2NA/exec";
 const internalURL = `${baseURL}?route=planning&email=${encodeURIComponent(email.value)}&prof_id=${encodeURIComponent(profId.value)}`;
     const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(internalURL)}`;
     const response = await axios.get(finalURL);
@@ -419,6 +477,146 @@ const submitReport = async () => {
 };
 
 
+function openUploadModal() {
+  log("openUploadModal()")
+  showCourseMenu.value = false
+  showUploadModal.value = true
+}
+
+
+function closeUploadModal() {
+  showUploadModal.value = false
+  selectedFile.value = null
+  uploadProgress.value = 0
+}
+
+function onFileSelected(event) {
+  selectedFile.value = event.target.files[0]
+  log("file selected", selectedFile.value?.name, selectedFile.value?.size)
+}
+
+
+async function uploadFile() {
+  log("uploadFile() CLICK")
+
+  if (!selectedFile.value) {
+    log("❌ no file selected")
+    return
+  }
+
+  if (!selectedCourse.value) {
+    log("❌ no selectedCourse")
+    return
+  }
+
+  isUploading.value = true
+
+  try {
+    // 1️⃣ récupérer le token d’upload
+
+const endpoint = routes.POST
+const url = getProxyPostURL(endpoint)
+
+log("requesting upload token")
+
+const response = await axios.post(url, {
+  route: "getuploadtoken",
+  jwt: auth.jwt,
+  prof_id: auth.user.prof_id,
+  cours_id: selectedCourse.value.ID_Cours,
+  eleve_id: auth.user.user_id
+})
+
+log("token response", response.data)
+
+if (!response.data || !response.data.token) {
+  throw new Error("Token invalide ou manquant")
+}
+
+const token = response.data.token
+
+
+
+    // 2️⃣ upload vers GoDaddy
+    const formData = new FormData()
+    formData.append("file", selectedFile.value)
+    formData.append("token", token)
+log("requesting upload token")
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
+log("token response", response.data)
+
+    xhr.upload.onprogress = (e) => {
+      log("progress", uploadProgress.value + "%")
+
+      if (e.lengthComputable) {
+        uploadProgress.value = Math.round((e.loaded / e.total) * 100)
+      }
+    }
+
+xhr.onload = async () => {
+  try {
+    const result = JSON.parse(xhr.responseText)
+    log("upload result", result)
+
+    if (!result.success) {
+      throw new Error("Upload PHP failed")
+    }
+
+    // 📌 Appel GAS pour persister l’upload
+    const endpoint = routes.POST
+    const url = getProxyPostURL(endpoint)
+
+    const attachResponse = await axios.post(url, {
+      route: "attachfiletocours",
+      jwt: auth.jwt,
+      cours_id: result.cours_id,
+      prof_id: result.prof_id,
+      eleve_id: result.eleve_id,
+      file_url: result.url,
+      file_name: result.name,
+      file_size: result.size,
+      file_type: selectedFile.value.type
+    })
+
+    log("attachfiletocours response", attachResponse.data)
+
+    if (!attachResponse.data.success) {
+      throw new Error("attachfiletocours failed")
+    }
+
+    showToast("Fichier envoyé ✔", "success")
+    closeUploadModal()
+
+  } catch (err) {
+    log("❌ post-upload error", err)
+    showToast("Erreur après upload ❌", "error")
+  } finally {
+    isUploading.value = false
+  }
+}
+
+
+    xhr.onerror = () => {
+      throw new Error("Upload échoué")
+      log("upload error")
+
+    }
+
+    xhr.send(formData)
+
+  } catch (err) {
+      log("❌ upload failed", err)
+
+    isUploading.value = false
+    toast.message = "Erreur lors de l’envoi du fichier"
+    toast.type = "error"
+    toast.show = true
+      showToast("Erreur upload ❌", "error")
+
+  }
+}
 
 
    watchEffect(() => {
@@ -488,7 +686,16 @@ onMounted(async () => {
   showReportModal,
   closeAllModals,
     statusLabel,
-  statusClass
+  statusClass,
+  showUploadModal,
+selectedFile,
+uploadProgress,
+isUploading,
+
+openUploadModal,
+closeUploadModal,
+onFileSelected,
+uploadFile,
 };
 
   },

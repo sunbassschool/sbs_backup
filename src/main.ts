@@ -4,6 +4,9 @@ import { createPinia } from "pinia";
 export const pinia = createPinia();
 
 import router from "./router";
+window.vueRouterPush = (path) => {
+  router.push(path)
+}
 import { useAuthStore } from "@/stores/authStore.js";
 
 // Ajoute ça :

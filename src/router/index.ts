@@ -142,6 +142,13 @@ const router = createRouter({
     requiresAuth: true
   }
 },
+{
+  path: "/mes-uploads",
+  name: "EleveUploads",
+  component: () => import("@/views/EleveUploads.vue"),
+  meta: { requiresAuth: true }
+}
+,
     { path: "/moncompte", name: "moncompte", component: moncompte, meta: { requiresAuth: true } },
     { path: "/MesRessources", name: "MesRessources", component: MesRessources },
 
