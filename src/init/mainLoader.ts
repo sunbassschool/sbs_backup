@@ -1,6 +1,6 @@
 // src/init/mainLoader.ts
-import { initializeApp } from "/src/main.ts";
-
+import { initializeApp } from "../main.ts"; // ou "./main", selon ta structure
+import { readKV, saveSessionData, getSessionIdFromDB } from "@/utils/AuthDBManager.ts";
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const el = await waitForElement("#app");

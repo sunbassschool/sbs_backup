@@ -115,12 +115,15 @@
   <script>
   import Layout from "@/views/Layout.vue";
   import { getValidToken } from "@/utils/api.ts";
-  
+  import { useAuthStore } from "@/stores/authStore.js";
+
   export default {
     name: "GestionEleves",
     components: { Layout },
     data() {
       return {
+            auth: useAuthStore(),   // ← nécessaire sinon this.auth = undefined
+
         editing: {},
          updated: {},
         expanded: {}
@@ -138,50 +141,60 @@ champs: [
         eleves: [],
         loading: false,
         error: null,
-        apiURL: "https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec"
+        apiURL: "https://script.google.com/macros/s/AKfycbwWyqUjn5e_ZGHwTU14Xp-QD_Ljll4-XHjr-04lMjcuffqlzLXwn40rHMMYd9Zr-iyOTA/exec"
       };
     },
     async mounted() {
       await this.fetchEleves();
     },
     methods: {
-      async fetchEleves() {
-        this.loading = true;
-        this.error = null;
-  
-        const jwt = await getValidToken();
-        if (!jwt) {
-          this.error = "JWT non valide.";
-          this.loading = false;
-          return;
-        }
-  
-        const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
-          this.apiURL + `?route=geteleves`
-        )}`;
-  
-        try {
-          const res = await fetch(url);
-          const result = await res.json();
-          console.log("📦 Résultat brut reçu :", result);
+    async fetchEleves() {
+  this.loading = true;
+  this.error = null;
 
-          if (Array.isArray(result)) {
- this.eleves = result.sort((a, b) => {
-  if (a.statut === b.statut) return 0;
-  return a.statut === 'inscrit' ? -1 : 1;
-});
+  const jwt = await getValidToken();
+  if (!jwt) {
+    this.error = "JWT non valide.";
+    this.loading = false;
+    return;
+  }
 
-} else {
-  this.error = "Format inattendu reçu depuis le serveur.";
+  const profId = this.auth.user?.prof_id;
+  if (!profId) {
+    this.error = "prof_id manquant.";
+    this.loading = false;
+    return;
+  }
+
+  const base = this.apiURL + `?route=getelevesbyprof&jwt=${jwt}&prof_id=${profId}`;
+
+  const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
+
+  try {
+    const res = await fetch(url);
+    const result = await res.json();
+    console.log("📦 Résultat brut getelevesbyprof :", result);
+
+    if (result?.success && Array.isArray(result.eleves)) {
+      this.eleves = result.eleves.sort((a, b) => {
+        if (a.statut === b.statut) return 0;
+        return a.statut === "inscrit" ? -1 : 1;
+      });
+    } else {
+      this.error = result.message || "Format inattendu reçu depuis le serveur.";
+    }
+
+  } catch (err) {
+    console.error("❌ Erreur fetchEleves :", err);
+    this.error = "Erreur de connexion au serveur.";
+  } finally {
+    this.loading = false;
+  }
 }
+,
 
-        } catch (err) {
-          console.error("❌ Erreur fetchEleves :", err);
-          this.error = "Erreur de connexion au serveur.";
-        } finally {
-          this.loading = false;
-        }
-      },
+
+
       toggleExpand(email) {
         this.expanded = { ...this.expanded, [email]: !this.expanded[email] };
 
@@ -208,20 +221,22 @@ async updateEleve(eleve) {
   }
 
   const url = this.getProxyPostURL(this.apiURL);
-  const payload = {
-    route: "updateelevecomplet",
-    jwt,
-    email: eleve.email,
-    nom: eleve.nom,
-    prenom: eleve.prenom,
-    telephone: eleve.telephone,
-    statut: eleve.statut,
-    objectif: eleve.objectif,
-    trimestre: eleve.trimestre,
-    cursus: eleve.cursus,
-    drive: eleve.drive,
-    youtube: eleve.youtube
-  };
+ const payload = {
+  route: "updateelevecomplet",
+  jwt,
+  prof_id: this.auth.user.prof_id,   // ← obligatoire multi-prof
+  email: eleve.email,
+  nom: eleve.nom,
+  prenom: eleve.prenom,
+  telephone: eleve.telephone,
+  statut: eleve.statut,
+  objectif: eleve.objectif,
+  trimestre: eleve.trimestre,
+  cursus: eleve.cursus,
+  drive: eleve.drive,
+  youtube: eleve.youtube
+};
+
 
   console.log("📤 Payload envoyé à updateelevecomplet :", payload);
   console.log("🌐 URL POST :", url);

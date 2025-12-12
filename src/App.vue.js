@@ -1,5 +1,5 @@
 import { ref, onMounted } from "vue";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore.js";
 import { verifyIndexedDBSetup, restoreTokensIfNeeded } from "@/utils/api.ts";
 import router from "@/router";
 import RefreshOverlay from "@/components/RefreshOverlay.vue";

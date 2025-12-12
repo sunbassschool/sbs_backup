@@ -237,12 +237,13 @@
       <i class="bi bi-trash-fill fs-5"></i>
     </button>
 <button
+  v-if="fb.Type === 'Prof'"
   class="btn btn-sm p-0 text-warning border-0 bg-transparent"
-  title="isEditingFeedback && editingFeedbackId === fb.ID ? 'Annuler' : 'Modifier'"
   @click="startEditFeedback(fb)"
 >
   <i class="bi bi-pencil-square fs-5"></i>
 </button>
+
 
 <!-- ➕/➖ Toggle feedback -->
     <button
@@ -336,18 +337,63 @@
 
 <!-- 🔁 Réponses -->
 <div v-if="reponsesMap[fb.ID]?.length" class="mt-3">
-  <div
-    v-for="rep in reponsesMap[fb.ID]"
-    :key="rep.ID"
-    class="response-block"
-    :class="rep.Type === 'Prof' ? 'prof' : 'eleve'"
-  >
-    <div class="d-flex justify-content-between">
+ <div 
+  v-for="rep in reponsesMap[fb.ID]" 
+  :key="rep.ID"
+  class="response-block"
+  :class="rep.Type === 'Prof' ? 'prof' : 'eleve'"
+>
+
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
       <strong>{{ rep.Type }}</strong>
-      <small>{{ formatDate(rep.Date_Publication) }}</small>
+      <small class="ms-2">{{ formatDate(rep.Date_Publication) }}</small>
     </div>
-    <div class="formatted-content" v-html="rep.Contenu"></div>
+
+    <!-- ✏️ Bouton modifier uniquement pour les réponses du prof -->
+    <button
+      v-if="rep.Type === 'Prof'"
+      class="btn btn-sm p-0 text-warning border-0 bg-transparent"
+      @click="startEditFeedback(rep, 'reply', fb.ID)"
+      title="Modifier cette réponse"
+    >
+      <i class="bi bi-pencil-square fs-6"></i>
+    </button>
+    <button
+  v-if="rep.Type === 'Prof'"
+  class="btn btn-sm p-0 text-danger border-0 bg-transparent ms-2"
+  @click="confirmDeleteReply(rep)"
+  title="Supprimer cette réponse"
+>
+  <i class="bi bi-x-circle fs-5"></i>
+</button>
+
   </div>
+
+  <!-- 📝 Mode édition d’une réponse -->
+<div v-if="isEditingFeedback && String(editingFeedbackId) === String(rep.ID)" class="mt-2">
+    <QuillEditor
+      v-model:content="editingFeedbackContent"
+      content-type="html"
+      theme="snow"
+    />
+    <button
+      class="btn btn-outline-light btn-sm mt-2"
+      @click="submitEditedFeedback"
+    >
+      💾 Enregistrer
+    </button>
+  </div>
+
+  <!-- 📄 Affichage normal -->
+  <div 
+    v-else 
+    class="formatted-content mt-2"
+  v-html="rep.contenuformate || rep.Contenu"
+  ></div>
+
+</div>
+
 </div>
 
 
@@ -454,7 +500,7 @@ isLoadingEleves: false,
       nouveauFeedback: "",
       feedbackSentMessage: "",
       feedbacks: [],
-      apiURL: "https://script.google.com/macros/s/AKfycbw-LmDbIdL0asIu5WrQcskGh1J2Pr_ZxxepoUsC5B5yWpo_WDDH0MqzrFZAPMm0Tyls-A/exec"
+      apiURL: "https://script.google.com/macros/s/AKfycbwipEXouCRxHRYp1R-hHvAp1vJbaQeqZag1f4vl3KBnfhtu5vU6XXM9v-LlhafPPy6q/exec"
     };
     
   },
@@ -521,7 +567,12 @@ canSendFeedback() {
 }
 
 ,
-
+confirmDeleteReply(rep) {
+  if (confirm("Supprimer cette réponse ?")) {
+    this.deleteReply(rep);
+  }
+}
+,
 async toggleHistorique() {
   this.showGlobalFeedbacks = !this.showGlobalFeedbacks;
 
@@ -539,8 +590,44 @@ async toggleHistorique() {
 
 
 ,
+async deleteReply(rep) {
+  const jwt = await getValidToken();
+
+  const payload = {
+    route: "deletefeedback",
+    jwt,
+    feedback_id: rep.ID // l’ID direct de la réponse
+  };
+
+  try {
+    const res = await fetch(this.getProxyPostURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+    if (!result.success) {
+      console.warn("⚠️ Échec suppression :", result.message);
+      return;
+    }
+
+    // Mise à jour locale
+    await this.fetchFeedbacks();
+    if (this.selectedEleve) {
+      this.filterFeedbacksForEleve(this.selectedEleve);
+    }
+
+  } catch (err) {
+    console.error("❌ Erreur deleteReply :", err);
+  }
+}
+,
 async updateFeedbackStatut(feedbackId, newStatut) {
   const jwt = await getValidToken();
+  const cleanId = Number(
+  String(this.editingFeedbackId).replace("ID", "")
+);
   const payload = {
     route: "updatefeedback",
     jwt,
@@ -567,67 +654,59 @@ async updateFeedbackStatut(feedbackId, newStatut) {
   }
 }
 ,
-startEditFeedback(fb) {
-
-  // 🔁 Si on reclique sur le même feedback → on annule l’édition
-  if (this.isEditingFeedback && this.editingFeedbackId === fb.ID) {
-    this.isEditingFeedback = false;
-    this.editingFeedbackId = null;
-    this.editingFeedbackContent = "";
-
-    // 🔥 IMPORTANT : refermer le feedback visuellement
-    this.openedFeedbacks = this.openedFeedbacks.filter(id => id !== fb.ID);
-
-    return;
-  }
-
-  // ✏️ Sinon → on ouvre l’édition
+startEditFeedback(fb, type = "parent", parentId = null) {
   this.isEditingFeedback = true;
   this.editingFeedbackId = fb.ID;
+  this.editingFeedbackType = type;     // "parent" ou "reply"
+  this.editingFeedbackParentId = parentId; // utile pour recharger
   this.editingFeedbackContent = fb.contenuformate || fb.Contenu;
 
-  // 👁️ Si le feedback n'est pas ouvert → on l'ouvre pour afficher l'éditeur
-  if (!this.openedFeedbacks.includes(fb.ID)) {
-    this.openedFeedbacks.push(fb.ID);
+  if (!this.openedFeedbacks.includes(parentId || fb.ID)) {
+    this.openedFeedbacks.push(parentId || fb.ID);
   }
 }
+
 
 
 ,
 async submitEditedFeedback() {
   const jwt = await getValidToken();
 
+  const idClean = Number(String(this.editingFeedbackId).replace("ID", ""));
+
+  const parentIdClean = this.editingFeedbackType === "reply"
+    ? Number(String(this.editingFeedbackParentId).replace("ID", ""))
+    : "";
+
   const payload = {
     route: "updatefeedback",
     jwt,
-    feedback_id: this.editingFeedbackId.replace("ID", ""), // retire le "ID"
+    feedback_id: idClean,
+    id_cours: parentIdClean,
     contenu: this.editingFeedbackContent,
   };
 
-  try {
-    const res = await fetch(this.getProxyPostURL(), {
-      method: "POST",
-    headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload),
-    });
+  console.log("📤 Payload update :", payload);
 
-    const result = await res.json();
-    if (result.success) {
-      this.isEditingFeedback = false;
-      this.editingFeedbackId = null;
-      this.editingFeedbackContent = "";
+  const res = await fetch(this.getProxyPostURL(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
-      await this.fetchFeedbacks(); // recharge
-      this.filterFeedbacksForEleve(this.selectedEleve);
-    } else {
-      alert("Erreur : " + result.message);
-    }
-  } catch (err) {
-    console.error("❌ Erreur API :", err);
+  const result = await res.json();
+  console.log("📥 Retour update :", result);
+
+  if (result.success) {
+    this.isEditingFeedback = false;
+    this.editingFeedbackId = null;
+    this.editingFeedbackContent = "";
+    await this.fetchFeedbacks();
+    if (this.selectedEleve) this.filterFeedbacksForEleve(this.selectedEleve);
   }
 }
+
+
 ,
 toggleUnread() {
   this.showUnreadFeedbacks = !this.showUnreadFeedbacks;
@@ -829,7 +908,7 @@ async deleteFeedback(fb) {
   const payload = {
   route: "deletefeedback",
   jwt,
-  feedback_id: fb.ID.replace("ID", "") // ✅ retire le "ID"
+feedback_id: String(fb.ID).replace("ID", "")
 };
 
   const url = this.getProxyPostURL();

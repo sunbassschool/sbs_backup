@@ -2,71 +2,116 @@
 <html lang="fr" style="background-color: black;">
   <head>
     <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  
-   <style>
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+    <meta 
+      name="viewport" 
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    >
+
+    <style>
       html, body {
         margin: 0;
         padding: 0;
         background: #000 !important;
-        min-height: 100vh; /* hauteur minimale — pas fixe */
-        overflow-x: hidden; /* interdit le scroll horizontal */
+        min-height: 100vh;
+        overflow-x: hidden;
       }
+
       #loading-screen {
+        position: fixed;
+        inset: 0;
+        background: black;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        flex-direction: column;
-        width: 100%;
-        min-height: 100vh;
+        z-index: 9999;
       }
-      .loading-content {
-        max-width: 90vw;
-        text-align: center;
+
+      #loading-logo {
+        width: 90px;
+        opacity: 0;
+        transform: scale(0.9);
+        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
       }
-.user-logged-in .loading-container,
-.user-logged-in .loading-bar {
-  display: none !important;
-}
 
+      #loading-logo.logo-visible {
+        opacity: 1;
+        transform: scale(1);
+      }
 
+      #loading-logo.spin {
+        animation: spin 1.4s linear infinite;
+      }
 
-#app {
-  opacity: 0;
-  transition: opacity 0.5s ease-in-out;
-}
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
 
-#app.app-visible {
-  opacity: 1;
-}
+      /* 🔥 Refresh indicator */
+      #refresh-indicator {
+        width: 140px;
+        height: 4px;
+        margin-top: 25px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        overflow: hidden;
+      }
 
+      .refresh-bar {
+        width: 0%;
+        height: 4px;
+        background: linear-gradient(to right, #ff3300, #ff7b00);
+        animation: refresh-loading 1.2s infinite ease-in-out;
+      }
 
+      @keyframes refresh-loading {
+        0% { width: 0%; }
+        50% { width: 80%; }
+        100% { width: 0%; }
+      }
 
+      .refresh-active {
+        opacity: 1;
+      }
+
+      #app {
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+      }
+
+      #app.app-visible {
+        opacity: 1;
+      }
     </style>
-<body>
-  <!-- 🎸 Loader visible pendant initAuth -->
-<div id="loading-screen">
-  <div class="loading-content">
-    <img
-      id="loading-logo"
-      class="logo-visible spin"
-      src="/app/logo-512x512.png"
-      alt="Chargement SunBassSchool"
-    /><script>
-  document.getElementById("loading-logo")?.classList.add("logo-visible", "spin");
-</script>
+  </head>
 
-    <p id="loading-hint">Connexion à SunBassSchool…</p>
-  </div>
+  <body>
+    <!-- 🔥 Loader global -->
+    <div id="loading-screen">
+      <img id="loading-logo" src="/app/logo-512x512.png" alt="Chargement SunBassSchool" />
 
-</div>
+      <!-- 🔥 Barre visible UNIQUEMENT pendant refresh -->
+      <div id="refresh-indicator">
+        <div class="refresh-bar"></div>
+      </div>
+    </div>
 
+    <div id="app"></div>
+    <script type="module" src="/src/init/mainLoader.ts"></script>
 
-  <div id="app"></div>
-  <script type="module" src="/src/init/mainLoader.ts"></script>
-</body>
-
-
+    <script>
+      // Logo fade-in + spin
+      const logo = document.getElementById("loading-logo");
+      if (logo) {
+        logo.classList.add("logo-visible");
+        logo.classList.add("spin");
+      }
+    </script>
+  </body>
 </html>
 
 <style>
@@ -319,5 +364,37 @@
 }
 
 
+  #refresh-indicator {
+    width: 100%;
+    height: 4px;
+    margin-top: 20px;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+      position: relative;
+  z-index: 10000;
+  }
 
+  .refresh-bar {
+    width: 0%;
+    height: 4px;
+    background: #ff7a00;
+    animation: refresh-loading 1.2s infinite ease-in-out;
+  }
+
+  @keyframes refresh-loading {
+    0% { width: 0%; }
+    50% { width: 80%; }
+    100% { width: 0%; }
+  }
+
+  .refresh-active {
+    opacity: 1;
+  }
+
+  .refresh-hidden {
+    opacity: 0;
+  }
 </style>
+
+

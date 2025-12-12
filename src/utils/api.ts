@@ -14,7 +14,7 @@ import { jwtDecode } from "jwt-decode";
 import type { UserInfo } from "@/utils/types"; // 📌 Adapte le chemin si nécessaire
 import Cookies from "js-cookie";
 import { getAuthDB } from '@/utils/indexedDbUtils'; // chemin selon ton projet
-
+import { saveSessionData,getSessionIdFromDB } from "@/utils/AuthDBManager.ts";
 import axios from "axios";
 import router from "@/router/index.ts"
 let refreshInProgress: Promise<string | null> | null = null;
@@ -348,101 +348,85 @@ export function isTokenExpired(token: string): boolean {
 
 
 
+let refreshPromise: Promise<string | null> | null = null;
+// ============================================================================
+// 🔐 VERSION CORRIGÉE — getValidToken()
+// Renvoie TOUJOURS une string ou null
+// Ne pollue jamais le store avec un objet
+// ============================================================================
+
+
+
+
+
 export async function getValidToken(): Promise<string | null> {
-  console.log("🔍 Vérification rapide du JWT...");
+  const store = useAuthStore();
+  const jwt = store.jwt;
 
-  // ⛔ Blocage si logout en cours
- if (localStorage.getItem("logout_in_progress") === "true") {
-  console.warn("⛔ Blocage du refresh : logout en cours (via localStorage)");
-  return null;
-}
+  if (store.isLoggingOut) return null;
+  if (!jwt) return null;
 
-const authStore = useAuthStore();
-if (authStore.isLoggingOut) {
-  console.warn("⛔ Blocage du refresh : logout en cours (via store)");
-  return null;
-}
-
-
-  // 1️⃣ Lecture rapide : localStorage ou sessionStorage
-  let jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
-  if (jwt && !isJwtExpired(jwt)) {
-    console.log("✅ JWT valide trouvé (local/session)");
-    return jwt;
-  }
-
-  // 2️⃣ Récupération depuis IndexedDB (getToken personnalisé)
-  jwt = await getToken();
-  console.log("📦 getToken() a retourné :", jwt);
-
-  if (jwt && !isJwtExpired(jwt)) {
-    console.log("✅ JWT valide depuis IndexedDB");
-
-    // Sync les storages si refreshToken aussi dispo
-    const refreshToken = await getRefreshTokenFromDB();
-    if (refreshToken) {
-      await syncAllStorages(jwt, refreshToken); // Local + session
+  // Ici tu peux garder ta condition exacte si tu veux limiter au démarrage
+  if (!store.authReady && isJwtExpired(jwt)) {
+    // 🔁 Mutualisation : si un refresh est déjà en cours, on réutilise la même promesse
+    if (refreshPromise) {
+      return await refreshPromise;
     }
 
-    return jwt;
-  }
+    if (!store.refreshToken) return null;
 
-  // 3️⃣ Aucun JWT valide → tentative de refresh
-  console.warn("❗ Aucun JWT valide → refresh nécessaire");
+    document
+      .getElementById("refresh-indicator")
+      ?.classList.add("refresh-active");
 
-  if (isRefreshing) {
-    console.log("⏳ Refresh déjà en cours → en attente");
-    return await isRefreshing;
-  }
+    console.log("🔄 Refresh lancé…");
 
-  // 🔍 Recherche du refreshToken dans tous les stockages
-  const refreshTokenValue =
-    localStorage.getItem("refreshToken")?.trim() ||
-    sessionStorage.getItem("refreshToken")?.trim() ||
-    (await getRefreshTokenFromDB())?.trim();
+    // ✅ ICI : refreshPromise est bien un Promise<string | null>
+    refreshPromise = (async () => {
+      const result = await refreshToken();
+      if (!result || !result.jwt) return null;
 
-  if (!refreshTokenValue) {
-    console.warn("⛔ Aucun refreshToken trouvé → impossible de rafraîchir");
-    return null;
-  }
+      const jwtString = result.jwt;
 
-  try {
-    if (authStore.isLoggingOut) {
-  console.warn("⛔ Refresh annulé : logout en cours (dans try)");
-  return null;
-}
+      // 1️⃣ JWT dans le store
+      store.setUserToken(jwtString);
 
-    console.log("🔄 Refresh lancé en arrière-plan...");
-    isRefreshing = refreshToken(); // Ne pas await ici tout de suite
-    const newJwt = await isRefreshing;
-    console.log("📥 Nouveau JWT après refresh :", newJwt);
+      // 2️⃣ IndexedDB update
+      await saveSessionData({
+        jwt: jwtString,
+        refreshToken: result.refreshToken,
+        sessionId: result.sessionId,
+      });
 
-    if (newJwt) {
-      console.log("✅ Refresh réussi → stockage et utilisateur");
+      // 3️⃣ localStorage synchro
+      localStorage.setItem("refreshToken", result.refreshToken);
+      localStorage.setItem("sessionId", result.sessionId);
 
-      const authStore = useAuthStore();
-      authStore.setUserToken(newJwt); // Écrit dans tous les storages
+      // 4️⃣ store synchro
+      store.refreshToken = result.refreshToken;
+      store.sessionId = result.sessionId;
 
-      // ⚠️ Charge immédiatement l'utilisateur
-      const userLoaded = await authStore.loadUser();
-      if (!userLoaded) {
-        console.warn("⚠️ Chargement user KO après refresh");
-      }
+      return jwtString; // 🔥 cohérent avec Promise<string | null>
+    })();
 
-      return newJwt;
+    try {
+      return await refreshPromise;
+    } finally {
+      refreshPromise = null;
+      document
+        .getElementById("refresh-indicator")
+        ?.classList.remove("refresh-active");
     }
-
-    console.error("❌ Refresh KO → pas de JWT");
-    return null;
-
-  } catch (err) {
-    console.error("❌ Erreur lors du refresh :", err);
-    return null;
-
-  } finally {
-    isRefreshing = null; // Toujours reset après tentative
   }
+
+  return jwt;
 }
+
+
+
+
+
+
 ;
 
 
@@ -1557,234 +1541,123 @@ export async function checkIndexedDBStatus(): Promise<void> {
 }
 export let refreshFailed = false;
 
-import { useAuthStore } from "@/stores/authStore.ts"; // ✅ Ajout de Pinia
-import { getSessionIdFromDB,saveSessionData } from '@/utils/AuthDBManager';
+import { useAuthStore } from "@/stores/authStore.js"; // ✅ Ajout de Pinia
+
 import { clearAuthStoreFromIndexedDB } from "@/utils/storageHelpers";
 
 
 
 
 
-export async function refreshToken(): Promise<string | null> {
-  if (isLoggingOut) {
-    console.warn("⚠️ isLoggingOut était actif mais on tente quand même un refresh...");
-    isLoggingOut = false;
-  }
+// ============================================================================
+// 🔄 REFRESH TOKEN — VERSION PRO
+// API Pure — n'écrit rien, ne touche pas au DOM, ne gère pas le store
+// Compatible Apps Script & store PRO
+// ============================================================================
 
-const authStore = useAuthStore();
+export async function refreshToken(): Promise<{
+  jwt: string;
+  refreshToken: string;
+  sessionId: string;
+  [k: string]: any;
+} | null> {
+  const MAX_RETRIES = 2;     // 1 appel + 2 retries = 3 tentatives
+  const TIMEOUT_MS = 8000;   // timeout client
+  const RETRY_DELAY = 1500;  // pause entre tentatives
 
-// 🚫 Sécurité anti-boucle : si déjà en train de se déconnecter
-if (authStore.isLoggingOut) {
-  console.warn("⛔ Tentative de refresh ignorée : déconnexion en cours");
-  return null;
-}
+  const refreshToken =
+    (localStorage.getItem("refreshToken") || "").trim() ||
+    (sessionStorage.getItem("refreshToken") || "").trim();
 
-authStore.isRefreshingToken = true;
+  const sessionId =
+    (localStorage.getItem("sessionId") || "").trim() ||
+    (sessionStorage.getItem("sessionId") || "").trim();
 
-  // ➤ Si un refresh est déjà en cours :
-  if (isRefreshing) {
-    console.warn("⏳ Un rafraîchissement est déjà en cours...");
-    const result = await isRefreshing;
-    return result; // résultat = string | null (déjà conforme)
-  }
-
-  console.log("🔒 Activation du verrou de rafraîchissement...");
-  isRefreshing = new Promise<string | null>((resolve) => {
-    resolvePromise = resolve;
-  });
-
-  try {
-let token = localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
-
-// ➤ Token OK : on renvoie juste le JWT (pas l'objet)
-if (token && !isJwtExpired(token)) {
-  console.log("✅ Token valide trouvé dans local/session !");
-  resolvePromise?.(token);
-  return token;
-}
-
-// 🔥 Aucun token trouvé → nettoyer session orpheline
-if (!token) {
-  console.warn("❌ Aucun JWT trouvé dans les stockages → suppression des refresh data");
-
-  // ➤ Nettoyage des stockages classiques
-  localStorage.removeItem("refreshToken");
-  sessionStorage.removeItem("refreshToken");
-  localStorage.removeItem("sessionId");
-  sessionStorage.removeItem("sessionId");
-
-  // ➤ Nettoyage IndexedDB (optionnel mais recommandé)
-  await clearAuthStoreFromIndexedDB?.();
-
-  resolvePromise?.(null);
-  return null;
-}
-
-if (!token) {
-  console.warn("❌ Aucun JWT trouvé dans les stockages → abandon du refresh");
-  resolvePromise?.(null);
-  return null;
-}
-
-    // ➤ Récupération du refreshToken
-let storedRefreshToken =
-  (localStorage.getItem("refreshToken") || "").trim() ||
-  (sessionStorage.getItem("refreshToken") || "").trim() ||
-  (await getRefreshTokenFromDB())?.trim();
-
-if (!storedRefreshToken || storedRefreshToken === "undefined" || storedRefreshToken === "") {
-  console.warn("❌ Aucun refreshToken valide trouvé dans les stockages.");
-  console.table({
-    fromLocal: localStorage.getItem("refreshToken"),
-    fromSession: sessionStorage.getItem("refreshToken"),
-    fromIndexedDB: await getRefreshTokenFromDB()
-  });
-
-  await handleRefreshFailure();
-  resolvePromise?.(null);
-  return null;
-}
-
-let sessionId =
-  (localStorage.getItem("sessionId") || "").trim() ||
-  (sessionStorage.getItem("sessionId") || "").trim() ||
-  (await getSessionIdFromDB())?.trim();
-
-if (!sessionId || sessionId === "undefined" || sessionId === "") {
-  console.warn("❌ Aucun sessionId valide trouvé dans les stockages.");
-  console.table({
-    fromLocal: localStorage.getItem("sessionId"),
-    fromSession: sessionStorage.getItem("sessionId"),
-    fromIndexedDB: await getSessionIdFromDB()
-  });
-
-  await handleRefreshFailure();
-  resolvePromise?.(null);
-  return null;
-}
-
-
-
-    const base =
-      "https://script.google.com/macros/s/AKfycbzrwUcf0Vbb8_QAOKkjK9dVnOpCG4L4JntwLImgimpdA4FYtYUvLHivN8Ria8Yp4ybjAA/exec";
-    const query = `route=refresh&refreshtoken=${encodeURIComponent(
-      storedRefreshToken
-    )}&sessionId=${encodeURIComponent(sessionId || "")}`;
-    const fullURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
-      `${base}?${query}`
-    )}`;
-
-    const overlay = document.getElementById("reconnecting-overlay");
-    if (overlay) overlay.style.display = "flex";
-
-    let data: any;
-    try {
-      console.time("⏳ Durée du fetch de refresh");
-      console.log("🔎 refreshToken() → fullURL:", fullURL);
-console.log("🔎 refreshToken() → refreshToken:", storedRefreshToken);
-console.log("🔎 refreshToken() → sessionId:", sessionId);
-
-      data = await Promise.race([
-        fetch(fullURL, {
-          method: "GET",
-          headers: { "X-Requested-With": "XMLHttpRequest" },
-        }).then((r) => r.json()),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout")), 10000)
-        ),
-      ]);
-      console.timeEnd("⏳ Durée du fetch de refresh");
-    } catch (error) {
-      console.error("❌ Erreur de fetch :", error);
-      await handleRefreshFailure();
-      resolvePromise?.(null);
-      return null;
-    } finally {
-      const authStore = useAuthStore();
-
-      // ✅ Sécurité anti-spinner bloqué
-      authStore.isRefreshingToken = false;
-      authStore.authLoading = false;
-
-      // ✅ Nettoyage overlay DOM si jamais persiste
-      const overlay = document.getElementById("reconnecting-overlay");
-      if (overlay) overlay.style.display = "none";
-
-      // ✅ Fin du verrou async
-      isRefreshing = null;
-    }
-
-    // ➤ Réponse OK
-    if (data?.jwt && data?.refreshToken) {
-      const newJwt = data.jwt;
-
-      // ➤ Mise à jour stockages
-      localStorage.setItem("jwt", newJwt);
-      sessionStorage.setItem("jwt", newJwt);
-      localStorage.setItem("refreshToken", data.refreshToken);
-      sessionStorage.setItem("refreshToken", data.refreshToken);
-
-      authStore.setUserToken(newJwt);
-      authStore.setRefreshToken(data.refreshToken);
-const sessionIdToSave = data.sessionId?.trim() || sessionId;
-if (!sessionIdToSave) {
-  console.error("❌ Impossible de sauvegarder : sessionId manquant !");
-  resolvePromise?.(null);
-  return null;
-}
-
-await saveSessionData({
-  jwt: newJwt,
-  refreshToken: data.refreshToken,
-  sessionId: sessionIdToSave,
-  userData: {
-    prenom: authStore.user?.prenom ?? '',
-    email: authStore.user?.email ?? '',
-  },
-
-  
-});
-
-
-
-
-
-
-
-
-
-      await syncAllStorages(newJwt, data.refreshToken);
-      window.dispatchEvent(new Event("jwt-refreshed"));
-
-      // ➤ ICI : renvoie seulement le JWT (string)
-      resolvePromise?.(newJwt);
-      return newJwt;
-    } else {
-      console.warn("❌ Réponse API invalide :", data);
-      await handleRefreshFailure();
-      resolvePromise?.(null);
-      return null;
-    }
-  } catch (error) {
-    console.error("❌ Exception dans refreshToken :", error);
-    await handleRefreshFailure();
-    resolvePromise?.(null);
+  if (!refreshToken || !sessionId) {
+    console.warn("❌ refreshToken : infos manquantes");
     return null;
-  } finally {
-    console.log("🔓 Libération du verrou de rafraîchissement...");
-    isRefreshing = null;
-    sessionStorage.removeItem("refreshInProgress");
-  sessionStorage.removeItem("refreshDuration");
-    authStore.isRefreshingToken = false;
   }
+
+  const base =
+    "https://script.google.com/macros/s/AKfycbzBzqJGz-60bAXK9txOlR81aXXsRjKlceFYQotMXaKvaKasdgzTybn3WBaFeRsM4WE_yA/exec";
+
+  const query =
+    `route=refresh&refreshtoken=${encodeURIComponent(refreshToken)}` +
+    `&sessionId=${encodeURIComponent(sessionId)}`;
+
+  const fullURL =
+    "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
+    encodeURIComponent(`${base}?${query}`);
+
+  for (let attempt = 1; attempt <= 1 + MAX_RETRIES; attempt++) {
+    try {
+      console.log(`🔄 Refresh try #${attempt} →`, fullURL);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      const res = await fetch(fullURL, {
+        method: "GET",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        console.warn(`❌ Refresh HTTP ${res.status} (try ${attempt})`);
+
+        if (
+          attempt <= MAX_RETRIES &&
+          (res.status === 504 || res.status >= 500)
+        ) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY));
+          continue;
+        }
+
+        return null;
+      }
+
+      const data = await res.json();
+
+      if (!data?.jwt || !data?.refreshToken) {
+        console.warn("❌ Refresh API invalide :", data);
+        return null;
+      }
+
+      return {
+        ...data,
+        jwt: data.jwt,
+        refreshToken: data.refreshToken,
+        sessionId: data.sessionId || sessionId,
+      };
+    } catch (err) {
+      console.warn(`⚠️ Erreur réseau/timeout refresh (try ${attempt})`, err);
+
+      if (attempt <= MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY));
+        continue;
+      }
+
+      console.error("❌ Erreur finale refreshToken() :", err);
+      return null;
+    }
+  }
+
+  return null;
 }
 
-export function decodeJwt(token: string): any {
+
+
+export function decodeJwt(token: any): Record<string, any> {
+  if (!token || typeof token !== "string" || !token.includes(".")) {
+    return {};
+  }
+
   try {
-    const [, payload] = token.split('.');
+    const [, payload] = token.split(".");
     return JSON.parse(atob(payload));
-  } catch (e) {
-    console.error("❌ decodeJwt failed :", e);
+  } catch {
     return {};
   }
 }
@@ -1824,78 +1697,6 @@ function removeItemFromStore(key: string, subKey?: string) {
 
 
 
-export async function handleRefreshToken() {
-  if (isRefreshing) {
-    return; // Si une tentative de rafraîchissement est déjà en cours, ne rien faire
-  }
-
-  isRefreshing = new Promise<string>((resolve, reject) => {
-    resolve("nouveau JWT");
-  });  // Utilisation de la variable globale en tant que promesse
-
-  const storedRefreshToken = localStorage.getItem("refreshToken") || sessionStorage.getItem("refreshToken");
-
-  // Si le refresh token est valide
-  if (storedRefreshToken) {
-    try {
-      const response = await refreshToken(); // Appel API
-
-      // Vérification et parse de la réponse
-      let responseData;
-      try {
-        // Vérifier si la réponse est vide ou mal formatée
-        if (!response) {
-          throw new Error("Réponse du serveur vide ou mal formatée");
-        }
-responseData = response ?? null;
- // Gère le cas de `null`
-      } catch (error) {
-        throw new Error("Réponse du serveur invalide ou mal formée");
-      }
-      console.log("🔥 refreshToken - réponse : ", responseData);
-
-      // Vérification de la réponse
-      let parsed: RefreshResponse | null = null;
-try {
-  parsed = JSON.parse(responseData);
-} catch (e) {
-  console.error("❌ JSON.parse failed on refresh response", e);
-  return null;
-}
-
-if (parsed?.status === "success") {
-  const newJwt = parsed.jwt;
-  const newRefreshToken = parsed.refreshToken;
-
-        // Mettre à jour les tokens
-sessionStorage.setItem("jwt", newJwt);
-localStorage.setItem("jwt", newJwt);
-
-
-        localStorage.setItem("refreshToken", newRefreshToken);
-        sessionStorage.setItem("refreshToken", newRefreshToken);
-
-        console.log("✅ Nouveau JWT et Refresh Token récupérés !");
-      } else {
-        console.warn("⚠️ Échec du rafraîchissement du token", responseData);
-        
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error("❌ Erreur lors du rafraîchissement du token :", error.message);
-      } else {
-        console.error("❌ Erreur inconnue lors du rafraîchissement du token");
-      }
-      
-    } finally {
-      isRefreshing = null; // Libère la promesse en la réinitialisant à null
-    }
-  } else {
-    console.warn("⚠️ Aucun refresh token trouvé !");
-    
-    isRefreshing = null; // Libère la promesse en la réinitialisant à null
-  }
-}
 
 
 
@@ -2267,161 +2068,182 @@ export async function syncRefreshToken() {
 
 export let isLoggingOut = false;
 
-export async function logoutUser(origin = "unknown") {
-  
-  console.warn("🚨 logoutUser() appelé — ORIGINE =", origin);
-  console.trace("📍 Stack trace logoutUser");
+// 🔒 Verrou global interne pour éviter tout overlap logout/refresh
+let logoutLock = false;
 
+export async function logoutUser() {
   const store = useAuthStore();
 
-  if (store.isLoggingOut) {
-    console.log("⏳ Déjà en train de logout, on ignore.");
-    return;
-  }
-
+  // 🚫 Si un logout est déjà en cours → on annule
+  if (logoutLock || store.isLoggingOut) return;
+  logoutLock = true;
   store.isLoggingOut = true;
 
-  // ✅ Affiche le message avec redirection différée
-  showLogoutMessage(1200, async () => {
-    console.log("🚨 Déconnexion en cours (callback)...");
-      localStorage.setItem("logout_in_progress", "true");
+  console.log("🚨 Déconnexion en cours...");
 
+  // 📣 Message UI (avant démontage)
+  window.dispatchEvent(new CustomEvent("show-logout-message"));
 
-    try {
-      if (typeof refreshInProgress !== "undefined" && refreshInProgress) {
-        refreshInProgress = Promise.resolve(null);
-      }
+  // ---------------------------------------------------------
+  // 🔒 1) Stopper tout refresh possible (anti-race)
+  // ---------------------------------------------------------
 
-      window.dispatchEvent(new Event("logout"));
+  // ❌ PAS DE _refreshTimer ici
+  // ❌ PAS DE _refreshPromise ici
+  // Ils appartiennent au STORE, pas à api.ts
 
-      store.$reset();
-      store.user = null;
-      store.jwt = null;
-      store.impersonateStudent = false;
-      store.isRefreshingToken = false;
-      store.refreshFailed = false;
-
-    // 🔥 Nettoyage de localStorage : on garde uniquement 2 clés
-Object.keys(localStorage).forEach((key) => {
-  if (!["partitions_cache", "partitions_cache_timestamp"].includes(key)) {
-    localStorage.removeItem(key);
+  // ancien système de refresh (compatibilité)
+  if (typeof refreshInProgress !== "undefined") {
+    refreshInProgress = null;
   }
-});
 
-// 🔥 Nettoyage complet de sessionStorage
-sessionStorage.clear();
+  store.isRefreshingToken = false;
+
+  // ---------------------------------------------------------
+  // 🧹 2) Purge immédiate du store (anti-flash)
+  // ---------------------------------------------------------
+  store.user = null;
+  store.jwt = null;
+  store.impersonateStudent = false;
+  store.refreshFailed = false;
+
+  window.dispatchEvent(new Event("user-data-updated"));
+
+  // ---------------------------------------------------------
+  // 🧽 3) Préparation environnement propre
+  // ---------------------------------------------------------
+  localStorage.setItem("session_expired", "true");
+  localStorage.removeItem("userLogged");
+
+  // ---------------------------------------------------------
+  // 🗑 4) Suppression cache utilisateur
+  // ---------------------------------------------------------
+ const PREFIXES = [
+  "userData_", "userInfos_", "userPlanning_", "userNote_", "nonInscrit_", "dashboard_"
+];
 
 
-      deleteAllCookies();
-
-      console.log("🗑️ Nettoyage de IndexedDB...");
-      await clearIndexedDBData();
-      console.log("✅ IndexedDB nettoyée !");
-
-      store.isInitDone = true;
-      store.isLoggingOut = false;
-
-      // ⭐ Redirection
-      await router.replace({ name: "login" });
-
-    } catch (error) {
-      console.error("❌ Erreur lors de la déconnexion :", error);
-      store.isLoggingOut = false;
-    }
+  Object.keys(localStorage).forEach(k => {
+    if (PREFIXES.some(p => k.startsWith(p))) localStorage.removeItem(k);
   });
+
+  Object.keys(sessionStorage).forEach(k => {
+    if (PREFIXES.some(p => k.startsWith(p))) sessionStorage.removeItem(k);
+  });
+
+  // Tokens + infos génériques
+  [
+    "jwt", "refreshToken", "refreshTokenExpiration",
+    "prenom", "email", "videos_cache", "videos_cache_timestamp",
+    "savedEmail", "savedPrenom", "role", "visit-count", "user"
+  ].forEach(k => {
+    localStorage.removeItem(k);
+    sessionStorage.removeItem(k);
+  });
+
+  deleteAllCookies();
+
+  // ---------------------------------------------------------
+  // 🗃 5) Nettoyage IndexedDB
+  // ---------------------------------------------------------
+  console.log("🗑️ Nettoyage IndexedDB…");
+  await clearIndexedDBData();
+  console.log("✅ IndexedDB nettoyée !");
+
+  // ---------------------------------------------------------
+  // 🔄 6) Redirection propre
+  // ---------------------------------------------------------
+setTimeout(async () => {
+  console.log("🔄 Redirection vers login…");
+
+  // Réinitialisation des flags
+
+  store.authReady = false;  // <-- IMPORTANT
+
+  // Retirer le loader HTML
+  const screen = document.getElementById("loading-screen");
+  if (screen) screen.style.display = "none";
+
+  const app = document.getElementById("app");
+  if (app) app.classList.add("app-visible");
+
+  await router.replace("/login");
+
+  store.isInitDone = true;
+  store.isLoggingOut = false;
+  logoutLock = false;
+}, 500);
+
+
+  return true;
 }
 
 
-// 💬 Affiche le message avec callback après `duration`
-function showLogoutMessage(duration = 2000, callback?: () => void) {
 
-  const style = document.createElement("style");
-  style.innerHTML = `
-    .logout-container-wrapper {
+
+
+// ✅ Affichage stylisé du message de déconnexion
+export function showLogoutMessage() {
+    const logoutMessage = document.createElement("div");
+    logoutMessage.innerHTML = `
+    <div class="logout-container">
+      <div class="logout-spinner"></div>
+      <p class="logout-text">Déconnexion en cours...</p>
+    </div>
+  `;
+    const style = document.createElement("style");
+    style.innerHTML = `
+    .logout-container {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      z-index: 99999;
-      pointer-events: none;
-    }
-
-    .logout-container {
-      pointer-events: auto;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 8px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px 20px;
-      background: linear-gradient(135deg, #121212, #1e1e1e);
-      color: #ff4c4c;
-      font-size: 14px;
-      font-weight: 500;
-      border: 1px solid #ff4c4c33;
-      box-shadow: 0 0 10px rgba(255, 76, 76, 0.25);
-      border-radius: 6px;
+      flex-direction: column;
+      z-index: 9999;
+      text-align: center;
       animation: fadeIn 0.3s ease-in-out;
-      white-space: nowrap;
     }
-
     .logout-spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid #ff4c4c55;
-      border-top: 2px solid #ff7f50;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #ffffff;
+      border-top: 4px solid transparent;
       border-radius: 50%;
-      animation: spin 0.9s linear infinite;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
     }
-
     .logout-text {
       margin: 0;
-      color: #ff7f50;
-      text-shadow: 0 0 3px rgba(255, 127, 80, 0.3);
     }
-
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
     @keyframes fadeIn {
-      from { opacity: 0; transform: translate(-50%, -60%); }
-      to { opacity: 1; transform: translate(-50%, -50%); }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
   `;
-  document.head.appendChild(style);
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "logout-container-wrapper";
-
-  const logoutMessage = document.createElement("div");
-  logoutMessage.className = "logout-container";
-  logoutMessage.innerHTML = `
-    <div class="logout-spinner"></div>
-    <p class="logout-text">Déconnexion en cours...</p>
-  `;
-
-  wrapper.appendChild(logoutMessage);
-  document.body.appendChild(wrapper);
-
-  setTimeout(() => {
-    wrapper.remove();
-    style.remove();
-    if (typeof callback === "function") callback();
-  }, duration);
+    document.head.appendChild(style);
+    document.body.appendChild(logoutMessage);
 }
-
 // ✅ Suppression propre des cookies
 function deleteAllCookies() {
-  console.log("🗑️ Suppression des cookies...");
-  document.cookie.split(";").forEach((cookie) => {
-    const cookieName = cookie.split("=")[0].trim();
-    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
-  });
+    console.log("🗑️ Suppression des cookies...");
+    document.cookie.split(";").forEach((cookie) => {
+        const cookieName = cookie.split("=")[0].trim();
+        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
+    });
 }
-
-
 
 
 

@@ -2,9 +2,10 @@ import { createApp } from "vue";
 import { wakeCorsProxy } from "@/utils/cors";
 import { createPinia } from "pinia"
 const pinia = createPinia()
-
+export const pinia = createPinia(); // 👈 à exporter
+app.use(pinia);
 // ⬇️ AJOUTE ICI
-import { useAuthStore } from "@/stores/authStore"
+import { useAuthStore } from "@/stores/authStore.js"
 window.authStore = useAuthStore(pinia)
 
 import "font-awesome/css/font-awesome.min.css";

@@ -94,10 +94,15 @@ onMounted(async () => {
     
     if (newJwt) {
       console.log("✅ Nouveau JWT récupéré, redirection...");
-const jwtString = newJwt ?? "";
+// newJwt peut être soit une string, soit un objet { jwt, refreshToken, sessionId }
+const jwtString =
+  typeof newJwt === "string"
+    ? newJwt
+    : newJwt?.jwt ?? "";
 
 sessionStorage.setItem("jwt", jwtString);
 localStorage.setItem("jwt", jwtString);
+
 
       return router.replace("/mon-espace");
     }

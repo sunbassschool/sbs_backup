@@ -9,7 +9,9 @@
   <select v-model="selectedCourse" class="form-select border-start-0">
     <option disabled value="">Choisir un replay</option>
     <option v-for="(row, index) in replayCourses" :key="index" :value="row.formattedDate">
-      📅 {{ row.formattedDate }} — {{ row.commentaire || "Sans titre" }}
+      📅 {{ extractShortDate(row.formattedDate) }}
+
+
     </option>
   </select>
 </div>
@@ -32,22 +34,38 @@
 
 <!-- ✅ Swiper affichant les replays -->
 <Swiper
+  @swiper="onSwiper"
   :modules="[Pagination, Autoplay]"
   :slides-per-view="1"
   :autoplay="{ delay: 4000, disableOnInteraction: false }"
-  
   class="mySwiper"
 >
+
 
 <SwiperSlide v-for="(row, index) in replayCourses" :key="index">
   <div class="w-100 d-flex justify-content-center flex-column align-items-center">
     
    <div class="card shadow rounded-4 border-0 overflow-hidden mb-3" style="max-width: 600px;">
-<img 
-  :src="generateThumbnail(row.lienReplay)" 
-  class="replay-thumbnail img-fluid rounded mx-auto d-block"
-  @click="openVideo(row.lienReplay, row.formattedDate)" 
-/>
+<div class="position-relative w-100">
+<div class="thumbnail-wrapper" @click="openVideo(row.lienReplay, row.formattedDate)">
+  <img 
+    :src="generateThumbnail(row.lienReplay)" 
+    class="replay-thumbnail"
+    @error="(e) => onImageError(e, row.formattedDate)"
+    @load="(e) => onImageLoad(row.formattedDate, e)"
+  />
+  
+  <div v-if="erroredImages[row.formattedDate]" class="no-thumb-overlay">
+    🎬 Replay disponible<br />Cliquez pour voir
+  </div>
+</div>
+
+
+
+
+
+</div>
+
 
   <div class="card-body bg-light">
     <h5 class="card-title text-primary mb-1">{{ row.formattedDate }}</h5>
@@ -78,20 +96,23 @@
  <div v-if="showModal" class="modal fade show d-block bg-dark bg-opacity-75" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content border-0 rounded-4 overflow-hidden">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title">{{ currentVideoTitle }}</h5>
+      <div class="modal-header bg-dark text-white border-0">
+
+        <h5 class="modal-title mb-0" style="font-size: 1rem;">{{ currentVideoTitle }}</h5>
         <button type="button" class="btn-close btn-close-white" @click="closeModal"></button>
       </div>
-      <div class="modal-body p-0">
-        <iframe 
-          :src="videoUrl" 
-          frameborder="0" 
-          allowfullscreen 
-          width="100%" 
-          height="450"
-          class="w-100"
-        ></iframe>
-      </div>
+<div class="modal-body p-0">
+  <iframe 
+    :src="videoUrl"
+    frameborder="0"
+    allowfullscreen
+    width="100%"
+    height="450"
+    class="w-100"
+  ></iframe>
+</div>
+
+
     </div>
   </div>
 </div>
@@ -101,15 +122,96 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+ import { useAuthStore } from "@/stores/authStore"
+const auth = useAuthStore()
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination, Autoplay } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import Layout from '../views/Layout.vue'
+const loadedImages = ref({})
+
+function extractDriveId(url) {
+  if (!url) return null;
+
+  // format 1 : /d/ID/
+  const match1 = url.match(/\/d\/([^/]+)/);
+  if (match1) return match1[1];
+
+  // format 2 : ?id=ID
+  const match2 = url.match(/[?&]id=([^&]+)/);
+  if (match2) return match2[1];
+
+  return null;
+}
+
+
+function onImageLoad(formattedDate, event) {
+  const isFallback = event?.target?.src?.includes('dummyimage.com')
+  if (!isFallback) {
+    loadedImages.value[formattedDate] = true
+    console.log(`✅ Image OK : ${formattedDate}`)
+  }
+}
+
+
+
+const erroredImages = ref({})
+
+const moisFrancais = {
+  janvier: 0,
+  février: 1,
+  mars: 2,
+  avril: 3,
+  mai: 4,
+  juin: 5,
+  juillet: 6,
+  août: 7,
+  septembre: 8,
+  octobre: 9,
+  novembre: 10,
+  décembre: 11
+}
+
+function parseFrenchFormattedDate(dateStr) {
+  try {
+    const regex = /(\d{2}) (\w+) (\d{4}) à (\d{2}):(\d{2})/
+    const match = dateStr.match(regex)
+    if (!match) return new Date(0)
+    const [, day, monthName, year, hours, minutes] = match
+    const month = moisFrancais[monthName.toLowerCase()]
+    return new Date(Number(year), month, Number(day), Number(hours), Number(minutes))
+  } catch {
+    return new Date(0)
+  }
+}
+function onImageError(event, formattedDate) {
+  erroredImages.value[formattedDate] = true
+}
+
+
+
 
 const selectedCourse = ref('')
+let swiperInstance = null
+function onSwiper(swiper) {
+  swiperInstance = swiper
+}
+
+watch(selectedCourse, (newVal) => {
+  const index = replayCourses.value.findIndex(r => r.formattedDate === newVal)
+  if (index !== -1 && swiperInstance) {
+    swiperInstance.slideTo(index)
+    swiperInstance.autoplay?.stop()
+
+    // 👇 Ne pas ouvrir la vidéo automatiquement
+    // const row = replayCourses.value[index]
+    // openVideo(row.lienReplay, row.formattedDate)
+  }
+})
+
 const planningData = ref([])
 const isLoading = ref(true)
 
@@ -118,23 +220,39 @@ const showModal = ref(false)
 const videoUrl = ref('')
 const currentVideoTitle = ref('')
 
+
 const sortedPlanningData = computed(() => {
-  return [...planningData.value].sort((a, b) => new Date(a.formattedDate) - new Date(b.formattedDate))
+  return [...planningData.value].sort(
+    (a, b) => parseFrenchFormattedDate(b.formattedDate) - parseFrenchFormattedDate(a.formattedDate)
+  )
 })
+
+
+
 
 const replayCourses = computed(() =>
   sortedPlanningData.value.filter(r => r.lienReplay && r.lienReplay !== "Pas de replay disponible")
 )
 
 function generateThumbnail(url) {
-  const match = url?.match(/\/d\/(.*?)\//)
-  return match ? `https://drive.google.com/thumbnail?id=${match[1]}` : null
+  const id = extractDriveId(url);
+  if (!id) {
+    console.warn("Miniature impossible pour :", url);
+    return "https://via.placeholder.com/600x300?text=Miniature+indisponible";
+  }
+
+  return `https://drive.google.com/thumbnail?id=${id}`;
 }
 
+
+
+
 function generateDownloadLink(url) {
-  const match = url?.match(/\/d\/(.*?)\//)
-  return match ? `https://drive.google.com/uc?export=download&id=${match[1]}` : null
+  const id = extractDriveId(url);
+  return id ? `https://drive.google.com/uc?export=download&id=${id}` : null;
 }
+
+
 
 function openVideo(url, title) {
   const match = url?.match(/\/d\/(.*?)\//)
@@ -143,8 +261,11 @@ function openVideo(url, title) {
   showModal.value = true
 }
 
+
+
 function closeModal() {
   showModal.value = false
+  closeModal
   videoUrl.value = ''
 }
 
@@ -152,13 +273,32 @@ function updateWindowWidth() {
   windowWidth.value = window.innerWidth
 }
 
+
+
 async function fetchPlanningData() {
   isLoading.value = true
   try {
     const jwt = sessionStorage.getItem("jwt") || localStorage.getItem("jwt") || ""
-    const email = localStorage.getItem("email") || ""
-    const prenom = localStorage.getItem("prenom") || ""
+
+
+const email = auth.user?.email || localStorage.getItem("email") || ""
+const prenom = auth.user?.prenom || localStorage.getItem("prenom") || ""
+
     if (!jwt || !email || !prenom) return
+
+function parseFrenchFormattedDate(dateStr) {
+  try {
+    const regex = /(\d{2}) (\w+) (\d{4}) à (\d{2}):(\d{2})/
+    const match = dateStr.match(regex)
+    if (!match) return new Date(0) // fallback très ancien si parsing échoue
+
+    const [, day, monthName, year, hours, minutes] = match
+    const month = moisFrancais[monthName.toLowerCase()]
+    return new Date(Number(year), month, Number(day), Number(hours), Number(minutes))
+  } catch {
+    return new Date(0)
+  }
+}
 
     const route = "planning"
     const targetBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec"
@@ -168,12 +308,26 @@ async function fetchPlanningData() {
     const json = await res.json()
     if (json.success && json.planning) {
       planningData.value = json.planning
+       // 👇 Debug ici
+  console.log("Exemples de dates :")
+  console.table(planningData.value.map(p => p.formattedDate))
     }
   } catch (e) {
     console.error("Erreur lors du chargement du planning:", e)
   } finally {
     isLoading.value = false
   }
+}
+function extractShortDate(fullDate) {
+  const match = fullDate.match(/^(\d{2}) (\w+) (\d{4})/)
+  if (!match) return fullDate
+  const [ , day, monthName, year ] = match
+  const moisMap = {
+    janvier: '01', février: '02', mars: '03', avril: '04', mai: '05', juin: '06',
+    juillet: '07', août: '08', septembre: '09', octobre: '10', novembre: '11', décembre: '12'
+  }
+  const month = moisMap[monthName.toLowerCase()] || '00'
+  return `${day}/${month}/${year}`
 }
 
 onMounted(() => {
@@ -237,7 +391,9 @@ onUnmounted(() => {
 .card img {
   width: 100%;
   max-height: 300px; /* Agrandir un peu */
-  object-fit: cover;
+  object-fit: contain;
+background: #111;
+
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.2s;
@@ -311,7 +467,9 @@ onUnmounted(() => {
 .replay-thumbnail {
   max-width: 100%;
   max-height: 300px;
-  object-fit: cover;
+object-fit: contain;
+background: #111;
+
   cursor: pointer;
   transition: transform 0.2s ease-in-out;
   border-radius: 8px;
@@ -326,6 +484,49 @@ onUnmounted(() => {
 
 .replay-thumbnail:hover {
   transform: scale(1.03);
+}
+
+.no-thumb-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 123, 255, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-weight: bold;
+  font-size: 1rem;
+  text-align: center;
+  padding: 10px;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.thumbnail-wrapper {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #000;           /* fond noir propre */
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.replay-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;         /* LA clé pour ne plus rogner */
+  background: #000;            /* comble les bords */
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.replay-thumbnail:hover {
+  transform: scale(1.02);
 }
 
 </style>

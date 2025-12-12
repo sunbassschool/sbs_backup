@@ -1,9 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
-import {
-  getValidToken,isJwtValid 
-} from "@/utils/api.js";
+import { useAuthStore } from "@/stores/authStore.js";
+import { watch } from "vue";
 
-// Vues
+type AnyStore = ReturnType<typeof useAuthStore> & Record<string, any>;
+
+// =============================================================
+// 📌 Pages (import)
+// =============================================================
 import HomeView from "@/views/HomeView.vue";
 import IntroView from "@/views/IntroView.vue";
 import BassTuner from "@/views/BassTuner.vue";
@@ -29,115 +32,185 @@ import FeedBackProf from "@/views/FeedBackProf.vue";
 import GestionEleves from "@/views/GestionEleves.vue";
 import AdminFeedback from "@/views/AdminFeedback.vue";
 import moncompte from "@/views/moncompte.vue";
+import dashboardreports from "@/views/dashboardreports.vue";
+import LinkProf from "@/views/LinkProf.vue";
+import DashboardProf from "@/views/dashboard-prof.vue";
 import Abonnements from "@/views/Abonnements.vue";
-import { useAuthStore } from "@/stores/authStore";
-import { isLoggingOut } from "@/utils/api.ts";
 import NotFound from "@/views/NotFound.vue";
 
-
-// Base URL
+// =============================================================
+// 🌍 Base URL (prod = /app/)
+// =============================================================
 const baseUrl = import.meta.env.MODE === "production" ? "/app/" : "/";
 
 const router = createRouter({
   history: createWebHistory(baseUrl),
+
   routes: [
-       {
-  path: "/",
-  name: "root-redirect",
-  redirect: () => {
-    const store = useAuthStore();
-    return store.isLoggedIn ? { name: "dashboard" } : { name: "login" };
-  }
-},
+    // =========================================================
+    // 🏠 ROOT → redirige selon login
+    // =========================================================
+    {
+      path: "/",
+      name: "root-redirect",
+      redirect: () => {
+        const store = useAuthStore() as AnyStore;
+        return store.isLoggedIn ? { name: "dashboard" } : { name: "login" };
+      },
+    },
 
-
-
-    { path: "/register-cursus", name: "RegisterCursus", component: RegisterCursus, meta: { requiresAuth: true, role: "admin" } },
-    { path: "/reset-password", name: "Resetpassword", component: ResetPassword },
-    { path: "/MesRessources", name: "MesRessources", component: MesRessources },
+    // =========================================================
+    // 🛂 AUTH
+    // =========================================================
+    { path: "/login", name: "login", component: Login },
     { path: "/forgot-password", name: "Forgotpassword", component: ForgotPassword },
-    { path: "/Createplanning", name: "CreatePlanning", component: CreatePlanning, meta: { requiresAuth: true, role: "admin" } },
-    { path: "/cours", name: "cours", component: Cours, meta: { requiresAuth: true, role: "admin" } },
-    { path: "/AdminFeedback", name: "AdminFeedback", component: AdminFeedback, meta: { requiresAuth: true, role: "admin" } },
+    { path: "/reset-password", name: "Resetpassword", component: ResetPassword },
 
+    // =========================================================
+    // 👑 ADMIN ONLY
+    // =========================================================
+    {
+      path: "/register-cursus",
+      name: "RegisterCursus",
+      component: RegisterCursus,
+      meta: { requiresAuth: true, role: "admin" },
+    },
+
+    {
+      path: "/AdminFeedback",
+      name: "AdminFeedback",
+      component: AdminFeedback,
+      meta: { requiresAuth: true, role: "admin" },
+    },
+    {
+      path: "/dashboardreports",
+      name: "dashboardreports",
+      component: dashboardreports,
+      meta: { requiresAuth: true, role: "admin" },
+    },
+
+
+    // =========================================================
+    // 👨‍🏫 PROF (et ADMIN aussi)
+    // =========================================================
+    {
+      path: "/dashboard-prof",
+      name: "dashboard-prof",
+      component: DashboardProf,
+      meta: { requiresAuth: true, requiresProf: true },
+    },
+    {
+      path: "/GestionEleves",
+      name: "GestionEleves",
+      component: GestionEleves,
+      meta: { requiresAuth: true, requiresProf: true },
+    },
+    {
+      path: "/FeedBackProf",
+      name: "FeedBackProf",
+      component: FeedBackProf,
+      meta: { requiresAuth: true, requiresProf: true },
+    },
+
+        {
+      path: "/cours",
+      name: "cours",
+      component: Cours,
+      meta: { requiresAuth: true, requiresProf: true },
+    },
+
+        {
+      path: "/CreatePlanning",
+      name: "CreatePlanning",
+      component: CreatePlanning,
+      meta: { requiresAuth: true, requiresProf: true },
+    },
+    // =========================================================
+    // 👤 USER (tout utilisateur connecté)
+    // =========================================================
+    { path: "/dashboard", name: "dashboard", component: Dashboard, meta: { requiresAuth: true } },
     { path: "/mon-espace", name: "mon-espace", component: MonEspace, meta: { requiresAuth: true } },
+    { path: "/planning", name: "planning", component: Planning, meta: { requiresAuth: true } },
+    { path: "/replay", name: "replay", component: Replay, meta: { requiresAuth: true } },
+    { path: "/moncompte", name: "moncompte", component: moncompte, meta: { requiresAuth: true } },
+    { path: "/MesRessources", name: "MesRessources", component: MesRessources },
+
+    // =========================================================
+    // 🌐 PUBLIC
+    // =========================================================
     { path: "/intro", name: "intro", component: IntroView },
     { path: "/Feedback", name: "Feedback", component: Feedback },
     { path: "/FeedBackProf", name: "FeedBackProf", component: FeedBackProf },
     { path: "/home", name: "home", component: HomeView },
     { path: "/partitions", name: "partitions", component: Partitions },
+    { path: "/videos", name: "videos", component: Videos },
+    { path: "/Metronome", name: "Metronome", component: Metronome },
+    { path: "/BassTuner", name: "BassTuner", component: BassTuner },
+    { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
     { path: "/register", name: "register", component: Register },
     { path: "/registerform", name: "registerform", component: RegisterForm },
 
-    { path: "/planning", name: "planning", component: Planning, meta: { requiresAuth: true } },
-    { path: "/replay", name: "replay", component: Replay, meta: { requiresAuth: true } },
-
-    { path: "/videos", name: "videos", component: Videos },
-
-    { path: "/dashboard", name: "dashboard", component: Dashboard, meta: { requiresAuth: true, forceRefresh: true } },
-
-    { path: "/login", name: "login", component: Login },
-
-    { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
-
-    { path: "/Metronome", name: "Metronome", component: Metronome },
-    { path: "/BassTuner", name: "BassTuner", component: BassTuner },
-
-    { path: "/GestionEleves", name: "GestionEleves", component: GestionEleves },
-
-    { path: "/moncompte", name: "moncompte", component: moncompte, meta: { requiresAuth: true } },
-    { path: "/Abonnements", name: "Abonnements", component: Abonnements },
-      { path: "/:pathMatch(.*)*", name: "NotFound", component: NotFound }, // 👈 à la fin
-
+    // =========================================================
+    // ❌ 404
+    // =========================================================
+    { path: "/:pathMatch(.*)*", name: "NotFound", component: NotFound },
   ],
 });
 
-router.beforeEach(async (to) => {
+
+// =============================================================
+// 🔐 GLOBAL GUARD MULTI-PROF / ADMIN
+// =============================================================
+router.beforeEach(async (to, from) => {
   const store = useAuthStore();
 
-  // 💡 Lance initAuth sans bloquer la navigation
-  if (!store.isInitDone) {
-    console.log("🚀 initAuth lancé sans blocage...");
-    store.initAuth(); // 🔄 Ne pas await !
+  const hasJwt = !!store.jwt;
+  const hasUser = !!store.user;
+  const isLoggedIn = hasJwt && hasUser;
+  const requiresAuth = to.meta.requiresAuth === true;
+
+  // ============================
+  // LOGIN toujours accessible
+  // ============================
+  if (to.name === "login") return true;
+
+  // ============================
+  // Attente authReady
+  // ============================
+  if (!store.authReady) {
+    await new Promise((resolve) =>
+      watch(
+        () => store.authReady,
+        (v) => v === true && resolve(true),
+        { immediate: false }
+      )
+    );
   }
 
-  // ⛔ Blocage si logout en cours
-  if (store.isLoggingOut && to.name !== "login") {
-    console.warn("⛔ Navigation bloquée car logout en cours");
-    return false;
+  // ============================
+  // Route PROTÉGÉE → login si pas connecté
+  // ============================
+  if (requiresAuth && !isLoggedIn) {
+    return { name: "login" };
   }
 
-  const requiresAuth = !!to.meta.requiresAuth;
-  const isOnLogin = to.name === "login";
-  const hasJwt = store.isLoggedIn;
+  // ============================
+  // Route PROF (admin autorisé aussi)
+  // ============================
+  if (to.meta.requiresProf) {
+    if (!["prof", "admin"].includes(store.user?.role)) {
+      return { path: "/" };
+    }
+  }
 
-  // 🔁 Si connecté, empêche accès à /login
-  if (isOnLogin && hasJwt) return { path: "/" };
-
-  // 🔓 Route publique → OK
-  if (!requiresAuth) return true;
-
-  // 🔐 Route protégée → pas connecté ? → attend `isInitDone`
-  if (!hasJwt && store.isInitDone) return { path: "/login" };
-
-  // 👤 Si connecté sans user (et pas logout) → on charge
-  if (!store.user && hasJwt && !store.isLoggingOut) {
-    store.loadUser(); // Optionnel si déjà déclenché par initAuth
+  // ============================
+  // Route ADMIN
+  // ============================
+  if (to.meta.role === "admin" && store.user?.role !== "admin") {
+    return { path: "/" };
   }
 
   return true;
 });
-
-
-
-
-
-
-
-
-
-
-
-
 
 export default router;

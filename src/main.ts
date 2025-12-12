@@ -1,8 +1,14 @@
 import { createApp } from "vue";
 import App from "@/App.vue";
 import { createPinia } from "pinia";
+export const pinia = createPinia();
+
 import router from "./router";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore.js";
+
+// Ajoute ça :
+type AnyStore = ReturnType<typeof useAuthStore> & Record<string, any>;
+
 import Toast from 'vue-toastification';
 
 import "font-awesome/css/font-awesome.min.css";
@@ -195,34 +201,37 @@ export async function initializeApp() {
     checkIndexedDBStatus();
   }
 
+  // --- 1) Création App + Pinia ---
   const app = createApp(App);
   const pinia = createPinia();
   app.use(pinia);
 
-  const authStore = useAuthStore();
-  await authStore.initAuth();
+ const authStore = useAuthStore() as AnyStore;
 
+
+  // --- 2) INIT AUTH AVANT ROUTER ---
+  console.log("🚀 App init → lancement initAuth()");
+  await authStore.initAuth();              // ← FIX CRITIQUE
+
+  console.log("🟢 initAuth terminé, authReady =", authStore.authReady);
+
+  // --- 3) Router + plugins ---
   app.use(router);
-  app.use(Toast, {
-    position: 'bottom-center',
-    timeout: 3000,
-    closeOnClick: true,
-    pauseOnFocusLoss: true,
-    pauseOnHover: true,
-    draggable: true,
-    hideProgressBar: false,
-    maxToasts: 3,
-    newestOnTop: true,
-    transition: 'Vue-Toastification__fade'
-  });
+  app.use(Toast, { /* … */ });
 
+  // --- 4) Mount ---
+  await router.isReady();
   app.mount("#app");
 
-  router.isReady().then(() => {
-    requestAnimationFrame(() => {
-      if (loadingScreen) loadingScreen.style.opacity = "0";
-      setTimeout(() => loadingScreen && (loadingScreen.style.display = "none"), 600);
-      if (appContainer) appContainer.classList.add("app-visible");
-    });
+  // --- 5) Loading screen ---
+  requestAnimationFrame(() => {
+    if (loadingScreen) loadingScreen.style.opacity = "0";
+    setTimeout(() => {
+      if (loadingScreen) loadingScreen.style.display = "none";
+    }, 600);
+
+    if (appContainer) appContainer.classList.add("app-visible");
   });
 }
+
+

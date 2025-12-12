@@ -3,40 +3,49 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Fond global */
 html,
 body {
   background-color: black !important;
   color: white;
+  margin: 0;
+  padding: 0;
+
+  /* Utilisation correcte sur iOS */
+  height: 100%;
+  min-height: 100%;
 }
 
-#app {
-    background-color: black !important;
-
-  width: 100vw !important;
-  height: 100vh !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ✅ Supprime toute marge indésirable */
+/* SAFE AREAS iPhone */
 body {
-  margin: 0 !important;
-  padding: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+
   overflow-x: hidden !important;
 }
 
-/* ✅ Supprime les anciennes règles qui causent le problème */
+/* ⚠️ RETIRER 100vh ici ! */
+#app {
+  background-color: black !important;
+  width: 100%;
+  min-height: 100%; /* remplace height:100vh */
+  margin: 0 !important;
+  padding: 0 !important;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* Version Desktop */
 @media (min-width: 1024px) {
   #app {
-    display: flex !important;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start; /* pas center → sinon ça casse le layout */
     padding: 0 !important;
   }
 }

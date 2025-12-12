@@ -3,8 +3,28 @@ export function getCache(key) {
     return getUserDataCache(key); // ✅ Utilise la même logique que `getUserDataCache`
 }
 export function setCache(key, data) {
-    setUserDataCache(key, data); // ✅ Utilise la même logique que `setUserDataCache`
+    const jwt = localStorage.getItem("jwt");
+    let role = null;
+    let prof_id = null;
+
+    if (jwt) {
+        try {
+            const payload = JSON.parse(atob(jwt.split(".")[1]));
+            role = payload.role;
+            prof_id = payload.prof_id;
+        } catch {}
+    }
+
+    const finalData = {
+        ...data,
+        ...(role ? { role } : {}),
+        ...(prof_id ? { prof_id } : {})
+    };
+
+    localStorage.setItem(key, JSON.stringify(finalData));
+    console.log(`✅ Cache mis à jour pour ${key} (role & prof_id protégés)`);
 }
+
 
 // Plus de suppression automatique après 24h, on met à jour en fonction de l’API
 export function getUserDataCache(key) {
@@ -61,9 +81,28 @@ export async function updateUserDataIfNeeded(key, fetchFromAPI) {
 
 // ✅ Sauvegarde des données utilisateur dans le cache (sans expiration automatique)
 export function setUserDataCache(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
-    console.log(`✅ Cache mis à jour pour ${key}`);
+    const jwt = localStorage.getItem("jwt");
+    let role = null;
+    let prof_id = null;
+
+    if (jwt) {
+        try {
+            const payload = JSON.parse(atob(jwt.split(".")[1]));
+            role = payload.role;
+            prof_id = payload.prof_id;
+        } catch(e) {}
+    }
+
+    const finalData = {
+        ...data,
+        ...(role ? { role } : {}),
+        ...(prof_id ? { prof_id } : {})
+    };
+
+    localStorage.setItem(key, JSON.stringify(finalData));
+    console.log(`✅ Cache mis à jour pour ${key} (avec role & prof_id)`);
 }
+
 
 // ✅ Vérifie si l'utilisateur est connecté et rafraîchit le JWT si nécessaire
 export async function checkUserSession() {

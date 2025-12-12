@@ -42,11 +42,7 @@ export default {
     const loading = ref(true);
 
     onMounted(() => {
-      if (getUserRole() !== "admin") {
-        console.error("🚫 Accès refusé : vous n'êtes pas admin !");
-        router.push("/");
-      }
-
+   
       // Sécurité : si l'iframe prend trop de temps, désactive le loader après 3s
       setTimeout(() => {
         loading.value = false;

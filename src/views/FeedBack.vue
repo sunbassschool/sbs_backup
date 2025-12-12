@@ -121,7 +121,7 @@
     </div>
 
     <!-- ✅ Marquer comme lu -->
-    <div v-if="fb.Type === 'Prof' && fb.Statut !== 'Validé'" class="form-check mt-2">
+<div v-if="fb.Statut !== 'Validé'" class="form-check mt-2">
       <input 
         class="form-check-input"
         type="checkbox"
@@ -240,6 +240,8 @@
   
   <script>
   import Layout from "../views/Layout.vue";
+  import { useAuthStore } from "@/stores/authStore";
+
   import { getValidToken } from "@/utils/api.ts";
   import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
@@ -271,12 +273,13 @@ sendingFeedback: false,
         filterStatut: "ALL",
 
         routes: {
-          GET: "AKfycbwCqxG2nnN758I6lVDlcoVo_2iDu0p1wkIj0S7SnONwTJjtm_MuDAfLmWtFoC9VovPO1A/exec",
-          POST: "AKfycbwCqxG2nnN758I6lVDlcoVo_2iDu0p1wkIj0S7SnONwTJjtm_MuDAfLmWtFoC9VovPO1A/exec",
+          GET: "AKfycbzSdi_Gl1PBWPXdbZshmqJvM7cudH1DdxQK-kD-pMdImbIdc9EH9H07tLs8IOMN_Tv17g/exec",
+          POST: "AKfycbzSdi_Gl1PBWPXdbZshmqJvM7cudH1DdxQK-kD-pMdImbIdc9EH9H07tLs8IOMN_Tv17g/exec",
         },
-        email: localStorage.getItem("email") || sessionStorage.getItem("email"),
-        prenom: localStorage.getItem("prenom") || sessionStorage.getItem("prenom"),
-        userData: JSON.parse(localStorage.getItem(`userData_${localStorage.getItem("prenom")}`)) || {},
+     email: null,
+prenom: null,
+userData: {},
+
       };
     },
   computed: {
@@ -344,11 +347,16 @@ filteredFeedbacks() {
   }
 },
 
-    async mounted() {
-      await this.fetchFeedbacks();
-      this.setDefaultMonth();
+  async mounted() {
+  const auth = useAuthStore();
 
-    },
+  this.email = auth.user?.email || null;
+  this.prenom = auth.user?.prenom || null;
+  this.userData = auth.user || {};
+
+  await this.fetchFeedbacks();
+  this.setDefaultMonth();
+},
   
     methods: {
         async deleteFeedback(id) {
@@ -462,15 +470,20 @@ nettoyerContenu(contenu) {
   if (!jwt) return;
 
   const url = this.getProxyPostURL(this.routes.POST);
-  const payload = {
-    route: "replytofeedback",
-    jwt,
-    feedback_id: Number(String(feedbackId).replace("ID", "")),
-    contenu: texte,
-    id_eleve: this.userData?.id || this.email,
-    prenom: this.userData?.prenom || this.prenom,
-    type: "Élève"
-  };
+const auth = useAuthStore();
+
+const payload = {
+  route: "replytofeedback",
+  jwt,
+  feedback_id: Number(String(feedbackId).replace("ID", "")),
+  contenu: texte,
+id_eleve: auth.user?.id || auth.user?.email,
+  prenom: auth.user?.prenom,
+  email: auth.user?.email,   // 🔥 obligatoire !
+  type: "Élève"
+};
+
+
 
   console.log("📤 Payload envoyé pour reply:", payload);
 
@@ -528,7 +541,8 @@ async fetchFeedbacks() {
     }
 
     const all = data.feedbacks;
-    const idEleveActuel = this.userData?.id || this.email;
+const auth = useAuthStore();
+const idEleveActuel = auth.user?.id || auth.user?.email;
 
     // 🧠 Map des ID existants
     const allIds = new Set(all.map(fb => String(fb.ID)));
@@ -629,15 +643,20 @@ async fetchFeedbacks() {
   if (!jwt) return;
 
   const url = this.getProxyPostURL(this.routes.POST);
+const auth = useAuthStore();
+
 const payload = {
   route: "addfeedback",
   jwt,
-  id_cours: "", // 🔥 très important : feedback principal
-  id_eleve: this.userData.id || this.email,
-  prenom: this.prenom,
+  id_cours: "",
+id_eleve: auth.user?.id || auth.user?.email,
+  prenom: auth.user?.prenom,
+  email: auth.user?.email,   // 🔥 OBLIGATOIRE
   contenu: this.nouveauFeedback.trim(),
   type: "Élève"
 };
+
+
 
   console.log("📡 URL POST brute :", this.getProxyPostURL(this.routes.POST));
 console.log("🧾 Payload envoyé :", payload);

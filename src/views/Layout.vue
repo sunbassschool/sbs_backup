@@ -1,364 +1,385 @@
 <template>
- <div
-  class="layout-container"
-  :class="{ 'with-sidebar': sidebarIsVisible }"
->
-  
-   
+  <div class="layout-container" :class="{ 'with-sidebar': sidebarIsVisible }">
 
-<!-- ✅ Menu latéral gauche (style Spotify) version PC-->
+    <!-- ========================================================= -->
+    <!-- 🟥 1) SIDEBAR (Desktop uniquement)                        -->
+    <!-- ========================================================= -->
+    <aside
+      class="sidebar"
+      :class="{ isCollapsed: isSidebarCollapsed, hidden: isMobile }"
+    >
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <img :src="logoUrl" class="sidebar-main-logo" alt="SunBassSchool" />
+      </div>
 
-<aside class="sidebar" :class="{ isCollapsed: isSidebarCollapsed, hidden: isMobile }">
-
-
-
-
-    
-  <div class="sidebar-logo">
-    <img :src="logoUrl" alt="Logo SunBassSchool" class="sidebar-main-logo">
-  </div>
-
-  
-  <nav class="sidebar-nav">
-
-  <a v-if="!isAdmin"  class="sidebar-link btn-cours" 
-   href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/" 
-   target="_blank" 
-   rel="noopener noreferrer">
-  <i class="bi bi-play-circle"></i>
-  <span>Prendre un cours</span>
-</a>
-    <router-link v-show="isLoggedIn && !isAdmin" to="/dashboard" class="sidebar-link">
-
-
-  <i class="bi bi-person-circle"></i>
-  <span>Accueil</span>
-</router-link>
-    <router-link v-show="isLoggedIn && !isAdmin" to="/moncompte" class="sidebar-link">
-
-
-  <i class="bi bi-person-circle"></i>
-  <span>Mon Compte</span>
-</router-link>
-
-
-    <router-link class="sidebar-link" v-if="!isAdmin"    to="/videos">
-      <i class="bi bi-film"></i>
-      <span>Vidéos</span>
-    </router-link>
-
-    <router-link class="sidebar-link" v-if="isLoggedIn && !isAdmin"    to="/planning">
-
-  <i class="bi bi-calendar-check"></i>
-  <span>Plannings</span>
-</router-link>
-
-<router-link class="sidebar-link" v-if="isLoggedIn && !isAdmin" to="/replay">
-
-  <i class="bi bi-play-btn"></i>
-  <span>Replay</span>
-    </router-link>
-
- 
-  
-<router-link v-if="isLoggedIn && !isAdmin"to="/Feedback" class="sidebar-link">
-  <i class="bi bi-person-plus"></i>
-  <span>FeedBacks</span>
-</router-link>
-<router-link v-if="!isLoggedIn" to="/registerform" class="sidebar-link register-cta">
-  <i class="bi bi-person-plus-fill"></i>
-  <span>S'inscrire</span>
-</router-link>
-
+      <!-- ======================== -->
+      <!-- MENU : ÉLÈVE (non admin / non prof) -->
+      <!-- ======================== -->
+      <nav class="sidebar-nav">
+<!-- ======================== -->
+<!-- MENU : PUBLIC (non connecté) -->
+<!-- ======================== -->
+<template v-if="!isLoggedIn">
  
 
-    <router-link class="sidebar-link" to="/partitions">
-      <i class="bi bi-music-note-beamed"></i>
-      <span>Partitions</span>
-    </router-link>
-      
-    <router-link class="sidebar-link" to="/BassTuner">
-      <i class="bi-music-note-beamed"></i>
-      <span>Accordeur</span>
-    </router-link>
+  <router-link to="/videos" class="sidebar-link">
+    <i class="bi bi-film"></i>
+    <span>Vidéos</span>
+  </router-link>
+
+  <router-link to="/partitions" class="sidebar-link">
+    <i class="bi bi-music-note-beamed"></i>
+    <span>Partitions</span>
+  </router-link>
+
+  <router-link to="/BassTuner" class="sidebar-link">
+    <i class="bi bi-music-note"></i>
+    <span>Accordeur</span>
+  </router-link>
+</template>
+
+        <!-- Élève : bouton "Prendre un cours" externe -->
+        <a
+          v-if="isLoggedIn && isEleve"
+          class="sidebar-link btn-cours"
+          href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
+          target="_blank"
+        >
+          <i class="bi bi-play-circle"></i>
+          <span>Prendre un cours</span>
+        </a>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/dashboard" class="sidebar-link">
+          <i class="bi bi-house-door"></i>
+          <span>Accueil</span>
+        </router-link>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/moncompte" class="sidebar-link">
+          <i class="bi bi-person-circle"></i>
+          <span>Mon compte</span>
+        </router-link>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/videos" class="sidebar-link">
+          <i class="bi bi-film"></i>
+          <span>Vidéos</span>
+        </router-link>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/planning" class="sidebar-link">
+          <i class="bi bi-calendar-check"></i>
+          <span>Plannings</span>
+        </router-link>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/replay" class="sidebar-link">
+          <i class="bi bi-play-btn"></i>
+          <span>Replay</span>
+        </router-link>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/Feedback" class="sidebar-link">
+          <i class="bi bi-chat-left-text"></i>
+          <span>Feedback</span>
+        </router-link>
+
+        <router-link v-if="isLoggedIn && isEleve" to="/videos" class="sidebar-link">
+  <i class="bi bi-film"></i>
+  <span>Vidéos</span>
+</router-link>
+
+<router-link v-if="isLoggedIn && isEleve" to="/partitions" class="sidebar-link">
+  <i class="bi bi-music-note-beamed"></i>
+  <span>Partitions</span>
+</router-link>
+
+<router-link v-if="isLoggedIn && isEleve" to="/BassTuner" class="sidebar-link">
+  <i class="bi bi-music-note"></i>
+  <span>Accordeur</span>
+</router-link>
 
 
-    <router-link v-if="isAdmin" to="/AdminFeedBack" class="sidebar-link">
-  <i class="bi bi-person-plus"></i>
-  <span>FeedBacks Admin</span>
+        <!-- ======================== -->
+        <!-- MENU : PROF (prof ou admin) -->
+        <!-- ======================== -->
+        <router-link v-if="isProf" to="/dashboard-prof" class="sidebar-link">
+          <i class="bi bi-speedometer2"></i>
+          <span>Dashboard Prof</span>
+        </router-link>
+
+        <router-link v-if="isProf" to="/FeedBackProf" class="sidebar-link">
+          <i class="bi bi-chat-left-dots"></i>
+          <span>Feedbacks Élèves</span>
+        </router-link>
+
+        <router-link v-if="isProf" to="/gestioneleves" class="sidebar-link">
+          <i class="bi bi-people"></i>
+          <span>Gestion Élèves</span>
+        </router-link>
+
+        <!-- 🔥 AJOUT POUR PROF -->
+<router-link v-if="isProf" to="/CreatePlanning" class="sidebar-link">
+  <i class="bi bi-calendar-event"></i>
+  <span>Créer un planning</span>
 </router-link>
-    <router-link v-if="isAdmin" to="/CreatePlanning" class="sidebar-link">
-  <i class="bi bi-pencil-square"></i>
-  <span>Créer planning de l'élève</span>
-</router-link>
-    <router-link v-if="isAdmin" to="/register-cursus" class="sidebar-link">
-  <i class="bi bi-person-add"></i>
-  <span>Ajouter un élève</span>
-</router-link>
-  
-<router-link v-if="isAdmin" to="/cours" class="sidebar-link">
- <i class="bi bi-tools"></i>
+
+<router-link v-if="isProf" to="/cours" class="sidebar-link">
+  <i class="bi bi-wrench-adjustable"></i>
   <span>Gestion des cours</span>
 </router-link>
-<router-link v-if="isAdmin" to="/gestioneleves" class="sidebar-link">
- <i class="bi bi-tools"></i>
-  <span>Gestion des élèves</span>
-</router-link>
 
+        <!-- ======================== -->
+        <!-- MENU : ADMIN ONLY -->
+        <!-- ======================== -->
+        <router-link v-if="isAdmin" to="/AdminFeedBack" class="sidebar-link">
+          <i class="bi bi-shield-lock"></i>
+          <span>Feedbacks Admin</span>
+        </router-link>
 
+        <router-link v-if="isAdmin" to="/CreatePlanning" class="sidebar-link">
+          <i class="bi bi-calendar-event"></i>
+          <span>Créer un planning</span>
+        </router-link>
 
-  </nav>
-</aside>
- <!-- ✅ Bouton pour afficher/masquer la sidebar -->
- <button class="toggle-menu-btn" v-if="!isMobile" @click="toggleSidebar">
-  <i :class="isSidebarCollapsed ? 'bi bi-chevron-right' : 'bi bi-chevron-left'"></i>
-</button>
+        <router-link v-if="isAdmin" to="/register-cursus" class="sidebar-link">
+          <i class="bi bi-person-plus"></i>
+          <span>Ajouter un élève</span>
+        </router-link>
 
+        <router-link v-if="isAdmin" to="/cours" class="sidebar-link">
+          <i class="bi bi-wrench-adjustable"></i>
+          <span>Cours <span v-if="pendingCount > 0">({{ pendingCount }})</span></span>
+        </router-link>
 
-    <!-- ✅ Bandeau principal -->
+      </nav>
+    </aside>
+
+    <!-- Bouton collapse desktop -->
+    <button
+      v-if="!isMobile"
+      class="toggle-menu-btn"
+      @click="toggleSidebar"
+    >
+      <i :class="isSidebarCollapsed ? 'bi bi-chevron-right' : 'bi bi-chevron-left'"></i>
+    </button>
+
+    <!-- ========================================================= -->
+    <!-- 🟦 2) HEADER (mobile + desktop)                           -->
+    <!-- ========================================================= -->
     <header class="hero-banner">
       <div class="hero-content">
-        <!-- ✅ Logo pour Desktop -->
-        <img v-if="!isMobile" :src="logoUrl" alt="Logo SunBassSchool" class="logo" />
 
-        <!-- ✅ Logo Responsive si l'utilisateur n'est pas connecté -->
-        <img v-if="showResponsiveLogo" :src="logoUrl" alt="Logo SunBassSchool" class="logo responsive-logo" />
+        <!-- Logo desktop -->
+        <img
+          v-if="!isMobile"
+          :src="logoUrl"
+          class="logo"
+          alt="SunBassSchool"
+        />
 
-        <!-- ✅ Menu Hamburger en Responsive -->
-      <button class="menu-btn" v-if="isMobile" @click="authStore.toggleMenu()">
-  <i class="bi bi-list"></i>
-</button>
+        <!-- Logo mobile si pas connecté -->
+        <img
+          v-if="showResponsiveLogo"
+          :src="logoUrl"
+          class="logo responsive-logo"
+        />
 
-<!-- ✅ Bouton Mon compte (Responsive) -->
-<div v-if="isLoggedIn && isMobile" class="mobile-account-actions">
-  <router-link to="/moncompte" title="Mon Compte">
-    <i class="bi bi-person-circle"></i>
-  </router-link>
-  <button @click="handleLogout" title="Se déconnecter">
-    <i class="bi bi-box-arrow-right"></i>
-  </button>
-</div>
-
-
-        <!-- ✅ Bouton Installer PWA -->
-        <button v-if="showInstallButton" @click="installPWA" class="install-btn" title="Installer SunBassAPP">
-          📥
+        <!-- Burger menu mobile -->
+        <button class="menu-btn" v-if="isMobile" @click="authStore.toggleMenu()">
+          <i class="bi bi-list"></i>
         </button>
 
+        <!-- Boutons mobile : compte + logout -->
+        <div v-if="isLoggedIn && isMobile" class="mobile-account-actions">
+          <router-link to="/moncompte">
+            <i class="bi bi-person-circle"></i>
+          </router-link>
+          <button @click="handleLogout">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
+        </div>
 
-        <!-- ✅ Section centrale -->
+        <!-- Installer PWA -->
+        <button v-if="showInstallButton" @click="installPWA" class="install-btn">📥</button>
+
+        <!-- Titre / Slogan -->
         <div class="hero-text">
           <h1 class="hero-title">SunBassAPP</h1>
           <p class="hero-subtitle">L'école de basse en ligne qui groove</p>
         </div>
-        <!-- ✅ Boutons supplémentaires pour desktop -->  
-      
-<div v-if="!isLoggedIn && !isMobile" class="desktop-auth-buttons">
-  <router-link to="/login" class="btn-auth login-btn">Se connecter</router-link>
 
-  <router-link to="/registerform" class="btn-auth trial-btn">Essai Gratuit</router-link>
+        <!-- Auth desktop -->
+        <div v-if="!isLoggedIn && !isMobile" class="desktop-auth-buttons">
+          <router-link to="/login" class="btn-auth login-btn">Se connecter</router-link>
+          <router-link to="/registerform" class="btn-auth trial-btn">Essai Gratuit</router-link>
+        </div>
 
+        <!-- Abonnement + compte desktop -->
+        <div v-if="isLoggedIn && !isMobile" class="account-info-block">
+          <router-link to="/moncompte" class="account-link">
+            <i class="bi bi-person-gear"></i>
+          </router-link>
 
-</div>   
-<!-- ✅ Bloc pour le bouton Déconnexion -->
-<div v-if="isLoggedIn && !isMobile" class="account-info-block">
-  
+          <div v-if="user?.statut" class="subscription-badge mt-2">
+            <template v-if="isSubscribed">
+              <span class="badge bg-success">✅ Abonné</span>
+            </template>
+            <template v-else>
+              <a
+                href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
+                target="_blank"
+                class="badge bg-danger"
+              >
+                ❌ Non abonné
+              </a>
+            </template>
+          </div>
+        </div>
 
-  
- 
-<!-- Icône Mon Compte -->
-  <router-link
-    to="/moncompte"
-    class="account-link"
-    title="Mon Compte"
-  >
-    <i class="bi bi-person-gear" style="font-size: 1.8rem; color: #ffffff;"></i>
-  </router-link>
-<!-- Bouton Déconnexion -->
-  <button
-    @click="handleLogout"
-    class="logout-btn"
-    title="Se déconnecter"
-  >
-    <i class="bi bi-box-arrow-right" style="font-size: 1.8rem; color: #ffffff;"></i>
-  </button>
-
-  <div v-if="isUserReady && user && user.statut" class="subscription-badge mt-2">
-    <template v-if="isSubscribed">
-<span class="badge bg-success" :title="user.type_abonnement">
-  ✅ Abonné
-
-      </span>
-    </template>
-    <template v-else>
-     <a
-  href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
-  target="_blank"
-  rel="noopener noreferrer"
-  class="badge bg-danger text-decoration-none"
-  title="S'abonner maintenant"
->
-  ❌ Non abonné 
-</a>
-
-    </template>
-  </div>
-</div>
-</div>
+      </div>
     </header>
 
-<div v-if="showMenu" class="menu-overlay" @click="toggleMenu"></div>
-<div class="mobile-menu" :class="{ 'active': showMenu }">
-  <!-- ✅ Info abonnement responsive -->
- <div class="subscription-badge mt-2 mb-2" v-if="user && user.statut && isMobile" style="text-align: center;">
-  <template v-if="isSubscribed">
-    <span class="badge bg-success" :title="user.type_abonnement + ' — Renouvellement : ' + formattedFinAcces">
-      ✅ Abonné
-    </span>
-  </template>
-  <template v-else>
-    <a
-      href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="badge bg-danger text-decoration-none"
-    >
-      ❌ Non abonné
-    </a>
-  </template>
-</div>
+    <!-- ========================================================= -->
+    <!-- 🟩 3) MENU MOBILE (overlay)                               -->
+    <!-- ========================================================= -->
+    <div v-if="showMenu" class="menu-overlay" @click="toggleMenu">
 
 
-  <!-- MENU MOBLE -->
- <router-link v-if="isLoggedIn" to="/dashboard" class="nav-link">
-    <i class="bi bi-person-circle"></i><span>Accueil</span>
-  </router-link>
+    </div>
+  <!-- ========================================================= -->
+     <!-- ========================================================= -->
+        <!-- ========================================================= -->
+    <div class="mobile-menu" :class="{ active: showMenu }">
+      <!-- 🔵 PUBLIC (non connecté) -->
+<template v-if="!isLoggedIn">
 
-  <router-link v-if="isLoggedIn && !isAdmin" to="/moncompte" class="nav-link">
-    <i class="bi bi-person-circle"></i><span>Mon Compte</span>
-  </router-link>
-
-  <router-link v-if="isLoggedIn && !isAdmin" to="/Feedback" class="nav-link">
-    <i class="bi bi-chat-left-text"></i><span>Feedback</span>
-  </router-link>
-
- <router-link v-if="isLoggedIn && !isAdmin" to="/replay" class="nav-link">
-    <i class="bi bi-play-btn"></i><span>Replay</span>
-  </router-link>
-
-
-    <!-- ✅ Liens du footer (Planning, Replay, Partitions, Vidéos) -->
-  <router-link v-if="isLoggedIn && !isAdmin" to="/planning" class="nav-link">
-    <i class="bi bi-calendar-check"></i><span>Plannings</span>
-  </router-link>
-
-
-
-    <!-- ✅ Tes sections perso -->
- 
-
-  <router-link to="/partitions" class="nav-link">
-    <i class="bi bi-music-note-beamed"></i><span>Partitions</span>
-  </router-link>
-
-
-  <router-link v-if="isLoggedIn" to="/BassTuner" class="nav-link">
-    <i class="bi bi-music-note"></i><span>Accordeur</span>
-  </router-link>
-
-
-
-
-
- 
 
   <router-link to="/videos" class="nav-link">
     <i class="bi bi-film"></i><span>Vidéos</span>
   </router-link>
 
-  <!-- ✅ Connexion / Cours -->
-  <router-link v-if="!isLoggedIn" to="/login" class="nav-link">
+  <router-link to="/partitions" class="nav-link">
+    <i class="bi bi-music-note-beamed"></i><span>Partitions</span>
+  </router-link>
+
+  <router-link to="/BassTuner" class="nav-link">
+    <i class="bi bi-music-note"></i><span>Accordeur</span>
+  </router-link>
+    <router-link to="/login" class="nav-link">
     <i class="bi bi-box-arrow-in-right"></i><span>Se connecter</span>
   </router-link>
-<router-link v-if="!isLoggedIn" to="/registerform" class="nav-link">
-  <i class="bi bi-person-plus-fill"></i>
-  <span>S'inscrire</span>
+
+  <router-link to="/registerform" class="nav-link">
+    <i class="bi bi-person-plus"></i><span>S'inscrire</span>
+  </router-link>
+
+  <hr />
+</template>
+
+
+      <!-- Sub badge -->
+      <div v-if="user && isMobile" class="subscription-badge mt-2 mb-2" style="text-align:center;">
+        <span v-if="isSubscribed" class="badge bg-success">✅ Abonné</span>
+        <a v-else href="https://www.sunbassschool.com" target="_blank" class="badge bg-danger">❌ Non abonné</a>
+      </div>
+
+      <!-- Élève -->
+      <router-link v-if="isEleve" to="/dashboard" class="nav-link">
+        <i class="bi bi-house"></i><span>Accueil</span>
+      </router-link>
+
+      <router-link v-if="isEleve" to="/moncompte" class="nav-link">
+        <i class="bi bi-person"></i><span>Mon compte</span>
+      </router-link>
+
+      <router-link v-if="isEleve" to="/Feedback" class="nav-link">
+        <i class="bi bi-chat-left"></i><span>Feedback</span>
+      </router-link>
+
+      <router-link v-if="isEleve" to="/planning" class="nav-link">
+        <i class="bi bi-calendar-check"></i><span>Plannings</span>
+      </router-link>
+
+      <router-link v-if="isEleve" to="/replay" class="nav-link">
+        <i class="bi bi-play-btn"></i><span>Replay</span>
+      </router-link>
+
+      <router-link v-if="isEleve" to="/videos" class="nav-link">
+  <i class="bi bi-film"></i><span>Vidéos</span>
+</router-link>
+
+<router-link v-if="isEleve" to="/partitions" class="nav-link">
+  <i class="bi bi-music-note-beamed"></i><span>Partitions</span>
+</router-link>
+
+<router-link v-if="isEleve" to="/BassTuner" class="nav-link">
+  <i class="bi bi-music-note"></i><span>Accordeur</span>
 </router-link>
 
 
-  <a v-if="!isAdmin" href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
-     target="_blank" rel="noopener noreferrer" class="nav-link">
-    <i class="bi bi-play-circle"></i><span>Prendre un cours</span>
-  </a>
+      <!-- Prof -->
+      <router-link v-if="isProf" to="/dashboard-prof" class="nav-link">
+        <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+      </router-link>
 
-  <!-- ✅ Liens Admin -->
-  <router-link v-if="isAdmin" to="/AdminFeedBack" class="nav-link">
-    <i class="bi bi-pencil-square"></i><span>FeedBack</span>
-  </router-link>
-  <router-link v-if="isAdmin" to="/CreatePlanning" class="nav-link">
-    <i class="bi bi-calendar-event"></i><span>Planning</span>
-  </router-link>
-  <router-link v-if="isAdmin" to="/register-cursus" class="nav-link">
-    <i class="bi bi-person-plus"></i><span>Ajouter un élève</span>
-  </router-link>
-  <router-link v-if="isAdmin" to="/cours" class="nav-link">
-    <i class="bi bi-tools"></i><span>Cours</span>
-  </router-link>
-  <button v-if="authStore.user?.role === 'admin'" @click="authStore.toggleImpersonateStudent()" class="nav-link">
-  <i class="bi bi-person-check-fill"></i>
-  <span>{{ authStore.impersonateStudent ? '👑 Revenir admin' : '👤 Voir comme élève' }}</span>
-</button>
-</div>
+      <router-link v-if="isProf" to="/FeedBackProf" class="nav-link">
+        <i class="bi bi-chat"></i><span>Mes Feedbacks </span>
+      </router-link>
 
+      <router-link v-if="isProf" to="/gestioneleves" class="nav-link">
+        <i class="bi bi-people"></i><span>Mes élèves</span>
+      </router-link>
 
+      <router-link v-if="isProf" to="/CreatePlanning" class="nav-link">
+  <i class="bi bi-calendar-event"></i><span>Créer planning</span>
+</router-link>
 
-    <!-- ✅ Contenu principal --><div v-if="refreshFailed" class="error-message">
-  ⚠️ Session expirée, veuillez vous reconnecter.
-</div>
+<router-link v-if="isProf" to="/cours" class="nav-link">
+  <i class="bi bi-tools"></i><span>Gestion des cours</span>
+</router-link>
+      <!-- Admin -->
+      <router-link v-if="isAdmin" to="/AdminFeedBack" class="nav-link">
+        <i class="bi bi-pencil-square"></i><span>Feedbacks Admin</span>
+      </router-link>
+
+      <router-link v-if="isAdmin" to="/CreatePlanning" class="nav-link">
+        <i class="bi bi-calendar-event"></i><span>Planning</span>
+      </router-link>
+
+      <router-link v-if="isAdmin" to="/register-cursus" class="nav-link">
+        <i class="bi bi-person-plus"></i><span>Ajouter élève</span>
+      </router-link>
+
+      <router-link v-if="isAdmin" to="/cours" class="nav-link">
+        <i class="bi bi-tools"></i><span>Cours</span>
+      </router-link>
+
  
-<main :class="['page-content', { collapsed: isSidebarCollapsed }]">
- <!-- pour debug -->
 
+    </div>
 
-<div v-if="showSwipeHint" class="swipe-hint">
-  <i class="bi bi-arrow-right-short"></i>
-</div>
+    <!-- ========================================================= -->
+    <!-- 🟨 4) CONTENU PRINCIPAL                                   -->
+    <!-- ========================================================= -->
+    <main class="page-content" :class="{ collapsed: isSidebarCollapsed }">
+      <slot></slot>
+    </main>
 
-  <div v-if="isRefreshing" class="loading">
-    🔄 Rafraîchissement en cours...
-  </div>
+    <!-- Refresh overlay / warnings -->
+    <div v-if="refreshFailed" class="error-message">
+      ⚠️ Session expirée, veuillez vous reconnecter.
+    </div>
 
-  <transition name="slide" mode="out-in">
-  <div>
-    <slot></slot>
-  </div>
-</transition>
-
-</main>
-
-
-    <!-- ✅ Menu de navigation en bas -->
-   
-    <!-- Overlay visible pendant le rafraîchissement du token -->
-
-<!-- 🔄 Overlay visible pendant le rafraîchissement -->
-
-  <div v-if="tookTooLong" class="slow-warning">
-    ⏱️ Cela prend plus de temps que prévu... Vérifiez votre connexion ?
-  </div>
-
-
-
-
-
-
-
-
- <div class="impersonate-toggle">
+    <div v-if="tookTooLong" class="slow-warning">
+      ⏱️ Cela prend plus de temps que prévu…
+    </div>
+<!-- ========================================================= -->
+<!-- 🔁  MODE IMPERSONATION (ADMIN ↔ ÉLÈVE)                   -->
+<!-- ========================================================= -->
+<div v-if="isRealAdmin" class="impersonate-toggle">
   <label class="switch-mode-toggle">
- <input type="checkbox"
-       :checked="authStore.impersonateStudent"
-       @change="authStore.toggleImpersonateStudent()" />
+    <input
+      type="checkbox"
+      :checked="authStore.impersonateStudent"
+      @change="authStore.toggleImpersonateStudent()"
+    />
     <span class="slider"></span>
     <span class="label-text">
       {{ authStore.impersonateStudent ? '👤 Élève' : '👑 Admin' }}
@@ -366,336 +387,336 @@
   </label>
 </div>
 
-
   </div>
-
-
-
-
- 
-
-
 </template>
 
 
 
 
+
+
 <script>
-import { ref, computed, onMounted, onUnmounted, inject, getCurrentInstance, watch, watchEffect } from "vue";
-import { useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/authStore.ts";
-import { logoutUser,isJwtExpired  } from "@/utils/api.ts";
+/* ============================================================================
+   📦 IMPORTS
+   ============================================================================ */
+import {
+  ref,
+  computed,
+  onMounted,
+  onUnmounted,
+  watch
+} from "vue";
+
+import { useRouter, useRoute } from "vue-router";
+import { useAuthStore } from "@/stores/authStore.js";
+import {
+  logoutUser,
+  isJwtExpired
+} from "@/utils/api.ts";
+
 import MiniMetronome from "@/components/MiniMetronome.vue";
-import { useRoute } from "vue-router";
-
-
 import logo from "@/assets/logo.PNG";
+
+/* ============================================================================
+   🌐 SESSION EXPIRED GLOBAL FLAG
+   ============================================================================ */
 export const visible = ref(false);
 export function showSessionExpired() {
   visible.value = true;
 }
-
-// Optionnel : cacher après un délai
 export function hideSessionExpired(delay = 3000) {
-  setTimeout(() => {
-    visible.value = false;
-  }, delay);
+  setTimeout(() => (visible.value = false), delay);
 }
+
+/* ============================================================================
+   🎛️ LAYOUT COMPONENT
+   ============================================================================ */
 export default {
   name: "Layout",
   components: { MiniMetronome },
 
- setup() {
-  const authStore = useAuthStore();
-  window.authStore = authStore;
-const isUserReady = ref(false);
-const showOverlay = ref(false);
+  setup() {
+    /* ------------------------------------------------------------------------
+       🧩 STORES & ROUTERS
+    ------------------------------------------------------------------------ */
+    const authStore = useAuthStore();
+    const router = useRouter();
+    const route = useRoute();
 
-  const router = useRouter();
-  const route = useRoute();
-  const showSwipeHint = ref(false);
-  const showResponsiveLogo = ref(false);
-  const logoUrl = ref(logo);
-  const logoutMessage = ref("");
-  const tookTooLong = ref(false);
-    const prenom = localStorage.getItem("prenom");
-    const userData = localStorage.getItem("userData_" + prenom);
-  const decoded = authStore.jwt ? JSON.parse(atob(authStore.jwt.split('.')[1])) : {};
-  const isSidebarCollapsed = ref(false);
-  const isMobile = ref(window.innerWidth <= 1024);
-  const deferredPrompt = ref(null);
-  const showInstallButton = ref(false);
-  const isRefreshing = ref(false);
-const user = ref({});
-const email = decoded?.email || "anonymous";
+    console.log("💥 USER STORE (Layout):", authStore.user);
 
-  if (userData) user.value = JSON.parse(userData);
-const cacheKey = "userData_" + email;
-const cached = localStorage.getItem(cacheKey);
-if (cached) {
-  try {
-    user.value = JSON.parse(cached);
-    console.log("⚡ user.value chargé depuis localStorage :", user.value);
-  } catch (err) {
-    console.warn("❌ Erreur parsing cache userData :", err);
-  }
-}
+/* ------------------------------------------------------------------------
+   👤 USER & ROLES — VERSION SAAS MULTI-PROF (FIX CASE-SENSITIVE)
+------------------------------------------------------------------------ */
 
+// Normaliser le rôle en minuscule
+const role = computed(() => (authStore.user?.role || "").toLowerCase());
 
+const user = computed(() => authStore.user);
 
+const pendingCount = computed(() => authStore.pendingReportsCount);
 
+const isLoggedIn = computed(() => !!authStore.jwt);
 
+/* ADMIN réel = toujours vrai si role = admin (même en impersonation) */
+const isRealAdmin = computed(() => role.value === "admin");
 
-  const isLoggedIn = computed(() => !!authStore.jwt);
-  const isAdmin = computed(() => authStore.isAdmin);
-  const refreshFailed = computed(() => authStore.refreshFailed);
-  const authLoading = computed(() => authStore.isRefreshingToken);
-  const showMenu = computed(() => authStore.menuOpen);
-const sidebarIsVisible = computed(() => {
-  if (!authStore.isInitDone) return false; // tant que l'auth n'est pas prête, ne rien montrer
-  return !!authStore.jwt && !isMobile.value && !isSidebarCollapsed.value;
+/* Admin visible → sauf en mode 'voir comme élève' */
+const isAdmin = computed(() => {
+  if (authStore.impersonateStudent) return false;
+  return role.value === "admin";
 });
-  const isSubscribed = computed(() => {
-    const statut = (user.value?.statut || "").toLowerCase();
-    return ["abonné", "payant", "inscrit", "actif"].includes(statut) && !!user.value?.fin_acces;
-  });
 
-  const formattedFinAcces = computed(() => {
-    if (!user.value?.fin_acces) return "Non défini";
-    const date = new Date(user.value.fin_acces);
-    return date.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
+/* Prof = prof OU admin */
+const isProf = computed(() =>
+  ["prof", "admin"].includes(authStore.user?.role)
+);
+
+/* Élève = ni admin visible, ni prof */
+const isEleve = computed(() =>
+  isLoggedIn.value && !isAdmin.value && !isProf.value
+);
+
+
+
+
+    /* ------------------------------------------------------------------------
+       🛠️ UI STATES
+    ------------------------------------------------------------------------ */
+    const isMobile = ref(window.innerWidth <= 1024);
+    const isSidebarCollapsed = ref(false);
+    const sidebarIsVisible = computed(
+      () => !isMobile.value && !isSidebarCollapsed.value && authStore.jwt
+    );
+
+    const showMenu = computed(() => authStore.menuOpen);
+    const logoUrl = ref(logo);
+    const showResponsiveLogo = ref(false);
+
+    const showOverlay = ref(false);
+    const tookTooLong = ref(false);
+    const logoutMessage = ref("");
+
+    const showSwipeHint = ref(false);
+
+    /* ------------------------------------------------------------------------
+       📱 PWA INSTALL HANDLING
+    ------------------------------------------------------------------------ */
+    const deferredPrompt = ref(null);
+    const showInstallButton = ref(false);
+
+    function handleBeforeInstallPrompt(e) {
+      deferredPrompt.value = e;
+      showInstallButton.value = true;
+    }
+
+    function installPWA() {
+      if (!deferredPrompt.value) return;
+      deferredPrompt.value.prompt();
+      deferredPrompt.value = null;
+    }
+
+    /* ------------------------------------------------------------------------
+       🧮 ABONNEMENT
+    ------------------------------------------------------------------------ */
+    const isSubscribed = computed(() => {
+      const statut = (user.value?.statut || "").toLowerCase();
+      return ["abonné", "payant", "inscrit", "actif"].includes(statut) &&
+        !!user.value?.fin_acces;
     });
-  });
 
-  const checkMobile = () => (isMobile.value = window.innerWidth <= 1024);
-
-  function toggleMenu() {
-    authStore.toggleMenu();
-  }
-
-  function toggleSidebar() {
-    isSidebarCollapsed.value = !isSidebarCollapsed.value;
-  }
-
-  function handleBeforeInstallPrompt(e) {
-    deferredPrompt.value = e;
-    showInstallButton.value = true;
-  }
-
-  function installPWA() {
-    if (!deferredPrompt.value) return;
-    deferredPrompt.value.prompt();
-    deferredPrompt.value = null;
-  }
-
-  async function handleLogout() {
-    await logoutUser();
-  }
-
-  let intervalId;
-  let touchStartX = 0;
-  let touchEndX = 0;
-
-  function handleTouchStart(e) {
-    touchStartX = e.changedTouches[0].screenX;
-  }
-
-  function handleTouchEnd(e) {
-    touchEndX = e.changedTouches[0].screenX;
-    handleSwipeGesture();
-  }
-
-  function handleSwipeGesture() {
-    const deltaX = touchEndX - touchStartX;
-    const threshold = 50;
-    if (Math.abs(deltaX) > threshold) {
-      deltaX > 0 ? showSidebar() : hideSidebar();
-    }
-  }
-
-  function showSidebar() {
-    if (isMobile.value && !authStore.menuOpen) {
-      authStore.menuOpen = true;
-    }
-  }
-
-  function hideSidebar() {
-    if (isMobile.value && authStore.menuOpen) {
-      authStore.menuOpen = false;
-    }
-  }
-
-  onMounted(async () => {
-     window.addEventListener("user-data-updated", () => {
-    setTimeout(() => {
-      const el = document.querySelector("main");
-      if (el && !el.classList.contains("page-content")) {
-        console.warn("⚠️ Correction .page-content après update user");
-        el.classList.add("page-content");
-      }
-    }, 50);
-  });
-
-    // ✅ Events UI
-    window.addEventListener("resize", checkMobile);
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("touchstart", handleTouchStart, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd);
-
-    const mobileMenu = document.querySelector('.mobile-menu');
-    if (mobileMenu) {
-      mobileMenu.addEventListener('click', (e) => {
-        const isRouterLink = e.target.closest('.nav-link');
-        if (isRouterLink) {
-          authStore.menuOpen = false;
-        }
+    const formattedFinAcces = computed(() => {
+      if (!user.value?.fin_acces) return "Non défini";
+      return new Date(user.value.fin_acces).toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
       });
-    }
-
-    if (isMobile.value && !localStorage.getItem("seenSwipeHint")) {
-      showSwipeHint.value = true;
-      localStorage.setItem("seenSwipeHint", "true");
-      setTimeout(() => showSwipeHint.value = false, 5000);
-    }
-
-    window.addEventListener("session-expired", (e) => {
-      logoutMessage.value = e.detail;
-      setTimeout(() => logoutMessage.value = "", 2000);
     });
 
-    // ✅ Auth & User
-    await authStore.loadUser();
-    if (!authStore.jwt) {
-      console.warn("⛔ Pas de JWT → fetchUserData() ignoré");
-      return;
+    /* ------------------------------------------------------------------------
+       📏 RESPONSIVE HANDLERS
+    ------------------------------------------------------------------------ */
+    const checkMobile = () =>
+      (isMobile.value = window.innerWidth <= 1024);
+
+    const toggleMenu = () => authStore.toggleMenu();
+    const toggleSidebar = () => (isSidebarCollapsed.value = !isSidebarCollapsed.value);
+
+    /* ------------------------------------------------------------------------
+       🔐 LOGOUT
+    ------------------------------------------------------------------------ */
+    async function handleLogout() {
+      await logoutUser();
+      authStore.$reset();
     }
 
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      try {
-        user.value = JSON.parse(cached);
-        console.log("⚡ user.value chargé depuis localStorage :", user.value);
-      } catch (err) {
-        console.warn("❌ Erreur parsing cache userData :", err);
+    /* ------------------------------------------------------------------------
+       📱 MOBILE SWIPE HANDLING
+    ------------------------------------------------------------------------ */
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const handleTouchStart = e => {
+      touchStartX = e.changedTouches[0].screenX;
+    };
+
+    const handleTouchEnd = e => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipeGesture();
+    };
+
+    function handleSwipeGesture() {
+      const deltaX = touchEndX - touchStartX;
+      if (Math.abs(deltaX) > 50) {
+        deltaX > 0 ? showSidebar() : hideSidebar();
       }
     }
 
-authStore.fetchUserData().then(() => {
-  const updated = localStorage.getItem(cacheKey);
-  if (updated) {
-    try {
-      user.value = JSON.parse(updated);
-      console.log("✅ user.value mis à jour via API :", user.value);
-      window.dispatchEvent(new CustomEvent('userDataUpdated', { detail: { email } }));
-    } catch (err) {
-      console.warn("❌ Erreur parsing updated userData :", err);
+    function showSidebar() {
+      if (!authStore.jwt) return;
+      if (isMobile.value) authStore.menuOpen = true;
     }
-  }
-  isUserReady.value = true;
-});
 
+    function hideSidebar() {
+      if (isMobile.value) authStore.menuOpen = false;
+    }
 
-    intervalId = setInterval(() => {
-      authStore.fetchUserData().then(() => {
-        const updated = localStorage.getItem(cacheKey);
-        if (updated) {
-          try {
-            user.value = JSON.parse(updated);
-            window.dispatchEvent(new CustomEvent('userDataUpdated', { detail: { email } }));
-          } catch (err) {
-            console.warn("❌ Erreur parsing périodique userData :", err);
+    /* ------------------------------------------------------------------------
+       🔥 ON MOUNT
+    ------------------------------------------------------------------------ */
+    onMounted(() => {
+      // Correctif CSS post-update user
+      window.addEventListener("user-data-updated", () => {
+        setTimeout(() => {
+          const el = document.querySelector("main");
+          if (el && !el.classList.contains("page-content")) {
+            el.classList.add("page-content");
           }
-        }
+        }, 50);
       });
-    }, 5 * 60 * 1000);
-  });
 
-  onUnmounted(() => {
-    clearInterval(intervalId);
-    window.removeEventListener("resize", checkMobile);
-    window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.removeEventListener("touchstart", handleTouchStart);
-    window.removeEventListener("touchend", handleTouchEnd);
-  });
-watch(() => authStore.jwt, () => {
-  setTimeout(() => {
-    const el = document.querySelector('.page-content');
-    if (el && !el.classList.contains('page-content')) {
-      el.classList.add('page-content');
-    }
-  }, 100); // petit délai pour laisser le DOM se stabiliser
-});
-watch(() => authStore.jwt, (newJwt, oldJwt) => {
-  if (!newJwt && oldJwt && !authStore.isLoggingOut && localStorage.getItem("logout_in_progress") !== "true") {
-    console.warn("🚨 [watch] JWT supprimé → redirection automatique vers /login");
-    console.log("🔍 Contexte du logout : ", {
-      newJwt,
-      oldJwt,
-      isLoggingOut: authStore.isLoggingOut,
-      isInitDone: authStore.isInitDone,
-      refreshFailed: authStore.refreshFailed,
-      storedJwt: localStorage.getItem("jwt")
+      // Responsive & PWA
+      window.addEventListener("resize", checkMobile);
+      window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+      // Touch gestures
+      window.addEventListener("touchstart", handleTouchStart, { passive: false });
+      window.addEventListener("touchend", handleTouchEnd);
+
+      // Auto-close mobile menu when tapping a link
+      const mobileMenu = document.querySelector(".mobile-menu");
+      if (mobileMenu) {
+        mobileMenu.addEventListener("click", e => {
+          if (e.target.closest(".nav-link")) authStore.menuOpen = false;
+        });
+      }
+
+      // Hint swipe first time
+      if (isMobile.value && !localStorage.getItem("seenSwipeHint")) {
+        showSwipeHint.value = true;
+        localStorage.setItem("seenSwipeHint", "true");
+        setTimeout(() => (showSwipeHint.value = false), 5000);
+      }
+
+      window.addEventListener("session-expired", e => {
+        logoutMessage.value = e.detail;
+        setTimeout(() => (logoutMessage.value = ""), 2000);
+      });
     });
-    logoutMessage.value = "Session expirée. Veuillez vous reconnecter.";
-    logoutUser(); // <-- ici
+
+    /* ------------------------------------------------------------------------
+       🔥 ON UNMOUNT
+    ------------------------------------------------------------------------ */
+    onUnmounted(() => {
+      window.removeEventListener("resize", checkMobile);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    });
+
+    /* ------------------------------------------------------------------------
+       🌀 REFRESH TOKEN OVERLAY
+    ------------------------------------------------------------------------ */
+    const authLoading = computed(() => authStore.isRefreshingToken);
+    const refreshFailed = computed(() => authStore.refreshFailed);
+    const isRefreshing = computed(() => authStore.isRefreshingToken);
+
+    watch(authLoading, val => {
+      showOverlay.value = val;
+      document.body.classList.toggle("loading-active", val);
+
+      if (val) {
+        setTimeout(() => {
+          if (authLoading.value) tookTooLong.value = true;
+        }, 5000);
+      } else {
+        tookTooLong.value = false;
+      }
+    });
+
+    /* ------------------------------------------------------------------------
+       🚨 JWT LOST → Redirect to login
+    ------------------------------------------------------------------------ */
+    watch(
+      () => authStore.jwt,
+      (newVal, oldVal) => {
+        if (!newVal && oldVal && !authStore.isLoggingOut &&
+          localStorage.getItem("logout_in_progress") !== "true") {
+          logoutMessage.value = "Session expirée. Veuillez vous reconnecter.";
+        }
+      }
+    );
+
+    /* ============================================================================
+       📤 EXPORTS TO TEMPLATE
+       ============================================================================ */
+    return {
+      /* State & store */
+      authStore,
+      user,
+      isLoggedIn,
+      isAdmin,
+      isProf,
+      isEleve,
+      isRealAdmin,
+      pendingCount,
+
+      /* UI */
+      isMobile,
+      sidebarIsVisible,
+      isSidebarCollapsed,
+      toggleSidebar,
+      toggleMenu,
+      showMenu,
+      showOverlay,
+      showResponsiveLogo,
+
+      logoUrl,
+
+      /* Subscription */
+      isSubscribed,
+      formattedFinAcces,
+
+      /* PWA */
+      showInstallButton,
+      installPWA,
+
+      /* Logout */
+      handleLogout,
+
+      /* Swipe */
+      showSwipeHint,
+
+      /* Refresh token overlay */
+      refreshFailed,
+      authLoading,
+      isRefreshing,
+      tookTooLong,
+      logoutMessage
+    };
   }
-});
-
-// 🆕 showOverlay lié dynamiquement à l'état d'authLoading
-watch(authLoading, (val) => {
-  showOverlay.value = val; // ← PATCH ajouté ici
-
-  document.body.classList.toggle("loading-active", val);
-  if (val) {
-    setTimeout(() => {
-      if (authLoading.value) tookTooLong.value = true;
-    }, 5000);
-  } else {
-    tookTooLong.value = false;
-  }
-});
-
-
-  watch(() => authStore.jwt, (newJwt, oldJwt) => {
-    if (!newJwt && oldJwt && !authStore.isLoggingOut && localStorage.getItem("logout_in_progress") !== "true") {
-      console.warn("🚨 JWT supprimé → redirection automatique vers /login");
-      logoutMessage.value = "Session expirée. Veuillez vous reconnecter.";
-    }
-  });
-
-  return {
-    authStore,
-    user,
-    isLoggedIn,
-    isAdmin,
-    showOverlay,
-    isSubscribed,
-    formattedFinAcces,
-    logoUrl,
-    isMobile,
-    showMenu,
-    toggleMenu,
-    toggleSidebar,
-    isSidebarCollapsed,
-    installPWA,
-    showInstallButton,
-    handleLogout,
-    showResponsiveLogo,
-    refreshFailed,
-    isRefreshing,
-    authLoading,
-    tookTooLong,
-    logoutMessage,
-    sidebarIsVisible,
-    showSwipeHint,
-  };
-}
-
 };
-
 </script>
 
 
@@ -1273,7 +1294,7 @@ html, body {
 .layout-container {
   display: flex;
   flex-direction: row; /* ✅ Garde uniquement celui-ci */
-  background-color: #242424;
+  background-color: #000000;
     height: 100vh;
 
   width: 100%;
@@ -1455,7 +1476,7 @@ html, body {
   overflow-y: auto;
   width: 100%;
   max-width: 100vw;
-  background-color: rgba(3, 1, 1, 0.801);
+  background-color: #000 !important;
   padding: 0px;
   padding-top: 0px;
   padding-bottom: 0px;
@@ -1728,7 +1749,7 @@ html, body {
   left: 0;
   width: 100%;
   height: 80px; /* Réduction de la hauteur pour un look plus compact */
-  background: #181818; /* Fond noir uni, plus propre */
+  background: #000000; /* Fond noir uni, plus propre */
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); /* Ombre subtile */
   display: flex;
   justify-content: center;
@@ -2158,5 +2179,10 @@ body.loading-active {
   color: #0a58ca;
   transform: scale(1.1);
 }
+.hero-banner {
+  padding-top: env(safe-area-inset-top);
+  background: #000 !important;
+}
+
 
 </style>

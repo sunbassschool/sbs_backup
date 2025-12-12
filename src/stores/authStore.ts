@@ -40,6 +40,7 @@ sessionId: string | null;
 sidebarIsVisible: boolean;
 
   isLoggingOut: boolean;
+  authReady: boolean; // <-- AJOUT ICI
 
   /** interne — ne pas persister */
   _refreshInterval?: number;
@@ -47,6 +48,8 @@ sidebarIsVisible: boolean;
 
 export const useAuthStore = defineStore("auth", {
   state: (): AuthState => ({
+    authReady: false,
+
     menuOpen: false,
     impersonateStudent: localStorage.getItem("impersonateStudent") === "true",
     user: null,
@@ -250,28 +253,41 @@ async loadUser(): Promise<boolean | void> {
 }
 ,
 
- async refreshJwt(): Promise<string | null> {
+async refreshJwt(): Promise<string | null> {
   if (this.isRefreshingToken) return null;
   this.isRefreshingToken = true;
 
-  // ✅ Indique à l'HTML qu'un refresh est en cours
+  // Indique à l'UI qu'un refresh est en cours
   sessionStorage.setItem("refreshInProgress", "true");
-  sessionStorage.setItem("refreshDuration", "0"); // valeur par défaut
+  sessionStorage.setItem("refreshDuration", "0"); 
 
-  const start = performance.now(); // 🕒 début du timer
+  const start = performance.now();
 
   try {
-    const newJwt = await apiRefreshToken(); // ⬅️ ton call réel
+    const result = await apiRefreshToken(); // <= OBJET
+    if (!result || !result.jwt) throw new Error("JWT manquant dans le refresh");
 
-    if (!newJwt) throw new Error("JWT manquant dans le refresh");
+    const jwtString = result.jwt; // <= EXTRACTION STRING
 
-    this.setUserToken(newJwt);
+    // Mise à jour du token principal
+    this.setUserToken(jwtString);
 
-    // ✅ Stocke la durée réelle du refresh pour l'animer dans le HTML
+    // Mise à jour refresh + sessionId
+    if (result.refreshToken) {
+      this.refreshToken = result.refreshToken;
+      localStorage.setItem("refreshToken", result.refreshToken);
+    }
+
+    if (result.sessionId) {
+      this.sessionId = result.sessionId;
+      localStorage.setItem("sessionId", result.sessionId);
+    }
+
+    // Durée réelle pour l'UI
     const duration = performance.now() - start;
-    sessionStorage.setItem("refreshDuration", duration.toFixed(0)); // en ms
+    sessionStorage.setItem("refreshDuration", duration.toFixed(0));
 
-    return newJwt;
+    return jwtString; // <= ON RENVOIE QUE LA STRING
 
   } catch (err) {
     console.error("❌ Refresh JWT échoué :", err);
@@ -281,9 +297,10 @@ async loadUser(): Promise<boolean | void> {
   } finally {
     this.isRefreshingToken = false;
     sessionStorage.removeItem("refreshInProgress");
-    sessionStorage.removeItem("refreshDuration"); // 🧼 nettoyage aussi
+    sessionStorage.removeItem("refreshDuration");
   }
 }
+
 ,
 
     triggerRefresh() {

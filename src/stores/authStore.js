@@ -1,518 +1,591 @@
+// ============================================================================
+// 🏛️ AUTH STORE — VERSION PRO
+// Gère : JWT, RefreshToken, SessionID, User, Cache, Auto-Refresh Silent
+// Compatibilité totale avec Apps Script (refresh, recupinfosmembres, logout).
+// ============================================================================
+
 import { defineStore } from "pinia";
-  import { readKV } from "@/utils/AuthDBManager";
+import { readKV, saveSessionData, getSessionIdFromDB } from "@/utils/AuthDBManager.ts";
+import {
+  getValidToken,
+  refreshToken,
+  logoutUser,
+  isJwtExpired,
+  decodeJwt
+} from "@/utils/api.ts";
 
+let _refreshTimer = null;
+let _refreshPromise = null;
 
-import { getValidToken, getUserInfoFromJWT, refreshToken, logoutUser,decodeJwt  } from "@/utils/api.ts";
-import { saveSessionData, getSessionIdFromDB } from "@/utils/AuthDBManager.ts"; // 👈 Chemin à adapter si besoin
-window.saveSessionData = saveSessionData;
-window.readKV = readKV;
-
-
+// ============================================================================
+// 🏛️ STORE
+// ============================================================================
 export const useAuthStore = defineStore("auth", {
-state: () => ({
+
+  // --------------------------------------------------------------------------
+  // STATE
+  // --------------------------------------------------------------------------
+  state: () => ({
+    menuOpen: false,
+
+    jwt: localStorage.getItem("jwt") || null,
     refreshToken: localStorage.getItem("refreshToken") || null,
+    sessionId: localStorage.getItem("sessionId") || null,
 
-  menuOpen: false,
-  impersonateStudent: localStorage.getItem("impersonateStudent") === "true",
-  user: null,
-  jwt: localStorage.getItem("jwt") || null,     // ← 🆕 FIX
-  authLoading: false,
-  refreshFailed: false,
-  isInitDone: false,
-  isRefreshingToken: false,
-  lastRefreshAttempt: 0
+    user: null,                 // Données utilisateur
+    role: null,                 // Rôle utilisateur (admin / adherent / etc)
 
-}),
+    pendingReportsCount: 0,     // nombre de demandes de report de cours en attente
 
+    impersonateStudent: localStorage.getItem("impersonateStudent") === "true",
 
+    authReady: false,           // L'app est prête
+    jwtReady: false,            // Le JWT est prêt pour l'UI
+    authLoading: false,         // Flag de chargement (login / fetch user ...)
+
+    isRefreshingToken: false,   // Flag pour empêcher un double refresh simultané
+    refreshFailed: false,       // Indique si un refresh a échoué (1 fois)
+    isLoggingOut: false,        // Flag pour empêcher double logout
+    isInitDone: false,          // initAuth est terminé
+
+    _refreshInterval: null,     // Timer pour auto-refresh
+  }),
+
+  // --------------------------------------------------------------------------
+  // GETTERS
+  // --------------------------------------------------------------------------
   getters: {
-    isLoggedIn: (state) => {
+    // ✅ Est-ce que l'utilisateur est considéré comme connecté ?
+    isLoggedIn(state) {
+      // 1) Pas de JWT → non connecté
       if (!state.jwt) return false;
+
+      // 2) Si on est en train de refresh → on considère la session comme active
+      if (state.isRefreshingToken) return true;
+
+      // 3) Si logout en cours → non connecté
+      if (state.isLoggingOut) return false;
+
+      // 4) Si init terminé, user doit être chargé
+      if (state.isInitDone && !state.user) return false;
+
+      // 5) Vérifier l’expiration du token (payload.exp)
       try {
         const payload = JSON.parse(atob(state.jwt.split('.')[1]));
         return Date.now() < payload.exp * 1000;
       } catch {
+        // JWT mal formé → non connecté
         return false;
       }
     },
-    isReady: (state) => !!state.user,
 
-isAdmin: (state) => {
-  // Tant que user n’est pas chargé, on ne retourne rien
-  if (!state.user) return false;
+    // 👑 Est-ce que l'utilisateur est admin (et pas en mode impersonation) ?
+    isAdmin: (state) => {
+      if (!state.user) return false;
+      if (state.impersonateStudent) return false;
+      return state.user.role === "admin";
+    },
 
-  // Si en mode élève, masquer admin
-  if (state.impersonateStudent) return false;
+    // 👨‍🏫 Est-ce que l'utilisateur est prof (ou admin + prof_id) ?
+    isProf(state) {
+      if (!state.user) return false;
+      if (state.impersonateStudent) return false;
+      return state.user.role === "prof" || (state.user.role === "admin" && state.user.prof_id);
+    },
 
-  // Sinon rôle normal
-  return state.user?.role === "admin";
-},
+    // 👨‍🎓 Est-ce que l'utilisateur est un élève ?
+    isEleve(state) {
+      if (!state.user) return false;
+      return state.user.role === "eleve";
+    },
 
-
-  needsRefresh: (state) => {
-  if (!state.jwt) return false;
-  try {
-    const payload = JSON.parse(atob(state.jwt.split('.')[1]));
-    const expiresIn = payload.exp * 1000 - Date.now();
-
-    console.log("⏱️ expiresIn =", expiresIn, "ms");
-
-    return expiresIn < 10_000; // ⏳ Seulement si < 4 min
-  } catch {
-    return false;
-  }
-}
-
+    // 🔥 Indique si le JWT arrive à expiration dans moins de 5 minutes
+    needsRefresh: (state) => {
+      if (!state.jwt) return false;
+      try {
+        const payload = JSON.parse(atob(state.jwt.split('.')[1]));
+        const expiresIn = payload.exp * 1000 - Date.now();
+        return expiresIn < 5 * 60 * 1000; // 5 minutes
+      } catch {
+        return false;
+      }
+    }
   },
 
+  // --------------------------------------------------------------------------
+  // ACTIONS
+  // --------------------------------------------------------------------------
   actions: {
-async setSessionData({ jwt, refreshToken, sessionId, userData = null }) {
-  if (jwt) {
-    this.jwt = jwt;
-    localStorage.setItem("jwt", jwt);
-  }
+    // ⏏️ Ouvre ou ferme le menu de navigation
+    toggleMenu() {
+      this.menuOpen = !this.menuOpen;
+      localStorage.setItem("menuOpen", this.menuOpen ? "true" : "false");
+    },
 
-  if (refreshToken) {
-    this.refreshToken = refreshToken;
-    localStorage.setItem("refreshToken", refreshToken);
-    sessionStorage.setItem("refreshToken", refreshToken);
-  }
+    // 🎭 Active ou désactive le mode “impersonation” de l’élève
+    toggleImpersonateStudent() {
+      this.impersonateStudent = !this.impersonateStudent;
+      // (on ne stocke pas dans LS ici, mais tu peux le faire si besoin)
+    },
 
-  // ✅ Toujours garder la session existante si aucune nouvelle session
-  const sessionIdToSave = sessionId?.trim() || this.sessionId || localStorage.getItem("sessionId") || (await getSessionIdFromDB());
-
-  if (sessionIdToSave) {
-    this.sessionId = sessionIdToSave;
-    localStorage.setItem("sessionId", sessionIdToSave);
-    sessionStorage.setItem("sessionId", sessionIdToSave);
-  }
-
-  try {
-    await saveSessionData({
-      jwt: this.jwt || "",
-      refreshToken: this.refreshToken || "",
-      sessionId: this.sessionId || "", // ← maintenant jamais vide
-      userData,
-    });
-  } catch (err) {
-    console.error("❌ Erreur saveSessionData :", err);
-  }
-}
-
-
-,
-ensureUserLoaded() {
-  if (this.user && this.user.email) return; // déjà chargé
-
-  const jwt = this.jwt || localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
-  if (!jwt) {
-    console.warn("⛔ Pas de JWT trouvé dans ensureUserLoaded()");
-    return;
-  }
-
-  const apiBase = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
-  const query = `?route=recupinfosmembres&jwt=${encodeURIComponent(jwt)}`;
-  const fullUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBase + query)}`;
-
-  return fetch(fullUrl)
-    .then(res => res.json())
-    .then(data => {
-      if (data?.email) {
-        this.user = data;
-        localStorage.setItem(`userData_${data.email}`, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent("userDataUpdated", { detail: data }));
-        console.log("✅ ensureUserLoaded → données chargées");
-      } else {
-        console.warn("⚠️ Données utilisateur invalides depuis l'API :", data);
-      }
-    })
-    .catch(err => {
-      console.error("❌ Erreur réseau dans ensureUserLoaded :", err);
-    });
-}
-,
-    startAutoRefresh() {
-  if (this._refreshInterval) return;
-
-  this._refreshInterval = setInterval(async () => {
-    if (this.needsRefresh && !this.isRefreshingToken) {
-      console.log("♻️ Refresh auto déclenché (timer)");
-      await this.refreshJwt();
-    }
-  }, 60_000); // toutes les 60 secondes
-}
-,
-    toggleMenu(force = null) {
-  if (force === true) {
-    this.menuOpen = true;
-  } else if (force === false) {
-    this.menuOpen = false;
-  } else {
-    this.menuOpen = !this.menuOpen;
-  }
-},
-toggleImpersonateStudent() {
-  this.impersonateStudent = !this.impersonateStudent;
-  console.log("🔄 impersonateStudent =", this.impersonateStudent);
-  localStorage.setItem("impersonateStudent", this.impersonateStudent);
-}
-
-,
-setRefreshToken(token) {
-  localStorage.setItem("refreshToken", token);
-  sessionStorage.setItem("refreshToken", token);
-}
-,
-setImpersonate(value) {
-  this.impersonateStudent = value;
-  localStorage.setItem("impersonateStudent", value);
-}
-,
-// Méthode pour définir le token utilisateur
-async setUserToken(token) {
-  this.jwt = token;
-  localStorage.setItem("jwt", token);
-
-  await this.setSessionData({ jwt: token });
-
-  console.log("JWT mis à jour :", token);
-},
-
-// Mise à jour du RefreshToken
-async setRefreshToken(token) {
-  this.refreshToken = token;
-  localStorage.setItem("refreshToken", token);
-  sessionStorage.setItem("refreshToken", token);
-
-  await this.setSessionData({ refreshToken: token });
-
-  console.log("RefreshToken mis à jour :", token);
-},
-
-// Mise à jour du SessionId
-async setSessionId(sessionId) {
-  localStorage.setItem("sessionId", sessionId);
-  sessionStorage.setItem("sessionId", sessionId);
-
-  await this.setSessionData({ sessionId });
-
-  console.log("SessionId mis à jour :", sessionId);
-},
-
-
-async loadUser(forceApi = false) {
-  if (this.user?.email && !forceApi) {
-    console.log("🛑 Utilisateur déjà chargé, skip API.");
-    return true;
-  }
-
-  console.log("🔄 Chargement des infos utilisateur...");
-
-  try {
-    const jwt = this.jwt || await getValidToken();
-    this.jwt = jwt;
-
-    if (!this.jwt) {
-      console.warn("⚠️ Aucun JWT valide trouvé → logout");
-      this.jwt = null;
-      return false;
-    }
-
-    const rawUser = getUserInfoFromJWT(this.jwt);
-    if (!rawUser) {
-      console.warn("⚠️ JWT ne contient pas les infos → tentative API...");
-      return await this.fetchUserData(); // retourne directement le succès
-    }
-
-    if (rawUser?.prenom) {
+    // 📥 Charge le nombre de demandes de report de cours via un endpoint externe
+    async fetchPendingReports() {
       try {
-        rawUser.prenom = decodeURIComponent(escape(rawUser.prenom));
-      } catch (err) {
-        console.warn("⚠️ UTF-8 prénom incorrect :", rawUser.prenom);
+        const jwt = this.jwt;
+        if (!jwt) return;
+
+        const url = `https://script.google.com/macros/s/AKfycbzZxvUx0RFAsAszO9bvA2zInIqbrWsntDw1YYZiHQ993nRYboPx266McgZrSH2RH2KpNw/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
+        const proxy = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
+
+        const res = await fetch(proxy);
+        const data = await res.json();
+
+        if (data.success && Array.isArray(data.reports)) {
+          this.pendingReportsCount = data.reports.filter(r => r.status === "DEMANDE").length;
+        }
+      } catch (e) {
+        console.error("❌ fetchPendingReports error:", e);
       }
-    }
+    },
 
-    this.user = { ...rawUser };
-    console.log("🧾 Utilisateur depuis JWT :", this.user);
+    // ♻️ Essaye de restaurer la session depuis IndexedDB (ou fallback localStorage)
+    async restoreSessionFromStorage() {
+      const jwtDB = await readKV("jwt");
+      const rtDB = await readKV("refreshToken");
+      const sidDB = await readKV("sessionId");
 
-    return await this.fetchUserData(); // retourne le résultat final
+      const jwt = localStorage.getItem("jwt") || jwtDB || null;
+      const rt = localStorage.getItem("refreshToken") || rtDB || null;
+      const sid = localStorage.getItem("sessionId") || sidDB || null;
 
-  } catch (error) {
-    console.error("❌ Erreur loadUser() :", error);
+      this.jwt = jwt;
+      this.refreshToken = rt;
+      this.sessionId = sid;
+
+      // Si la session est complète, on sauvegarde dans IndexedDB
+      if (jwt && rt && sid) {
+        await saveSessionData({ jwt, refreshToken: rt, sessionId: sid });
+      } else {
+        console.warn("⚠️ Session incomplète → pas d’écriture IndexedDB");
+      }
+    },
+
+    // 🧪 (Compat legacy) Permet de définir un JWT manuellement depuis l'extérieur (ex: api.ts)
+    setUserToken(jwt) {
+      this.jwt = jwt;
+      localStorage.setItem("jwt", jwt);
+    },
+
+    // 💾 Sauvegarde sécurisée des infos de session (jwt, refreshToken, sessionId, sans user)
+    async setSessionData({ jwt, refreshToken, sessionId, userData = null }) {
+      // Mise à jour du JWT si fourni
+      if (jwt) {
+        this.jwt = jwt;
+        localStorage.setItem("jwt", jwt);
+      }
+
+      // Mise à jour du refreshToken si fourni
+      if (refreshToken) {
+        this.refreshToken = refreshToken;
+        localStorage.setItem("refreshToken", refreshToken);
+      }
+
+      // Détermination de la sessionId finale
+      const finalSessionId =
+        sessionId ||
+        this.sessionId ||
+        localStorage.getItem("sessionId") ||
+        (await getSessionIdFromDB());
+
+      if (finalSessionId) {
+        this.sessionId = finalSessionId;
+        localStorage.setItem("sessionId", finalSessionId);
+      }
+
+      // Si des données user sont fournies, on fusionne avec l'existant
+      if (userData) {
+        this.user = { ...(this.user || {}), ...userData };
+      }
+
+      // Sauvegarde dans IndexedDB (sans userData complet)
+      await saveSessionData({
+        jwt: this.jwt || "",
+        refreshToken: this.refreshToken || "",
+        sessionId: this.sessionId || "",
+        userData: null
+      });
+    },
+
+    // 👤 Récupère les données utilisateur depuis l'API (Apps Script) en utilisant JWT
+   async fetchUserData() {
+  if (!this.jwt) return false;
+
+  const jwtString = typeof this.jwt === "string" ? this.jwt : this.jwt?.jwt;
+  if (!jwtString || typeof jwtString !== "string") {
+    console.warn("⛔ fetchUserData : JWT invalide :", this.jwt);
     return false;
   }
-}
 
-
-
-,
-async fetchUserData() {
-  if (!this.jwt || typeof this.jwt !== 'string' || !this.jwt.includes('.')) {
-    console.warn("⛔ JWT invalide dans fetchUserData :", this.jwt);
-    return false;
-  }
+  const routeID = "AKfycbxIxwk_bWeGN5_I_GPdxPD1LjPxnz2_7eCpnxr9cYWzH0v84DspNehx89KtHjlrsNiWSg";
+  const rawUrl = `https://script.google.com/macros/s/${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(jwtString)}`;
+  const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(rawUrl)}`;
 
   this.authLoading = true;
 
-  const routeID = "AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA";
-  const buildUrl = (jwt) => {
-    const rawUrl = `https://script.google.com/macros/s/${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(jwt)}`;
-    return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(rawUrl)}`;
-  };
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
 
-  let attempt = 0;
-  while (attempt < 2) {
-    const finalUrl = buildUrl(this.jwt);
-    console.log("🧪 URL API finale :", finalUrl);
-    console.log("📡 fetchUserData appelé avec :", { jwt: this.jwt });
+    if (!data?.email) {
+      console.warn("⚠️ fetchUserData : données invalides");
+      return false;
+    }
 
-    try {
-      const res = await fetch(finalUrl);
-      const data = await res.json();
-      console.log("📦 Données brutes de l’API :", data);
+    // 1️⃣ Décodage JWT → source prioritaire pour role & prof
+    const payload = decodeJwt(jwtString);
 
-      if (data?.email) {
-        localStorage.setItem("email", data.email);
-        if (data.prenom) localStorage.setItem("prenom", data.prenom);
+    const jwtRole = payload?.role ?? null;
+    const jwtProfId = payload?.prof_id ?? null;
+    const jwtUserId = payload?.id ?? null;
 
-        const mapped = {
-          ...data,
-          playlist_youtube: data.youtube || "",
-          espace_google_drive: data.drive || "",
-          objectif: data.objectif || "",
-        };
+    // 🔥 Harmonisation rôle : backend renvoie "statut", JWT renvoie "role"
+let finalRole = null;
 
-        this.user = { ...this.user, ...mapped };
-        const cacheKey = `userData_${data.email}`;
-        localStorage.setItem(cacheKey, JSON.stringify(this.user));
+// 1) Role du JWT prioritaire
+if (jwtRole) {
+  finalRole = jwtRole;
+}
 
-        console.log("✅ Données utilisateur enrichies via API :", this.user);
-        return true; // ✅ SUCCÈS
-      }
+// 2) Sinon role backend via "statut"
+else if (data.statut) {
+  finalRole = data.statut.toLowerCase(); // ADMIN → admin
+}
 
-      else if (data?.message === 'JWT expiré') {
-        console.warn("⚠️ JWT expiré, tentative de refresh...");
-        const newJwt = await refreshToken();
+// 3) Fallback : data.role
+else if (data.role) {
+  finalRole = data.role.toLowerCase();
+}
 
-        if (!newJwt) {
-          console.error("❌ Impossible de rafraîchir le token");
-          return false;
+    // 2️⃣ User final (clean)
+    const builtUser = {
+      ...data,
+
+      playlist_youtube: data.youtube || "",
+      espace_google_drive: data.drive || "",
+      objectif: data.objectif || "",
+
+      // 🆕 ID utilisateur (depuis backend Membres ou JWT en fallback)
+      user_id: data.user_id ?? jwtUserId ?? null,
+
+      // 🆕 PROF_ID (backend → sinon JWT → jamais ancient store)
+      prof_id: data.prof_id ?? jwtProfId ?? null,
+
+      // 🆕 ROLE (JWT > backend)
+role: finalRole,
+    };
+
+    // 3️⃣ Mise à jour du store
+    this.user = {
+      ...(this.user || {}),
+      ...builtUser
+    };
+
+    // 4️⃣ Cache local
+    localStorage.setItem(`userData_${data.email}`, JSON.stringify(builtUser));
+
+    return true;
+
+  } catch (err) {
+    console.error("❌ fetchUserData error :", err);
+    return false;
+  } finally {
+    this.authLoading = false;
+  }
+}
+,
+
+    // 🔄 Rafraîchit le JWT + éventuellement refreshToken & sessionId
+    // retry = true permet un second essai après échec
+    async refreshJwt(retry = false) {
+      if (this.isLoggingOut) return null;
+      if (this.isRefreshingToken) return null;
+
+      this.isRefreshingToken = true;
+
+      try {
+        const result = await refreshToken();
+        // result attendu = { jwt: "...", refreshToken: "...", sessionId: "..." }
+
+        if (!result || (!result.jwt && typeof result !== "string")) {
+          throw new Error("JWT manquant après refresh");
         }
 
-        this.jwt = newJwt;
-        attempt++;
-        continue;
-      }
+        const jwtString = typeof result === "string" ? result : result.jwt;
 
-      else {
-        console.warn("⚠️ fetchUserData : données incomplètes ou invalides :", data);
-        return false;
-      }
+        if (!jwtString || typeof jwtString !== "string") {
+          throw new Error("JWT invalide (pas une string)");
+        }
 
-    } catch (e) {
-      console.error("❌ Exception fetchUserData :", e);
-      return false;
-    } finally {
-      this.authLoading = false;
-    }
-  }
+        // Mise à jour du JWT
+        this.jwt = jwtString;
+        localStorage.setItem("jwt", jwtString);
 
-  return false; // ❌ si on sort de la boucle sans succès
-}
+        // Mise à jour du refreshToken si fourni
+        if (result.refreshToken) {
+          this.refreshToken = result.refreshToken;
+          localStorage.setItem("refreshToken", result.refreshToken);
+        }
 
-,
-async refreshJwt(retry = false) {
-  if (this.isLoggingOut) {
-  console.warn("⛔ refreshJwt() annulé : déconnexion déjà en cours");
-  return null;
-}
+        // Mise à jour du sessionId si fourni
+        if (result.sessionId) {
+          this.sessionId = result.sessionId;
+          localStorage.setItem("sessionId", result.sessionId);
+        }
 
-  if (this.isRefreshingToken) return null;
-  this.isRefreshingToken = true;
+        // Décodage pour garder user cohérent (role, prof_id)
+        const payload = decodeJwt(jwtString);
 
-  // ✅ Signale à l'interface qu'un refresh est en cours
-  sessionStorage.setItem("refreshInProgress", "true");
-  sessionStorage.setItem("refreshDuration", "0"); // valeur par défaut
+        if (!this.user) this.user = {};
+        if (payload?.role) this.user.role = payload.role;
+        if (payload?.prof_id) this.user.prof_id = payload.prof_id;
 
-  const start = performance.now(); // 🕒 début du timer
+        // Marquer la session comme OK
+        this.refreshFailed = false;
+        this.authReady = true;
+        this.jwtReady = true;
 
-  try {
-    const newJwt = await refreshToken(); // 👈 ton appel réel à l'API
+        // Sauvegarde complète dans IndexedDB
+        await saveSessionData({
+          jwt: this.jwt,
+          refreshToken: this.refreshToken,
+          sessionId: this.sessionId,
+        });
 
-    if (!newJwt || typeof newJwt !== "string") {
-      throw new Error("JWT manquant ou invalide pendant le refresh");
-    }
+        return jwtString;
 
-    this.setUserToken(newJwt);
+      } catch (err) {
+        console.error("❌ refreshJwt error :", err);
+        this.refreshFailed = true;
 
-    const duration = performance.now() - start;
-    sessionStorage.setItem("refreshDuration", duration.toFixed(0)); // durée en ms
+        if (!retry) {
+          setTimeout(() => {
+            if (!this.isLoggingOut) this.refreshJwt(true);
+          }, 5000);
+        } else {
+          this.logout();
+        }
 
-    this.refreshFailed = false;
-    return newJwt;
+        return null;
 
-  } catch (err) {
-    console.error("❌ Échec du refresh JWT :", err);
-    this.refreshFailed = true;
-
-   if (!retry) {
-  console.warn("🕒 Nouvelle tentative dans 5 secondes...");
-
-  setTimeout(() => {
-    // ⛔ On vérifie qu'on n'est pas en train de se déconnecter
-    if (this.isLoggingOut || localStorage.getItem("logout_in_progress") === "true") {
-      console.warn("⛔ Annulation de la relance : logout en cours");
-      return;
-    }
-
-    this.refreshJwt(true);
-  }, 5000);
-
-} else {
-  console.error("🔥 Deuxième échec → déconnexion");
-
-  setTimeout(() => {
-    // ⛔ On évite un logout multiple
-    if (this.isLoggingOut || localStorage.getItem("logout_in_progress") === "true") {
-      console.warn("⛔ Logout déjà en cours");
-      return;
-    }
-
-    this.logout();
-  }, 2000);
-}
-
-
-    return null;
-
-  } finally {
-    this.isRefreshingToken = false;
-    sessionStorage.removeItem("refreshInProgress");
-    sessionStorage.removeItem("refreshDuration"); // 🧼 nettoyage
-  }
-},
-
-
-
-
-logout: async function () {
-  if (this.isLoggingOut || localStorage.getItem("logout_in_progress") === "true") {
-    console.log("🚫 Logout déjà en cours — annulé.");
-    return;
-  }
-
-  this.isLoggingOut = true;
-  localStorage.setItem("logout_in_progress", "true");
-
-  console.log("🚪 Déconnexion en cours...");
-
-  try {
-    await logoutUser(); // 👈 Clean session serveur + redirection
-  } catch (err) {
-    console.warn("⚠️ Erreur lors du logout serveur :", err);
-  }
-
-  // Nettoyage
-  this.jwt = null;
-  this.user = null;
-
-  ['jwt', 'refreshToken', 'sessionId'].forEach(key => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  });
-
-  this.isLoggingOut = false;
-  localStorage.removeItem("logout_in_progress");
-
-  console.log("✅ Déconnexion réussie");
-
-  // Optionnel : router.replace("/login");
-}
-
-,
-
-    triggerRefresh() {
-      if (!this.isRefreshingToken) {
-        console.log("🔄 Tentative de rafraîchissement...");
-        this.refreshJwt();  // Appeler le rafraîchissement si aucun rafraîchissement n'est en cours
-      } else {
-        console.log("🛑 Rafraîchissement déjà en cours...");
+      } finally {
+        this.isRefreshingToken = false;
       }
     },
 
-async initAuth() {
-  console.log("🔵 initAuth lancé");
-
-  try {
-    const token = await getValidToken();
-    console.log("🔵 étape 2 : token reçu ?", token);
-
-    if (token) {
-      this.jwt = token;
-
-      // 🧠 Planification d'un refresh anticipé
-      try {
-        const payload = decodeJwt(token); // ou decodeJwtWithoutVerify()
-        const now = Date.now();
-        const exp = payload.exp * 1000;
-        const timeBeforeRefresh = exp - now - 60000; // 60 sec avant
-
-        if (timeBeforeRefresh > 0) {
-          console.log(`🕓 Refresh auto prévu dans ${Math.round(timeBeforeRefresh / 1000)} sec`);
-          setTimeout(() => {
-            console.log("🔄 Refresh anticipé déclenché");
-            this.refreshJwt(); // ✅ remplace l'appel incorrect
-          }, timeBeforeRefresh);
-        } else {
-          console.warn("⏱️ Le token expire bientôt → refresh immédiat");
-          this.refreshJwt(); // ✅ aussi ici
-        }
-      } catch (e) {
-        console.warn("⚠️ Impossible de décoder le JWT pour planifier le refresh :", e);
+    // ⏰ Planifie l’auto‑refresh du JWT avant expiration (avec timer)
+    startAutoRefresh() {
+      // Nettoyage d'un ancien timer si présent
+      if (_refreshTimer) {
+        clearTimeout(_refreshTimer);
+        _refreshTimer = null;
       }
 
-      // 🚀 Chargement utilisateur immédiat (non bloquant)
-      const userPromise = this.loadUser();
-      this.authLoading = true;
+      const jwt = this.jwt;
+      if (!jwt) return;
 
-      userPromise.then(success => {
-        if (this.user?.email) {
-          localStorage.setItem("email", this.user.email);
-        }
-        if (this.user?.prenom) {
-          localStorage.setItem("prenom", this.user.prenom);
+      const payload = decodeJwt(jwt);
+      const exp = payload?.exp ? payload.exp * 1000 : null;
+
+      if (!exp) return;
+
+      const now = Date.now();
+
+      // On planifie le refresh 2 minutes avant expiration, mais au moins dans 5 sec
+      const refreshDelay = Math.max(exp - now - 120000, 5000);
+
+      console.log("⏳ Auto-refresh dans", Math.round(refreshDelay / 1000), "sec");
+
+      _refreshTimer = setTimeout(async () => {
+        // Si logout en cours → on annule auto‑refresh
+        if (this.isLoggingOut) {
+          console.log("⛔ Auto-refresh annulé : logout en cours");
+          return;
         }
 
-        if (!success) {
-          console.warn("⚠️ User load failed despite valid token");
+        // Si hors-ligne, attendre retour réseau
+        if (!navigator.onLine) {
+          console.warn("📡 Offline → auto-refresh suspendu");
+          window.addEventListener("online", () => this.startAutoRefresh(), { once: true });
+          return;
         }
-      }).catch(err => {
-        console.warn("⚠️ Erreur lors de loadUser :", err);
-      }).finally(() => {
-        this.authLoading = false;
+
+        // Si un refresh est déjà en cours, attendre
+        if (_refreshPromise) {
+          console.log("⏳ Refresh déjà en cours → on attend");
+          await _refreshPromise;
+          this.startAutoRefresh();
+          return;
+        }
+
+        console.log("🔄 Auto-refresh lancé…");
+
+        _refreshPromise = refreshToken()
+          .then(async (newJwt) => {
+            if (!newJwt?.jwt) {
+              console.error("❌ Refresh impossible → logout…");
+              await this.logout();
+              return null;
+            }
+
+            // Mise à jour du store
+            this.jwt = newJwt.jwt;
+            localStorage.setItem("jwt", newJwt.jwt);
+
+            if (newJwt.refreshToken)
+              localStorage.setItem("refreshToken", newJwt.refreshToken);
+
+            if (newJwt.sessionId)
+              localStorage.setItem("sessionId", newJwt.sessionId);
+
+            // Sauvegarde en IndexedDB
+            await saveSessionData({
+              jwt: newJwt.jwt,
+              refreshToken: newJwt.refreshToken,
+              sessionId: newJwt.sessionId,
+            });
+
+            console.log("✅ Refresh OK → replanning");
+
+            return newJwt.jwt;
+          })
+          .catch((err) => {
+            console.error("⚠️ Erreur refresh :", err);
+          })
+          .finally(() => {
+            _refreshPromise = null;
+            this.startAutoRefresh(); // replanification
+          });
+
+        await _refreshPromise;
+
+      }, refreshDelay);
+    },
+
+    // 🔐 Déconnexion complète (backend + nettoyage local)
+    async logout() {
+      if (this.isLoggingOut) return;
+
+      this.isLoggingOut = true;
+      localStorage.setItem("logout_in_progress", "true");
+
+      try {
+        await logoutUser(); // appels backend / Apps Script
+      } catch (err) {
+        console.warn("⚠️ logoutUser erreur :", err);
+      }
+
+      // Nettoyage des données sensibles
+      this.jwt = null;
+      this.user = null;
+
+      ["jwt", "refreshToken", "sessionId"].forEach(k => {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
       });
 
-    } else {
-      console.log("🔵 Aucun token → pas connecté");
-    }
+      this.isLoggingOut = false;
+      localStorage.removeItem("logout_in_progress");
+    },
 
-  } catch (err) {
-    console.warn("⚠️ initAuth erreur :", err);
-  } finally {
-    this.authLoading = false;
-    this.isInitDone = true;
-    this.isRefreshingToken = false;
+    // 🚀 Initialisation complète de l’auth à l'ouverture de l'app
+    async initAuth() {
+      this.authLoading = true;
 
-    if (this.showOverlay !== undefined) this.showOverlay = false;
+      // 1️⃣ Restauration locale (IndexedDB / localStorage)
+      await this.restoreSessionFromStorage();
+      let jwt = this.jwt;
 
-    this.startAutoRefresh();
-  }
+      // 2️⃣ Si JWT présent, vérifier sa validité avant tout
+      const jwtIsValid = jwt && !isJwtExpired(jwt);
+
+      if (!jwtIsValid) {
+        // Essayer d'obtenir un token valide via API
+        jwt = await getValidToken();
+   if (!jwt) {
+  // 🔥 Refresh KO → on purge tout
+  this.jwt = null;
+  this.user = null;
+
+  this.refreshToken = null;
+  this.sessionId = null;
+  localStorage.removeItem("jwt");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("sessionId");
+
+  this.jwtReady = true;
+  this.authReady = true;
+  this.authLoading = false;
+  this.isInitDone = true;
+  return;
 }
 
-,
+      }
 
+      // 3️⃣ Normalisation du JWT (string)
+      const finalJwt = typeof jwt === "string" ? jwt : jwt?.jwt;
+      this.jwt = finalJwt;
+      localStorage.setItem("jwt", finalJwt);
 
+      // 4️⃣ Le JWT est prêt → l’app peut s’afficher
+      this.jwtReady = true;
+      this.authReady = true;
 
+      // Petit délai pour laisser Reactivity faire effet
+      await new Promise(r => setTimeout(r, 0));
 
+      // 5️⃣ Extraire infos du JWT
+      const payload = decodeJwt(finalJwt);
+      const email = payload?.email;
+
+      this.user = this.user ?? {};
+
+      if (payload?.role) this.user.role = payload.role;
+      if (payload?.prof_id) this.user.prof_id = payload.prof_id;
+
+      // 6️⃣ Charger le cache utilisateur si existant
+      const cacheKey = email ? `userData_${email}` : null;
+      const cached = cacheKey ? localStorage.getItem(cacheKey) : null;
+
+      if (cached) {
+        const cachedUser = JSON.parse(cached);
+
+        Object.assign(this.user, {
+          ...cachedUser,
+          role: this.user.role,    // Ne pas écraser role
+          prof_id: this.user.prof_id // Ni prof_id
+        });
+
+        // En parallèle, récupérer des données fraîches
+        setTimeout(() => this.fetchUserData(), 0);
+
+      } else {
+        // Pas de cache => fetch immédiat
+        const data = await this.fetchUserData();
+        if (data) Object.assign(this.user, data);
+      }
+
+      // 7️⃣ Charger le nombre de reports en attente
+      setTimeout(() => this.fetchPendingReports(), 0);
+
+      // 8️⃣ Si on a un refreshToken + sessionId, lancer l’auto‑refresh
+      const rt = localStorage.getItem("refreshToken");
+      const sid = localStorage.getItem("sessionId");
+      if (rt && sid) {
+        this.startAutoRefresh();
+      }
+
+      this.authLoading = false;
+      this.isInitDone = true;
+    },
   }
 });

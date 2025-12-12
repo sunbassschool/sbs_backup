@@ -1,14 +1,9 @@
 <template>
   <Layout>
-<div v-if="!isReady" class="logout-container-wrapper">
-  <div class="logout-container">
-    <div class="logout-spinner"></div>
-    <p class="logout-text">Chargement de ton compte...</p>
-  </div>
-</div>
 
 
-    <div v-else class="account-page container py-4">
+
+    <div class="account-page container py-4">
 
       <!-- 🧍 Avatar + Abonnement côte à côte -->
 <div class="cards-grid mb-4">
@@ -32,7 +27,7 @@
       id="avatar-upload"
       type="file"
       accept="image/*"
-      @change="onSelectFile"
+@change="handleAvatarUpload"
       style="display: none;"
     />
   <div class="avatar-edit-icon" title="Modifier l'avatar">
@@ -228,17 +223,20 @@
       <i class="bi bi-pencil ms-2 text-muted"></i>
     </span>
 
-    <input
-      v-else
-      v-model="userData.telephone"
-      type="text"
-      class="form-control form-control-sm"
-      style="max-width: 160px;"
-      :class="{ 'is-invalid': !isValidPhoneNumber(userData.telephone) && userData.telephone }"
-      @input="userData.telephone = formatPhoneInput(userData.telephone)"
-      @blur="updateTelephone"
-      @keyup.enter="updateTelephone"
-    />
+<input
+  v-else
+  ref="telephoneInput"
+  v-model="userData.telephone"
+  type="text"
+  class="form-control form-control-sm"
+  style="max-width: 160px;"
+  :class="{ 'is-invalid': !isValidPhoneNumber(userData.telephone) && userData.telephone }"
+  @input="userData.telephone = formatPhoneInput(userData.telephone)"
+  @blur="updateTelephone"
+  @keyup.enter="updateTelephone"
+/>
+
+
   </div>
 </li>
 
@@ -300,7 +298,7 @@ import { ref, onMounted, watch, computed, nextTick } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
 import VueCropper from "vue-cropperjs";
 import "@/assets/styles/cropper.css";
-import { storeToRefs } from "pinia";
+
 
 import Layout from "@/views/Layout.vue";
 import { logoutUser } from "@/utils/api.ts";
@@ -308,19 +306,36 @@ import { useAuthStore } from "@/stores/authStore.js";
 
 // === STORES ===
 const authStore = useAuthStore();
-const { user } = storeToRefs(authStore);
+
 
 // === ROUTER ===
 const router = useRouter();
 
+// telephone 
+const telephoneInput = ref(null);
 
 
-// === OBJECTIF (instantané grâce à l'email stocké) ===
-const objectif = ref("🎯 Chargement...");
-const editableObjectif = ref("");
+// === OBJECTIF = UNE SEULE SOURCE : LE STORE ===
+const objectif = computed(() => {
+  return authStore.user?.objectif || "🎯 Aucun objectif défini";
+});
+
+// Texte editable
+const editableObjectif = ref(objectif.value);
+
+// Si le store change → textarea suit
+watch(objectif, (v) => {
+  editableObjectif.value = v;
+});
+
+
 
 // Email toujours disponible ici grâce au patch dans fetchUserData()
-const email = localStorage.getItem("email") || "";
+const email = authStore.user?.email 
+           || localStorage.getItem("email") 
+           || sessionStorage.getItem("email") 
+           || "";
+
 const prenom = localStorage.getItem("prenom") || "";
 
 // 🔥 SOURCE LOCALE FIABLE : userInfos_<prenom>
@@ -331,12 +346,12 @@ if (infosRaw) {
   try {
     const infos = JSON.parse(infosRaw);
 
-    objectif.value = infos.objectif || "🎯 Aucun objectif défini";
+   authStore.user.objectif = infos.objectif || "🎯 Aucun objectif défini";
     editableObjectif.value = objectif.value;
 
     console.log("⚡ Objectif chargé via userInfos :", objectif.value);
   } catch {
-    objectif.value = "🎯 Aucun objectif défini";
+    authStore.user.objectif = "🎯 Aucun objectif défini";
   }
 }
 
@@ -349,23 +364,30 @@ if (email) {
     try {
       const data = JSON.parse(dataRaw);
 
-      if (data.objectif) {
-        objectif.value = data.objectif;
-        editableObjectif.value = objectif.value;
+    if (data.objectif) {
+  // MAJ STORE
+  if (authStore.user) {
+    authStore.user = {
+      ...authStore.user,
+      objectif: data.objectif
+    };
+  }
 
-        console.log("⚡ Objectif enrichi via userData :", objectif.value);
-      }
+  // MAJ TEXTAREA
+  editableObjectif.value = data.objectif;
+}
+
     } catch {}
   }
 }
 
 // 🔥 SYNC STORE → OBJECTIF quand le store finit de charger
 watch(
-  () => user.value?.objectif,
+  () => authStore.user?.objectif,
   (val) => {
     if (!val) return;
 
-    objectif.value = val;
+  
     editableObjectif.value = val;
 
     // sauvegarde
@@ -404,7 +426,10 @@ const toastMessage = ref("");
 
 const ressources = ref([]);
 const isLoadingResources = ref(true);
-const isReady = ref(false);
+const isReady = ref(
+  !!localStorage.getItem(`userData_${localStorage.getItem("email")}`)
+)
+
 const isRefreshing = ref(false);
 const isPageMounted = ref(false);
 const isUserDataLoaded = ref(false);
@@ -450,23 +475,29 @@ onBeforeRouteLeave((to, from, next) => {
     return;
   }
 
-  if (isSaving.value) {
-    const check = setInterval(() => {
-      if (!isSaving.value) {
-        clearInterval(check);
-        next();
-      }
-    }, 200);
-    return;
-  }
+ if (isSaving.value) {
+  // 🔥 PAS DE BLOCAGE : on laisse la sauvegarde finir en background
+  console.log("⏩ Navigation autorisée pendant la sauvegarde");
+}
+
 
   next();
 });
 
 
+
 function editField(field) {
   editingField.value[field] = true;
+
+  // focus auto après rendu
+  nextTick(() => {
+    if (field === "telephone" && telephoneInput.value) {
+      telephoneInput.value.focus();
+      telephoneInput.value.select(); // optionnel : sélectionne tout
+    }
+  });
 }
+
 function getAvatarSrc(url) {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)\//);
   if (match) {
@@ -503,7 +534,7 @@ async function resilierAbonnementStripe(emailLocal) {
     email: emailLocal
   };
 
-  const apiBaseURL = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec"; // Remplace par le bon ID
+  const apiBaseURL = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec"; // Remplace par le bon ID
   const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
 
   try {
@@ -558,7 +589,7 @@ async function applyCrop() {
         mimeType: selectedFile.type || "image/png"
       };
 
-      const apiBaseURL = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+      const apiBaseURL = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
       const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
 
       try {
@@ -573,9 +604,14 @@ async function applyCrop() {
         if (data.success && data.url) {
           userData.value.avatar_url = data.url;
 
-         const userDataKey = computed(() => `userData_${email.value}`);
+const userDataKey = `userData_${email}`;
 
-          const updatedData = { ...userData.value, avatar_url: data.url };
+    const safeLocal = JSON.parse(JSON.stringify(userData.value || {}));
+safeLocal.avatar_url = data.url;
+
+localStorage.setItem(userDataKey, JSON.stringify(safeLocal));
+
+
           localStorage.setItem(userDataKey, JSON.stringify(updatedData));
 
           triggerToast("🖼️ Avatar mis à jour !");
@@ -621,19 +657,27 @@ function formatPhoneInput(value) {
   return digits.replace(/(\d{2})(?=\d)/g, "$1 ").trim();
 }
 async function handleAvatarUpload(event) {
-  const file = event.target.files[0];
+
+  const file = event.target.files[0];   // ✅ d’abord on déclare
   if (!file) return;
+
+  console.log("📸 Fichier reçu :", file);
 
   const reader = new FileReader();
 
   reader.onload = async () => {
     const base64Data = reader.result.split(",")[1];
-    const email = localStorage.getItem("email") || "";
+  const email = authStore.user?.email 
+           || localStorage.getItem("email") 
+           || sessionStorage.getItem("email") 
+           || "";
 
-    const apiBaseURL = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
-    const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
 
-    console.log("📡 Appel API avatar (proxy):", proxyURL);
+    const apiBaseURL =
+      "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
+
+    const proxyURL =
+      `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
 
     const payload = {
       route: "upload_avatar",
@@ -650,23 +694,41 @@ async function handleAvatarUpload(event) {
         body: JSON.stringify(payload)
       });
 
+      const text = await res.clone().text();
+      console.log("🔍 RAW RESPONSE:", text);
+
       const data = await res.json();
+
       console.log("📨 Réponse upload avatar :", data);
 
-      if (data.success && data.url) {
-        userData.value.avatar_url = data.url;
-       const userDataKey = computed(() => `userData_${email.value}`);
-
-        const updatedData = { ...userData.value, avatar_url: data.url };
-        localStorage.setItem(userDataKey, JSON.stringify(updatedData));
-        triggerToast("🖼️ Avatar mis à jour !");
-      } else {
+      if (!data.success || !data.url) {
         console.error("❌ Upload échoué :", data.message);
-        triggerToast("❌ Erreur lors de l’upload.");
+        triggerToast("❌ Erreur lors de l’upload");
+        return;
       }
-    } catch (err) {
+
+      // 🔥 Mise à jour store
+      authStore.$patch({
+        user: {
+          ...authStore.user,
+          avatar_url: data.url
+        }
+      });
+
+      // 🔥 Mise à jour userData local
+      const userDataKey = `userData_${email}`;
+      const safeLocal = JSON.parse(JSON.stringify(userData.value || {}));
+
+      safeLocal.avatar_url = data.url;
+
+      localStorage.setItem(userDataKey, JSON.stringify(safeLocal));
+      userData.value.avatar_url = data.url;
+
+      triggerToast("🖼️ Avatar mis à jour !");
+    } 
+    catch (err) {
       console.error("❌ Erreur fetch avatar :", err);
-      triggerToast("❌ Problème de réseau.");
+      triggerToast("❌ Problème réseau");
     }
   };
 
@@ -675,8 +737,9 @@ async function handleAvatarUpload(event) {
 
 
 
+
 async function revokeSession(sessionId) {
- const email = computed(() => authStore.email);
+const email = computed(() => authStore.user?.email || "");
   if (!email || !sessionId) return;
 
   // 💨 SUPPRESSION VISUELLE IMMÉDIATE
@@ -685,7 +748,7 @@ async function revokeSession(sessionId) {
     sessions.value.splice(indexToRemove, 1);
   }
 
-  const apiBase = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+  const apiBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
   const url = `${apiBase}?route=revoke_session&email=${encodeURIComponent(email)}&sessionId=${encodeURIComponent(sessionId)}`;
   const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
@@ -756,79 +819,115 @@ async function updateTelephone() {
 
   editingField.value.telephone = false;
 
-  const jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
-  const telephone = userData.value.telephone?.trim() || "";
+  const raw = userData.value.telephone || "";
+  const cleanInput = raw.trim();
 
-  if (!jwt) {
-    console.warn("🚫 JWT manquant");
+  const prenomLocal = localStorage.getItem("prenom") || "";
+  const emailLocal = localStorage.getItem("email") || "";
+  const jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt") || "";
+
+  // 🔥 RÉCUPÉRATION DU VRAI ANCIEN NUMÉRO (dans le cache, NON modifié par v-model)
+  const userDataKey = `userData_${emailLocal}`;
+  const cached = JSON.parse(localStorage.getItem(userDataKey) || "{}");
+
+  const previousPhone = (cached.telephone || "").replace(/\s+/g, "").trim();
+  const newPhone = cleanInput.replace(/\s+/g, "").trim();
+
+  // 🚫 Aucun changement → on stoppe net
+  if (previousPhone === newPhone) {
+    console.log("☎️ Aucun changement → pas d'appel API");
     isUpdatingPhone = false;
     return;
   }
 
-  if (!isValidPhoneNumber(telephone)) {
+  // ❌ Vérif validité numéro
+  if (!isValidPhoneNumber(cleanInput)) {
     triggerToast("⚠️ Numéro invalide");
     isUpdatingPhone = false;
     return;
   }
 
-  const encodedJWT = encodeURIComponent(jwt);
-  const encodedTelephone = encodeURIComponent(telephone);
+  // 🔥 OPTIMISTIC UPDATE : UI + cache instantané
+  userData.value.telephone = cleanInput;
 
-  const apiBaseURL = "https://script.google.com/macros/s/";
-  const route = "AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+  // localStorage : userData_<email>
+  cached.telephone = cleanInput;
+  localStorage.setItem(userDataKey, JSON.stringify(cached));
+
+  // localStorage : userInfos_<prenom>
+  const userInfosKey = `userInfos_${prenomLocal}`;
+  const infos = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
+  infos.telephone = cleanInput;
+  localStorage.setItem(userInfosKey, JSON.stringify(infos));
+
+  triggerToast("📞 Téléphone mis à jour !");
+
+  // 🌐 API en tâche de fond
+  const encodedJWT = encodeURIComponent(jwt);
+  const encodedTel = encodeURIComponent(cleanInput);
+
+  const apiBaseURL =
+    "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
+
   const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
-    `${apiBaseURL}${route}?route=updateeleve&jwt=${encodedJWT}&telephone=${encodedTelephone}`
+    `${apiBaseURL}?route=updateeleve&jwt=${encodedJWT}&telephone=${encodedTel}`
   )}`;
 
-  try {
-    const res = await fetch(finalURL, {
-      method: "GET",
-      headers: { "X-Requested-With": "XMLHttpRequest" }
+  fetch(finalURL, {
+    method: "GET",
+    headers: { "X-Requested-With": "XMLHttpRequest" }
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.status !== "error") {
+        console.log("📡 Téléphone synchronisé côté serveur !");
+      } else {
+        console.warn("❌ Erreur API téléphone :", data.message);
+      }
+    })
+    .catch((err) => {
+      console.warn("⚠️ Sync téléphone échouée (offline ?)", err);
+    })
+    .finally(() => {
+      isUpdatingPhone = false;
     });
-
-    const data = await res.json();
-
-    if (data.status !== "error") {
-      console.log("📞 Téléphone mis à jour côté serveur");
-      triggerToast("📞 Téléphone mis à jour !");
-
-      const userDataKey = `userData_${prenom}`;
-      const userInfosKey = `userInfos_${prenom}`;
-      const updatedUserData = { ...userData.value, telephone };
-
-      localStorage.setItem(userDataKey, JSON.stringify(updatedUserData));
-      const infos = JSON.parse(localStorage.getItem(userInfosKey)) || {};
-      infos.telephone = telephone;
-      localStorage.setItem(userInfosKey, JSON.stringify(infos));
-    } else {
-      console.error("❌ Erreur API :", data.message);
-    }
-  } catch (err) {
-    console.error("❌ Exception lors de la MAJ téléphone :", err);
-  } finally {
-    isUpdatingPhone = false;
-  }
 }
+
+
 async function fetchSessions() {
-  const email = computed(() => authStore.email);
-  if (!email) return;
-  const apiBase = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+const email =
+  authStore.user?.email ||
+  localStorage.getItem("email") ||
+  sessionStorage.getItem("email") ||
+  "";
+
+  if (!email) {
+    console.warn("❌ fetchSessions : email introuvable");
+    return;
+  }
+
+  const apiBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
   const url = `${apiBase}?route=get_sessions&email=${encodeURIComponent(email)}`;
   const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
   try {
     const res = await fetch(proxyURL);
     const data = await res.json();
+
     if (data.sessions) {
       sessions.value = data.sessions;
       console.log("📡 Sessions reçues :", data.sessions);
+    } else {
+      console.warn("⚠️ Aucune session retournée :", data);
     }
   } catch (err) {
     console.error("❌ fetchSessions error:", err);
   } finally {
-    isLoadingSessions.value = false; // ✅ terminé
+    isLoadingSessions.value = false;
   }
 }
+
+
 
 
 
@@ -836,7 +935,14 @@ async function fetchSessions() {
 async function updateObjectifOnServer(prenomLocal, jwt, objectifValue) {
   // 🧠 1. Mise à jour immédiate du localStorage
   const userInfosKey = `userInfos_${prenomLocal}`;
-  const userDataKey = `userData_${prenomLocal}`;
+const email = authStore.user?.email 
+           || localStorage.getItem("email") 
+           || sessionStorage.getItem("email") 
+           || "";
+
+
+const userDataKey = `userData_${email}`;
+
 
   const userInfos = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
   userInfos.objectif = objectifValue;
@@ -858,7 +964,7 @@ async function updateObjectifOnServer(prenomLocal, jwt, objectifValue) {
   const encodedJWT = encodeURIComponent(jwt);
   const encodedObjectif = encodeURIComponent(objectifValue);
   const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
-    `https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec?route=updateeleve&jwt=${encodedJWT}&objectif=${encodedObjectif}`
+    `https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec?route=updateeleve&jwt=${encodedJWT}&objectif=${encodedObjectif}`
   )}`;
 
   console.log("🔗 URL envoi objectif :", url);
@@ -892,7 +998,7 @@ async function logoutAllDevices() {
     return;
   }
 
-  const apiBase = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+  const apiBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
   const url = `${apiBase}?route=revoke_all_sessions&email=${encodeURIComponent(email)}`;
   const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
@@ -926,55 +1032,71 @@ async function saveObjectif() {
 
   const trimmed = editableObjectif.value.trim();
   const newObjectif = trimmed || "🎯 Aucun objectif défini";
-  objectif.value = newObjectif;
+
+  // 1️⃣ Si rien n’a changé → on sort
+  if (newObjectif === objectif.value) {
+    isEditing.value = false;
+    savedAnimation.value = false;
+    return;
+  }
+
+  const prenomLocal = localStorage.getItem("prenom") || "";
+  const emailLocal = localStorage.getItem("email") || "";
+  const jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt") || "";
+
+  // 2️⃣ 🔥 MISE À JOUR INSTANTANÉE DES CACHES (avant tout !)
+  {
+    const infosKey = `userInfos_${prenomLocal}`;
+    const infosCache = JSON.parse(localStorage.getItem(infosKey) || "{}");
+    infosCache.objectif = newObjectif;
+    localStorage.setItem(infosKey, JSON.stringify(infosCache));
+
+    const dataKey = `userData_${emailLocal}`;
+    const dataCache = JSON.parse(localStorage.getItem(dataKey) || "{}");
+    dataCache.objectif = newObjectif;
+    localStorage.setItem(dataKey, JSON.stringify(dataCache));
+  }
+
+  console.log("⚡ Objectif MAJ instantanément dans localStorage:", newObjectif);
+
+  // 3️⃣ Mise à jour UI immédiate
+authStore.user.objectif = newObjectif;
+  editableObjectif.value = newObjectif;
 
   isEditing.value = false;
-  isSaving.value = true;
   savedAnimation.value = true;
   triggerToast("🎯 Objectif mis à jour !");
 
-  const prenom = localStorage.getItem("prenom") || "";
-  const email = localStorage.getItem("email") || "";
-  const jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt") || "";
+  // 4️⃣ Signal global pour dashboard & autres composants
+  window.dispatchEvent(new CustomEvent("userDataUpdated", {
+    detail: { prenom: prenomLocal }
+  }));
 
-  // 🔄 Mise à jour dans userInfos_<prenom>
-  const userInfosKey = `userInfos_${prenom}`;
-  const userInfosCache = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
-  userInfosCache.objectif = newObjectif;
-  localStorage.setItem(userInfosKey, JSON.stringify(userInfosCache));
+  // 5️⃣ API en tâche de fond (sans bloquer l'utilisateur)
+  updateObjectifOnServer(prenomLocal, jwt, newObjectif)
+    .then(() => console.log("📡 Objectif synchro serveur OK"))
+    .catch(() => console.warn("⚠️ Sync serveur échouée (offline ?)"));
 
-  // 🔄 Mise à jour dans userData_<email>
-  const userDataKey = `userData_${email}`;
-  const userDataRaw = localStorage.getItem(userDataKey);
-  if (userDataRaw) {
-    const userDataCache = JSON.parse(userDataRaw);
-    userDataCache.objectif = newObjectif;
-    localStorage.setItem(userDataKey, JSON.stringify(userDataCache));
-    userData.value.objectif = newObjectif; // 🔄 MAJ immédiate du template
-  }
-
-  // 📡 API
-  const success = await updateObjectifOnServer(prenom, jwt, newObjectif);
-  if (!success) {
-    console.error("❌ Échec mise à jour serveur.");
-  }
-
-  isSaving.value = false;
-  setTimeout(() => {
-    savedAnimation.value = false;
-  }, 1000);
+  // 6️⃣ Fin animation
+  setTimeout(() => (savedAnimation.value = false), 1000);
 }
+
 
 
 // moncompte.vue
 
 
 onMounted(async () => {
-  const email = authStore.email || authStore.user?.email || localStorage.getItem("email") || "";
+const email = authStore.user?.email 
+           || localStorage.getItem("email") 
+           || sessionStorage.getItem("email") 
+           || "";
+
 const prenom = authStore.user?.prenom || localStorage.getItem("prenom") || "";
 
-  console.log("📡 authStore.email =", authStore.email);
+console.log("📡 authStore.email =", authStore.user?.email);
 console.log("📡 authStore.user =", authStore.user);
+
 
   const handleRefresh = async () => {
   console.log("🔁 Pull‑to‑refresh MonCompte déclenché");
@@ -999,7 +1121,13 @@ const userDataKey = `userData_${email}`;
 if (rawUserData) {
   const data = JSON.parse(rawUserData);
 
-  userData.value = { ...data };
+userData.value = { ...data };
+
+// 👇 AJOUTER CES 2 LIGNES
+if (data.objectif) {
+  authStore.user.objectif = data.objectif;
+  editableObjectif.value = data.objectif;
+}
 
   // 🔥 Injection immédiate de la date (fix du bug)
   if (data.fin_acces) {
@@ -1017,7 +1145,7 @@ else {
     // ✅ Fallback si aucune donnée en localStorage
     console.warn("⏳ userData manquant — tentative de rechargement depuis Google Sheets");
 
-    const sheetAPI = `https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec`;
+    const sheetAPI = `https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec`;
 const queryURL = `${sheetAPI}?route=getelevebyemail&email=${encodeURIComponent(email)}`;
 
     const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(queryURL)}`;
@@ -1047,37 +1175,48 @@ if (data && data.email) {
   }
 
 async function safeSyncUserData() {
-  const email = computed(() => authStore.email);
-  const prenom = computed(() => authStore.user?.prenom || "");
+  const email = authStore.user?.email
+              || localStorage.getItem("email")
+              || sessionStorage.getItem("email")
+              || "";
 
-  const userDataKey = `userData_${email.value}`;
-  const userInfosKey = `userInfos_${prenom.value}`;
+  const prenom = authStore.user?.prenom
+               || localStorage.getItem("prenom")
+               || "";
 
-  const cached = JSON.parse(localStorage.getItem(userDataKey) || "{}");
-  const backup = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
-
-  // 🧠 Si userInfos contient un objectif plus récent, on le préfère
-  if (backup?.objectif) {
-    cached.objectif = backup.objectif;
+  if (!email || !prenom) {
+    console.warn("⚠️ safeSyncUserData annulé : email ou prénom manquant");
+    return;
   }
 
-  // 🧠 Ne met à jour que si les données changent
-  if (JSON.stringify(userData.value) !== JSON.stringify(cached)) {
-    Object.assign(userData.value, cached);
-    console.log("✅ userData.value mis à jour depuis le cache.");
+  const userDataKey = `userData_${email}`;
+  const userInfosKey = `userInfos_${prenom}`;
+
+  const cachedUserData = JSON.parse(localStorage.getItem(userDataKey) || "{}");
+  const cachedInfos    = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
+
+  // 🧠 priorité à userInfos pour l’objectif
+  if (cachedInfos.objectif) {
+    cachedUserData.objectif = cachedInfos.objectif;
   }
 
-  objectif.value = cached.objectif || "🎯 Aucun objectif défini";
-  editableObjectif.value = objectif.value;
+  // ✅ Mise à jour uniquement si différence
+  if (JSON.stringify(userData.value) !== JSON.stringify(cachedUserData)) {
+    userData.value = { ...cachedUserData };
+    console.log("✅ userData synchronisé proprement.");
+  }
 
- 
+  // ✅ MAJ affichage
+  editableObjectif.value = cachedUserData.objectif || "🎯 Aucun objectif défini";
 
- if (cached.fin_acces) {
-  formattedFinAcces.value = formatDateFR(cached.fin_acces);
-}
+  if (cachedUserData.fin_acces) {
+    formattedFinAcces.value = formatDateFR(cachedUserData.fin_acces);
+  }
 
-  isRecurrent.value = (cached.recurrent || "").toLowerCase() === "oui";
+  isRecurrent.value = (cachedUserData.recurrent || "").toLowerCase() === "oui";
 
+  // ✅ DERNIÈRE LIGNE SEULEMENT
+  await nextTick();
   isReady.value = true;
 }
 

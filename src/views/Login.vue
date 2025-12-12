@@ -1,9 +1,26 @@
 <template>
   <Layout>
-    <div v-if="!authCheckInProgress" class="container d-flex justify-content-center align-items-center mt-5">
+    
+<!-- 🟡 Phase 2 : SUCCESS -->
+<div v-if="loginSuccess" class="login-status-box">
+  <div class="login-status-title">Connexion réussie</div>
+  <div class="login-status-text">Redirection en cours…</div>
+  <span class="login-status-spinner"></span>
+</div>
+
+<!-- 🟠 Phase 1 : PROCESSING -->
+<div v-else-if="loginProcessing" class="login-status-box">
+  <div class="login-status-title">Connexion</div>
+  <div class="login-status-text">Merci de patienter…</div>
+  <span class="login-status-spinner"></span>
+</div>
+
+    <!-- 🟢 FORMULAIRE -->
+    <div v-else class="container d-flex justify-content-center align-items-center mt-5">
       <div class="row justify-content-center w-200">
         <div class="w-100 mx-auto">
           <div class="card shadow">
+
             <Form @submit="onSubmit" :validation-schema="schema" :initial-values="initialValues">
               <div class="mb-3">
                 <label for="email" class="form-label">Adresse e-mail</label>
@@ -17,7 +34,6 @@
                 <ErrorMessage name="password" class="text-danger small"/>
               </div>
 
-              <!-- Honeypot -->
               <Field name="botField" type="hidden" />
 
               <button type="submit" class="btn btn-primary" :disabled="loading">
@@ -31,18 +47,21 @@
                 <router-link to="/registerform" class="login-link">S’inscrire</router-link>
               </div>
             </Form>
+
           </div>
         </div>
       </div>
     </div>
+
   </Layout>
 </template>
+
 
 <script setup>
 import { Form, Field, ErrorMessage } from 'vee-validate'
 import * as yup from 'yup'
 import { useToast } from 'vue-toastification'
-import { useAuthStore } from '@/stores/authStore.ts'
+import { useAuthStore } from '@/stores/authStore.js'
 import { jwtDecode } from 'jwt-decode'
 import Layout from '@/views/Layout.vue'
 import {
@@ -53,8 +72,14 @@ import {
   refreshToken
 } from '@/utils/api.ts'
 import { saveSessionData } from '@/utils/AuthDBManager'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+let loginStartTime = 0
+let hashStart = 0;
+let fetchStart = 0;
+
+const loginSuccess = ref(false)
+const loginProcessing = ref(false)
 
 const toast = useToast()
 const router = useRouter()
@@ -76,32 +101,7 @@ const schema = yup.object({
   botField: yup.string().max(0)
 })
 
-onMounted(() => {
-  (async () => {
-    try {
-      await verifyIndexedDBSetup()
-      await checkAndRestoreTokens()
-      await restoreUserInfo()
 
-      let jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt")
-      if (jwt && !isJwtExpired(jwt)) {
-        router.replace("/dashboard")
-        return
-      }
-
-      const refreshTokenExists = localStorage.getItem("refreshToken") || sessionStorage.getItem("refreshToken")
-      if (refreshTokenExists && (!jwt || isJwtExpired(jwt))) {
-        const newJwt = await refreshToken()
-        if (newJwt) {
-          router.replace("/dashboard")
-          return
-        }
-      }
-    } catch (e) {
-      console.warn("Session restore error:", e)
-    }
-  })()
-})
 
 async function sha256(text) {
   const buffer = new TextEncoder().encode(text)
@@ -110,65 +110,113 @@ async function sha256(text) {
 }
 
 async function onSubmit(values) {
+  loginStartTime = performance.now();
+  hashStart = performance.now();
+  // 🔥 Reset pour que la reconnexion déclenche le watcher splash
+
   if (values.botField) {
-    toast.error("Erreur : bot détecté.")
-    return
+    toast.error("Erreur : bot détecté.");
+    return;
   }
 
-  loading.value = true
-  try {
-    const hashedPassword = await sha256(values.password)
-    const deviceInfo = `${navigator.platform} - ${navigator.userAgent}`
-    const apiURL = "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec"
+  loginProcessing.value = true;
+  loading.value = true;
+  console.log("🟡 Début process de login : hachage mot de passe…");
 
+  try {
+    // -------------------------
+    // 1) HASH PASSWORD
+    // -------------------------
+    const hashedPassword = await sha256(values.password);
+    console.log("🔐 Mot de passe haché :", hashedPassword);
+
+    // -------------------------
+    // 2) APPEL BACKEND
+    // -------------------------
+    const deviceInfo = `${navigator.platform} - ${navigator.userAgent}`;
+    const apiURL =
+      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbwJFk2QqR-fAFzX4dxJl_Php49AMKnwdNv3IpWQaMmEwKLcsG7uFUkSMjl5QYmd86JCkw/exec";
+
+    fetchStart = performance.now();
     const response = await fetch(apiURL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Origin": window.location.origin
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         route: "login",
         email: values.email,
         password: hashedPassword,
         deviceInfo
       })
-    })
+    });
 
-    const data = await response.json()
-    if (!data.jwt) throw new Error(data?.message || "Échec de connexion")
+    const data = await response.json();
+    console.log(`⏱️ API Apps Script = ${(performance.now() - fetchStart).toFixed(0)} ms`);
 
+    if (!data.jwt) throw new Error(data?.message || "Échec de connexion");
 
+    // -------------------------
+    // 3) ANIMATION DE SUCCÈS
+    // -------------------------
+    loginProcessing.value = false;
+    loginSuccess.value = true;
+    await nextTick();
 
-   await auth.setSessionData({
+    // -------------------------
+    // 4) DÉCODE JWT
+    // -------------------------
+    const payload = jwtDecode(data.jwt);
+
+    // Dashboard utilise localStorage pour la clé du cache
+    localStorage.setItem("email", payload.email || "");
+    localStorage.setItem("prenom", payload.prenom || "");
+
+    // -------------------------
+    // 5) STOCKAGE SESSION
+    // (⚠️ userData minimal → fusionné dans store, pas remplacement)
+    // -------------------------
+   auth.setSessionData({
   jwt: data.jwt,
   refreshToken: data.refreshToken,
   sessionId: data.sessionId,
-  userData: {
-    prenom: jwtDecode(data.jwt)?.prenom || '',
-    email: jwtDecode(data.jwt)?.email || ''
-  }
-})
+userData: {
+    prenom: payload.prenom,
+    email: payload.email,
+    role: payload.role,
+    id: payload.id,              // 🔥 ajouté
+    prof_id: payload.prof_id,    // 🔥 ajouté !!!
+    avatar_url: payload.avatar_url || null,
+}
+
+});
+
+await auth.fetchUserData();   // ✅ hydrate le user COMPLET
+
+auth.jwtReady = true;
+auth.authReady = true;
+auth.isInitDone = true;
+
+router.replace("/dashboard");
 
 
-router.replace("/dashboard") // Redirection immédiate
+  } catch (err) {
+    loginProcessing.value = false;
+    toast.error(err.message || "Erreur serveur.");
 
-// 🔁 Lancement du chargement utilisateur en arrière-plan (non bloquant)
-auth.loadUser().catch(err => {
-  console.warn("⚠️ Chargement utilisateur en échec après login :", err)
-})
-
-  } catch (error) {
-    toast.error(error.message || "Erreur serveur.")
-    const card = document.querySelector('.card')
+    const card = document.querySelector(".card");
     if (card) {
-      card.classList.add('shake')
-      setTimeout(() => card.classList.remove('shake'), 500)
+      card.classList.add("shake");
+      setTimeout(() => card.classList.remove("shake"), 500);
     }
+
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
+
+
+
+
+
 </script>
 
 
@@ -177,6 +225,50 @@ auth.loadUser().catch(err => {
 
 
 <style scoped>
+.login-status-box {
+  background: rgba(20, 20, 20, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 25px;
+  border-radius: 12px;
+  color: #fff;
+  text-align: center;
+  max-width: 360px;
+  margin: 80px auto 0;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+
+.login-status-title {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #ff6f3c; /* orange SunBass */
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.login-status-text {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.login-status-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #ff6f3c;
+  border-radius: 50%;
+  display: inline-block;
+  margin-top: 12px;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Shake animation */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }

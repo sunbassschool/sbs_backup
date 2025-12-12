@@ -1,8 +1,17 @@
 <template>
+<div class="cours-wrapper"> <!-- 🔥 ROOT UNIQUE -->
 
   <Layout>
     <div class="container-xxl mt-4">
       <h2 class="text-white text-center">📚 Gestion des Cours</h2>
+<!-- 🔗 Bouton vers la page de gestion des reports -->
+<div class="text-center mt-3 mb-3">
+  <button class="btn btn-warning btn-lg reports-btn" @click="router.push('/dashboardreports')">
+    📨 Gérer les demandes de report
+    <span v-if="pendingReportsCount > 0">({{ pendingReportsCount }})</span>
+  </button>
+</div>
+
 
       <!-- ✅ Sélecteur de prénom -->
       <div class="mb-3 text-center">
@@ -50,7 +59,9 @@
   <label for="weekSelect" class="text-white">Sélectionner une semaine :</label>
   <select v-model="selectedWeek" class="form-select mt-2" id="weekSelect">
     <option value="">Toutes les semaines</option>
-    <option v-for="week in weeks" :key="week.start" :value="week">
+<option v-for="week in weeks" :value="week.start.getTime()">
+
+
       {{ week.label }}
     </option>
   </select>
@@ -136,7 +147,7 @@
 
       </div>
     </div>
-  </Layout>
+  </Layout></div>
   <!-- ✅ MODAL DE MODIFICATION -->
 <div v-if="editModalOpen" class="modal show d-block" tabindex="-1">
   <div class="modal-dialog">
@@ -200,11 +211,18 @@ import axios from "axios";
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { getValidToken } from "@/utils/api.ts"; // 🔐 Import sécurisé
-
+import { useAuthStore } from "@/stores/authStore.js";
+import { storeToRefs } from "pinia";
 export default {
   name: "Cours",
   components: { Layout },
   setup() {
+    const router = useRouter();
+
+    const authStore = useAuthStore();
+const { authReady } = storeToRefs(authStore);
+const pendingReportsCount = computed(() => authStore.pendingReportsCount);
+
     const filterUpcoming = ref(false);
     const elevesInscrits = ref([]);
 const selectNextWeekFromNow = () => {
@@ -214,8 +232,13 @@ const selectNextWeekFromNow = () => {
     selectedWeek.value = nextWeek;
   }
 };
+const selectedWeekObj = computed(() =>
+  weeks.value.find(w => w.start.getTime() === selectedWeek.value)
+);
+const goToReports = () => {
+  router.push("/dashboardreports");
+};
 
-    const router = useRouter();
     const coursData = ref([]);
     const loading = ref(true);
     const deleting = ref(false);
@@ -568,23 +591,42 @@ const selectClosestWeek = () => {
         .padStart(2, "0")}H${dateObj.getMinutes().toString().padStart(2, "0")}`;
     };
 
-    onMounted(async () => {
-    try {
-      const jwt = await getValidToken(); // 🔒 Récupère le token sécurisé
-      if (!jwt) throw new Error("Utilisateur non connecté");
-    } catch (error) {
-      console.warn("🔐 Redirection forcée vers login");
+onMounted(async () => {
+  try {
+    // 1️⃣ Sécuriser getValidToken
+    const jwt = await getValidToken().catch(() => null);
+    if (!jwt) {
       router.replace("/login");
       return;
     }
-await fetchElevesInscrits();
 
-    await fetchCours();
-    selectClosestWeek();
-  });
+    // 2️⃣ TRY/CATCH INDIVIDUEL PAR FETCH
+    await fetchElevesInscrits().catch(err => {
+      console.error("❌ fetchElevesInscrits a crash :", err);
+    });
+
+    await fetchCours().catch(err => {
+      console.error("❌ fetchCours a crash :", err);
+    });
+
+    // 3️⃣ TRY pour éviter crash si weeks est vide
+    try {
+      selectClosestWeek();
+    } catch (e) {
+      console.warn("⚠️ selectClosestWeek a échoué :", e);
+    }
+
+  } catch (err) {
+    console.error("❌ ERREUR FATALE dans onMounted :", err);
+    // Empêche écran noir → on redirige
+    router.replace("/dashboard");
+  }
+});
+
 
     return {
-      coursData, loading, deleting, updating, selectedStudent, filterUpcoming, filteredCours,
+       router,coursData, loading, deleting, updating, selectedStudent, filterUpcoming,  pendingReportsCount,
+ goToReports,filteredCours,
       supprimerCours, openEditModal, closeEditModal, updateCours, editModalOpen,goToPreviousWeek,selectNextWeekFromNow
 ,
 
@@ -826,6 +868,28 @@ h2 {
     max-height: none !important; /* Laisse le container gérer le scroll */
     overflow-y: visible !important;
   }
+}
+.reports-btn {
+  background: linear-gradient(90deg, #ff6a00, #ff8800);
+  color: #000;
+  border: none;
+  font-weight: bold;
+  padding: 10px 20px;
+  border-radius: 8px;
+  transition: 0.2s;
+}
+
+.reports-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+.reports-btn span {
+  margin-left: 6px;
+  background: #ff6a00;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-weight: bold;
+  color: black;
 }
 
 </style>

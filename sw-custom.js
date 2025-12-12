@@ -29,3 +29,5 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
 });
+// Envoi d'un message aux clients
+// Envoi d'un message aux clients modif du  06/12/2025 à 22:10:25:5456

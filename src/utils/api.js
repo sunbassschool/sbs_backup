@@ -1119,7 +1119,7 @@ export async function checkIndexedDBStatus() {
         }
     }
 }
-import { useAuthStore } from "@/stores/authStore"; // ✅ Ajout de Pinia
+import { useAuthStore } from "@/stores/authStore.js"; // ✅ Ajout de Pinia
 export async function refreshToken() {
     if (isRefreshing) {
         console.warn("⏳ Un rafraîchissement est déjà en cours...");
@@ -1154,7 +1154,7 @@ return result?.jwt ?? null; // ✅ juste le jwt
             return null;
         }
         console.log("🔑 Refresh token envoyé à l'API :", storedRefreshToken);
-        const url = `https://cors-proxy-37yu.onrender.com/https://script.google.com/macros/s/AKfycbxc69Alhr0V0-DqrHblDJonvPKFy8PbjhEA6nA4sC4aFCTJOCKO9t0Q-uaApC_vcXgyHA/exec?route=refresh&refreshtoken=${encodeURIComponent(storedRefreshToken)}`;
+        const url = `https://cors-proxy-37yu.onrender.com/https://script.google.com/macros/s/AKfycbzZxvUx0RFAsAszO9bvA2zInIqbrWsntDw1YYZiHQ993nRYboPx266McgZrSH2RH2KpNw/exec?route=refresh&refreshtoken=${encodeURIComponent(storedRefreshToken)}`;
         const fetchPromise = fetch(url, { method: "GET" }).then(response => {
             if (!response.ok)
                 throw new Error(`HTTP ${response.status}`);

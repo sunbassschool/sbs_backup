@@ -1,20 +1,29 @@
-
 <template>
   <Layout>
-    <div class="container d-flex flex-column align-items-center justify-content-center">
-      <!-- 🔄 Spinner affiché pendant le chargement principal (pas juste la note) -->
-      <div v-if="isLoading && !isNoteLoading" class="logout-container-wrapper">
-        <div class="logout-container">
-          <div class="logout-spinner"></div>
-          <p class="logout-text">Chargement de ton compte...</p>
-        </div>
+
+    <!-- 🧱 Loader global -->
+   <!-- 🔥 OVERLAY : s’affiche PAR-DESSUS le dashboard -->
+    <div
+      v-if="!dashboardReady"
+      class="dashboard-overlay-loader"
+    >
+      <div class="loader-box">
+        <div class="logout-spinner"></div>
+        <p class="logout-text">Chargement de ton compte...</p>
       </div>
+    </div>
+  <!-- 🔥 OVERLAY spécial récupération cache / API -->
+  <div v-if="isLoading" class="dashboard-overlay-loader">
+    <div class="logout-container">
+      <div class="logout-spinner"></div>
+      <p class="logout-text">Récupération de tes données...</p>
+    </div>
+  </div>
+    <!-- 🧩 TON CONTENU EXACT, NON MODIFIÉ -->
+        <div class="container d-flex flex-column align-items-center justify-content-center">
 
-      <!-- 🔒 Si l'élève n'est pas connecté -->
-      <!-- Plus besoin de condition, Layout gère tout -->
 
-      <!-- ✅ Contenu principal si l'élève est connecté -->
-      <div class="content" v-show="!isLoading || cards.length">
+      <div class="content">
         <div
           v-for="(card, index) in cards"
           :key="index"
@@ -37,17 +46,18 @@
             </div>
           </div>
 
+          <!-- Bloc note -->
           <div
             v-if="index === 1"
             class="dashboard-card rounded-3 p-4 d-flex flex-column"
           >
             <h3 class="h5 mb-2">🎶 📝 Bloc note</h3>
 
-            <div
-              v-if="isNoteLoading"
-              class="form-control mt-2 loading-indicator"
-              style="min-height: 150px; display: flex; align-items: center; justify-content: center;"
-            >
+ <div
+  v-if="!noteReady"
+  class="form-control mt-2 loading-indicator"
+  style="min-height: 150px; display: flex; align-items: center; justify-content: center;"
+>
               ⏳ Chargement de ta note...
             </div>
 
@@ -87,7 +97,9 @@
           </div>
         </div>
       </div>
+
     </div>
+
   </Layout>
 </template>
 
@@ -95,686 +107,229 @@
 
 <script>
 import Layout from "../views/Layout.vue";
-import { jwtDecode } from "jwt-decode"; // 📌 Ajout du décodage du JWT
-import { getCache, setCache, clearCache, shouldUpdateCache } from "@/utils/cacheManager.js";
-import { getToken, getUserInfoFromJWT, getValidToken, refreshToken  } from "@/utils/api.ts";
-import { useAuthStore } from "@/stores/authStore.ts"; // 👈 importe ton store
+import { jwtDecode } from "jwt-decode";
+import {
+  getCache,
+  setCache,
+  clearCache,
+  shouldUpdateCache
+} from "@/utils/cacheManager.js";
+import {
+  getUserInfoFromJWT,
+  getValidToken
+} from "@/utils/api.ts";
+import { useAuthStore } from "@/stores/authStore.js";
+import router from "@/router/index.ts";
 import { onBeforeRouteLeave } from "vue-router";
+import { h, resolveComponent, markRaw } from "vue";
 
-import { h, resolveComponent, onUnmounted, onMounted, getCurrentInstance } from "vue";
-import router from "@/router/index.ts"
-
-import { Picker } from "emoji-mart-vue-fast";
 export default {
-  setup() {
-    const { proxy } = getCurrentInstance();
-    const auth = useAuthStore();
-
-    onBeforeRouteLeave((to, from, next) => {
-      const prenom = auth.user?.prenom || localStorage.getItem("prenom") || "";
-      
-      const noteKey = `userNote_${prenom}`;
-      const cached = localStorage.getItem(noteKey) || "";
-      
-      const note = proxy.note?.trim?.() || "";
-      const saving = proxy.saving;
-
-      if (
-        saving ||
-        !auth.jwt ||
-        note === "" ||
-        note === cached.trim()
-      ) {
-        return next();
-      }
-
-      proxy.saveNoteImmediately()
-        .catch(err => console.warn("Erreur saveNote async :", err))
-        .finally(() => next());
-    });
-  }
-,
-
   name: "Dashboard",
   components: { Layout },
-  data() {
-    
-    const rawPrenom = sessionStorage.getItem("prenom") || localStorage.getItem("prenom") || "";
-const prenom = decodeURIComponent(rawPrenom);
-const cacheKey = `userData_${prenom}`;
 
-
-  const cacheExpirationKey = `${cacheKey}_expiration`;
-
-  return{
-    prenom,  // ✅ Assure que `prenom` est défini avant l'utilisation des clés
-    cacheKey, // ✅ Stocke avec la bonne valeur
-    cacheExpirationKey, // ✅ Même chose ici
-    noteUpdatedMessage: "", // ✅ Message temporaire de succès
-
-    cards: [],
-    isLoading: true,
-    note: "", // Note de l'élève
-    email: "",
-    lastSaved: null,
-    isRefreshingNote: false,
-isNoteLoading: true,
-
-    saveCountdown: 0, // Timer avant la prochaine sauvegarde auto
-
-    cacheDuration: 24 * 60 * 60 * 1000,
-    apiBaseURL: "https://cors-proxy-sbs.vercel.app/api/proxy?url=",
-    routes: {
-      GET: "AKfycbw-LmDbIdL0asIu5WrQcskGh1J2Pr_ZxxepoUsC5B5yWpo_WDDH0MqzrFZAPMm0Tyls-A/exec",
-       POST: "AKfycbw-LmDbIdL0asIu5WrQcskGh1J2Pr_ZxxepoUsC5B5yWpo_WDDH0MqzrFZAPMm0Tyls-A/exec"
-    }
-  };
-}
-,
-computed: {
-  isLoggedIn() {
-    const auth = useAuthStore();
-    return !!auth.jwt && !!auth.user; // Vérifie que le JWT existe ET que l'utilisateur est chargé
-  }
-,
-  userData() {
-    const storedData = localStorage.getItem("userData_");
-    return storedData ? JSON.parse(storedData) : {}; 
-  },
-
-
-
-
-
-
-
-
-}
-,
-  
-async mounted() {
-this.isNoteLoading = true; // ✅ DIRECTEMENT AU DÉBUT
+data() {
   const auth = useAuthStore();
-  this.email = localStorage.getItem("email") || getUserInfoFromJWT()?.email || "";
   
-// ✅ Récupération sûre du prénom
-let prenom = localStorage.getItem("prenom") || sessionStorage.getItem("prenom");
-if (!prenom) {
-  const email = this.email;
-  const rawData = localStorage.getItem(`userData_${email}`);
-  try {
-    const parsed = JSON.parse(rawData);
-    prenom = parsed?.prenom || "";
-    if (prenom) {
-      localStorage.setItem("prenom", prenom); // 🔒 on le stocke pour les prochaines fois
-    }
-  } catch (e) {
-    console.warn("❌ Impossible de parser userData pour récupérer le prénom");
-  }
-}
-this.prenom = prenom;
+  const email = localStorage.getItem("email") || "";
+  const prenom = localStorage.getItem("prenom") || "";
 
-  if (auth.isLoggingOut) {
-    console.warn("⛔ Dashboard bloqué : logout en cours");
-    return;
-  }
+  // 🔹 On calcule immédiatement la note en cache
+  const noteKey = prenom ? `userNote_${prenom}` : null;
+  const cachedNote = noteKey ? localStorage.getItem(noteKey) : null;
+  const hasNoteCache = cachedNote !== null; // "" compte comme cache valide
 
-  const role = this.getUserRole();
-  if (role === "user") {
-    console.log("⛔ Rôle adhérent détecté → on affiche les cartes non inscrit");
-    this.displayError();
-    this.isLoading = false;
-    this.isNoteLoading = false;
-    return;
-  }
-
-  window.vueRouterPush = this.$router.push;
-
-  const now = Date.now();
-  const lastVisit = parseInt(sessionStorage.getItem("dashboardLastVisit"), 10) || 0;
-  const maxAge = 10 * 60 * 1000;
-  const isFresh = now - lastVisit < maxAge && sessionStorage.getItem("dashboardLoadedOnce");
-
-  try {
-    // ✅ Chargement principal
-    await this.loadUserData(); // ⏳ ici le prénom est dispo
-    this.isLoading = false;
-
-    // ✅ Chargement de la note utilisateur (après avoir prénom)
-    this.isNoteLoading = true;
-    const noteKey = `userNote_${this.prenom}`;
-    const cachedNote = localStorage.getItem(noteKey);
-
-    if (cachedNote) {
-      console.log("🧠 Note trouvée dans localStorage :", cachedNote);
-      this.note = cachedNote;
-    } else {
-      await this.syncNoteWithAPI();
-      const freshNote = localStorage.getItem(noteKey) || "";
-      this.note = freshNote;
-      console.log("🔁 Note mise à jour depuis l'API");
-    }
-
-    
-
-  } catch (err) {
-    console.error("❌ Erreur durant mounted :", err);
-  } finally {
-    this.isNoteLoading = false;
-    this.isLoading = false;
-  }
-
-  // 🔄 MAJ cache
-  setTimeout(() => {
-    if (!auth.isLoggingOut) {
-      this.forceUpdateCache();
-    }
-  }, 1000);
-
-  // 📆 Planning
-  const planningKey = `userPlanning_${this.prenom}`;
-  const planningData = localStorage.getItem(planningKey);
-  if (!planningData || !this.isValidJson(planningData)) {
-    await this.fetchFromAPI(true);
-  }
-
-  // ✅ Marqueur de visite
-  sessionStorage.setItem("dashboardLoadedOnce", "true");
-  sessionStorage.setItem("dashboardLastVisit", now.toString());
-
-  // 🔁 Sync JWT entre tabs
-  const currentJWT = sessionStorage.getItem("jwt") || localStorage.getItem("jwt");
- window.addEventListener("storage", async (event) => {
-  if (useAuthStore().isLoggingOut) return;
-
-  if (event.key === "jwt" && event.oldValue !== event.newValue) {
-    console.log("🔄 [storage] JWT changé (autre tab ?), refresh forcé...");
-    await this.fetchNote();
-    await this.fetchFromAPI(true);
-  }
-});
-
-
-  // 🔗 Redirection vers planning
-  this.$nextTick(() => {
-    const link = document.getElementById("planning-link");
-    if (link) {
-      link.addEventListener("click", () => {
-        this.$router.push("/Planning");
-      });
-    } else {
-      console.warn("🚫 Lien 'planning-link' non trouvé.");
-    }
-  });
-
-  this.handlePlanningClick = (e) => {
-    if (e.target && e.target.id === "planning-link") {
-      this.$router.push("/Planning");
-    }
-  };
-}
-
-,
-
-  beforeRouteEnter(to, from, next) {
-    next(vm => {
-      vm.loadNoteFromCacheThenSync(); // 🔁 Recharge la note à chaque retour
-    });
-  },
-beforeUnmount() {
-  window.removeEventListener("beforeunload", this.saveNoteOnUnload);
-
-  
-
-},
-  methods: {
-      isValidJson(str) {
-    try {
-      JSON.parse(str);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  },
-isCourseSoon(dateString) {
-  if (!dateString) return false;
-
-  try {
-    const courseDate = new Date(dateString);
-    if (isNaN(courseDate)) return false;
-
-    const now = new Date();
-    const diffMinutes = (courseDate - now) / (1000 * 60);
-    return diffMinutes > 0 && diffMinutes <= 30;
-  } catch (e) {
-    console.warn("⛔ isCourseSoon → date invalide :", dateString);
-    return false;
-  }
-}
-
-
-,
-  getObjectif() {
-    const fromPrenom = JSON.parse(localStorage.getItem(`userData_${this.prenom}`) || "{}").objectif;
-    const fromEmail = JSON.parse(localStorage.getItem(`userData_${this.email}`) || "{}").objectif;
-    
-    const fromUserInfos = JSON.parse(localStorage.getItem(`userInfos_${this.prenom}`) || "{}").objectif;
-
-    return (
-      fromPrenom ||
-      fromEmail ||
-      fromUserInfos ||
-      "🎯 Aucun objectif défini"
-    );
-  },
-  createRouterLinkCard(text, route) {
   return {
-    render() {
-      const RouterLink = resolveComponent("router-link");
-      return h("span", { class: "no-course-text" }, [
-        text,
-        h("br"),
-        "👉 ",
-        h(RouterLink, { to: route, class: "planning-link" }, { default: () => "Réserver un cours maintenant" })
-      ]);
+    note: "",              // toujours initialisé vide
+noteReady: false,      // le vrai indicateur d’API terminée
+
+    dashboardReady: false,
+    auth,
+    email,
+    prenom,
+
+    cacheKey: `dashboard_${email}`,
+
+    // 📝 NOTE
+    note: hasNoteCache ? cachedNote : "",
+    noteReady: hasNoteCache,          // ✅ si cache → pas de loader
+    isNoteLoading: !hasNoteCache,     // loader seulement si pas de cache
+    noteLoadedFromCache: hasNoteCache,
+
+    isRefreshingNote: false,
+    isLoading: true,
+    cards: [],
+
+    destroyed: false,
+    debounceTimer: null,
+noteLoadedFromCache: false,
+
+    routes: {
+      GET: "AKfycbzeh9vGiTKbzVXhE5NmI03Zg8zhEjbL-7UUJU-bbpYMBP4GNsBKqVRtb782ED2yIe8ODw/exec",
+      POST: "AKfycbzeh9vGiTKbzVXhE5NmI03Zg8zhEjbL-7UUJU-bbpYMBP4GNsBKqVRtb782ED2yIe8ODw/exec"
     }
   };
-}
-,
-attachPlanningLink() {
-  const el = document.getElementById("planning-link");
-  console.log("attachPlanningLink called — el:", el);
-  if (el) {
-    el.addEventListener("click", () => {
-      console.log("planning-link clicked");
-      this.$router.push("/planning");
+},
+
+
+
+  computed: {
+    isLoggedIn() {
+      return !!this.auth.jwt && !!this.auth.user;
+    },
+  },
+
+  // -----------------------------
+  //      NAVIGATION LEAVE
+  // -----------------------------
+  setup() {
+    onBeforeRouteLeave((to, from, next) => {
+      const auth = useAuthStore();
+      const prenom = auth.user?.prenom || localStorage.getItem("prenom");
+
+      const noteKey = `userNote_${prenom}`;
+      const cached = localStorage.getItem(noteKey) || "";
+      const note = this?.note?.trim?.() || "";
+
+      if (!auth.jwt || !note || note === cached) return next();
+
+      this.saveNoteImmediately()
+        .finally(() => next());
     });
-  } else {
-    console.warn("🚫 Lien 'planning-link' non trouvé.");
-  }
-}
-
-,
-    async saveNoteOnUnload(event) {
-        if (this.note.trim() !== "" && this.isLoggedIn) {
-            console.log("💾 Sauvegarde de la note avant de quitter la page...");
-            await this.updateNote(); // 🔥 Force l'envoi de la note avant le départ
-        }
-    },
-    getProxyPostURL(route) {
-  const baseURL = `https://script.google.com/macros/s/${route}`;
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`;
-},
-    getProxyURL(route, params = {}) {
-  const baseURL = `https://script.google.com/macros/s/${route}`;
-  const query = new URLSearchParams(params).toString();
-  const fullURL = `${baseURL}?${query}`;
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullURL)}`;
-},
-    getUserRole() {
-    let jwt = sessionStorage.getItem("jwt") || localStorage.getItem("jwt");
-    if (!jwt) return null;
-
-    try {
-      let decoded = jwtDecode(jwt);
-      return decoded.role || "user"; // Retourne "user" par défaut si absent
-    } catch (error) {
-      console.error("❌ Erreur lors du décodage du JWT :", error);
-      return null;
-    }
   },
-    syncCache(event) {
-    if (event.key === `userData_${this.prenom}`) {
-      console.log("🔄 Mise à jour du cache détectée dans un autre onglet, rechargement des données...");
-      this.loadUserData();
-    }
-  },
-  insertEmoji(event) {
-      this.note += event.detail.unicode; // Ajoute l'emoji à la fin du texte
-    },
-async loadUserData() {
-  const cachedData = getCache(this.cacheKey);
-  console.log("📂 Données récupérées du cache :", cachedData);
 
-  const isValid = this.isCacheValid(cachedData);
-  console.log("✅ Cache valide ?", isValid);
+  // -----------------------------
+  //     MOUNTED
+  // -----------------------------
+async mounted() {
+  const auth = this.auth;
+  if (auth.isLoggingOut || this.destroyed) return;
 
-  if (isValid) {
-    this.updateData(cachedData);
+  await this.$nextTick();
 
-    const planningKey = `userPlanning_${this.prenom}`;
-    const planningData = localStorage.getItem(planningKey);
-    if (planningData) {
-      const parsed = JSON.parse(planningData);
-      cachedData.planning = parsed.planning;
-      cachedData.prochainCours = parsed.prochainCours;
+  // 1️⃣ Email & prénom si absents
+  if (!this.email) this.email = getUserInfoFromJWT()?.email || "";
+  if (!this.prenom) this.prenom = getUserInfoFromJWT()?.prenom || "";
 
-      this.updateData(cachedData); // re-update si planning dispo
-    }
-
-    localStorage.setItem(this.cacheKey, JSON.stringify(cachedData));
-    return true;
-  }
-
-  console.warn("⚠️ Cache invalide ou expiré, appel API forcé !");
-  await this.fetchFromAPI(true);
-  return false;
-}
-
-
-
-
-
-
-
-,
-onNoteInput() {
-  const noteKey = `userNote_${this.prenom}`;
-  localStorage.setItem(noteKey, this.note); // ✅ Màj immédiate
-
-  if (this.debounceTimer) clearTimeout(this.debounceTimer);
-  this.debounceTimer = setTimeout(() => {
-    this.updateNote(); // 🔄 Appel différé
-  }, 1200);
-}
-
-,
-formatDateISO(isoString) {
-  if (!isoString) return "Date inconnue";
-
-  const dateObj = new Date(isoString);
-  
-  // Vérification si la date est invalide
-  if (isNaN(dateObj.getTime())) {
-    console.error("❌ Date invalide détectée :", isoString);
-    return "Date invalide";
-  }
-
-  const options = { weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" };
-  
-  return dateObj.toLocaleString("fr-FR", options);
-}
-,
-
-getDayName(dateString) {
-  if (!dateString) return "";
-
-  const days = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-  const dateObj = new Date(dateString);
-
-  if (isNaN(dateObj)) return "Date invalide";
-
-  return days[dateObj.getDay()];
-}
-,
-
-getFormattedDate(dateString) {
-  if (!dateString) return "";
-  const dateObj = new Date(dateString);
-  if (isNaN(dateObj)) return "Date invalide";
-
-  const day = String(dateObj.getDate()).padStart(2, "0");
-  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-  const year = dateObj.getFullYear();
-
-  return `${day}/${month}/${year}`;
-},
-
-getFormattedTime(dateString) {
-  if (!dateString) return "";
-  const dateObj = new Date(dateString);
-  if (isNaN(dateObj)) return "Heure invalide";
-
-  const hours = String(dateObj.getHours()).padStart(2, "0");
-  const minutes = String(dateObj.getMinutes()).padStart(2, "0");
-
-  return `${hours}h${minutes}`;
-},
-
-
-
-getMonthName(monthNumber) {
-  const months = [
-    "janvier", "février", "mars", "avril", "mai", "juin",
-    "juillet", "août", "septembre", "octobre", "novembre", "décembre"
-  ];
-  
-  return months[parseInt(monthNumber, 10) - 1];
-}
-,
-async forceUpdateCache(options = {}) {
-  const { forcePlanning = false } = options;
-
-  try {
-    console.log("🔄 forceUpdateCache appelée");
-    await this.fetchFromAPI(forcePlanning);
-  } catch (err) {
-    console.error("❌ Erreur forceUpdateCache :", err);
-  }
-}
-
-
-
-,
-async loadNoteFromCacheThenSync() {
-  this.isNoteLoading = true; // ✅ Démarre le chargement
-
+  // 2️⃣ Gestion du cache NOTE
   const noteKey = `userNote_${this.prenom}`;
   const cachedNote = localStorage.getItem(noteKey);
 
-  if (cachedNote) {
+  if (cachedNote !== null) {
+    // ✅ Cache trouvé → on affiche DIRECTEMENT
     this.note = cachedNote;
-    console.log("🧠 Note trouvée dans localStorage :", this.note);
-    this.isNoteLoading = false; // ✅ On affiche le champ car on a une note
+    this.noteReady = true;
   } else {
-    console.log("❌ Aucune note en cache, on attend la sync...");
-    try {
-      await this.syncNoteWithAPI(); // 🕒 Attend la réponse API
-      const freshNote = localStorage.getItem(noteKey) || "";
-      this.note = freshNote;
-    } catch (e) {
-      console.warn("⚠️ Erreur durant sync API :", e);
-    } finally {
-      this.isNoteLoading = false;
-    }
+    // ❌ Pas de cache → on montre le loader
+    this.note = "";
+    this.noteReady = false;
   }
+
+  this.noteLoadedFromCache = cachedNote !== null;
+
+  // 🔄 On synchronise AVEC l’API dans tous les cas
+  this.syncNoteWithAPI();
+
+  // 3️⃣ Planning cache ?
+  const cachedPlanning = getCache(this.cacheKey);
+  const hasPlanningCache = Array.isArray(cachedPlanning?.planning);
+
+  // 4️⃣ Objectif déjà dans le store ?
+  const hasObjectif = auth.user?.objectif !== undefined;
+
+  // 5️⃣ 🚀 Dashboard instantané SI tout est déjà en cache
+  if (hasPlanningCache && hasObjectif) {
+    this.updateData(cachedPlanning);
+    this.dashboardReady = true;
+
+    // Chargement silencieux en arrière‑plan
+    this.fetchFromAPI(true);
+    return;
+  }
+
+  // 6️⃣ Sinon : chargement normal
+  this.loadUserData();
+  this.fetchFromAPI(true);
+
+  this.dashboardReady = true;
 }
 
 
 
-
 ,
-async syncNoteWithAPI() {
-  const jwt = await getValidToken();
-  if (!jwt) return;
 
-  const proxyURL = this.getProxyURL(this.routes.GET, {
+  beforeUnmount() {
+    this.destroyed = true;
+  },
+
+  // -----------------------------
+  //     METHODS
+  // -----------------------------
+  methods: {
+    // -------------------------
+    //   NOTE SYSTEME
+    // -------------------------
+    async onNoteInput() {
+      const key = `userNote_${this.prenom}`;
+      localStorage.setItem(key, this.note);
+
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => {
+        this.updateNote();
+      }, 1200);
+    },
+
+async syncNoteWithAPI() {
+  const auth = this.auth;
+  const jwt = auth.jwt; // 🔥 jamais getValidToken()
+
+  if (!jwt) {
+    this.noteReady = true; // ✅ on libère le loader même sans token
+    return;
+  }
+
+  const url = this.getProxyURL(this.routes.GET, {
     route: "getnote",
     jwt
   });
 
-  this.isNoteLoading = true;
-
   try {
-    const response = await fetch(proxyURL, { cache: "no-store" });
-    const contentType = response.headers.get("content-type") || "";
-    const raw = await response.text();
+    const raw = await fetch(url).then(r => r.text());
+    const data = JSON.parse(raw);
 
-    if (!response.ok) {
-      console.error(`❌ HTTP ${response.status}: ${raw}`);
-      return;
-    }
+    const newNote = data.note || data?.notes?.[0]?.note || "";
+    const key = `userNote_${this.prenom}`;
 
-    if (!contentType.includes("application/json")) {
-      console.error("❌ Réponse non-JSON :", raw);
-      return;
-    }
+    // ✅ Toujours écrire le résultat API (même vide)
+    this.note = newNote;
+    localStorage.setItem(key, newNote);
 
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (e) {
-      console.error("❌ JSON invalide :", e);
-      return;
-    }
-
-    const newNote = data.note || data.notes?.[0]?.note || "";
-    const noteKey = `userNote_${this.prenom}`;
-    const cachedNote = localStorage.getItem(noteKey);
-
-    console.log("📌 Note key utilisée :", noteKey);
-    console.log("🧠 Note trouvée dans localStorage :", cachedNote);
-
-    // On commence par afficher ce qui existe déjà
-    this.note = cachedNote || "";
-
-    // 🧹 ————————————————————————————————————————————
-    //     Si la note API est VIDE → on supprime la carte & la note
-    // ——————————————————————————————————————————————
-    if (!newNote.trim()) {
-      console.log("ℹ️ Note API vide → suppression éventuelle de la carte.");
-
-      // Remove card if exists
-      this.cards = this.cards.filter(c => c.title !== "Ta dernière note");
-
-      // Clean local cache
-      localStorage.setItem(noteKey, "");
-
-      this.note = "";
-      return;
-    }
-
-    // 🟢 Si la note API est NON vide mais différente → mise à jour
-    if (newNote !== cachedNote) {
-      console.log("🔁 Nouvelle note reçue :", newNote);
-
-      this.note = newNote;
-      localStorage.setItem(noteKey, newNote);
-
-      // 🔄 Met à jour ou crée la carte
-      const existing = this.cards.find(c => c.title === "Ta dernière note");
-
-      if (existing) {
-        existing.text = newNote;
-      } 
-    } else {
-      console.log("🟢 Note inchangée");
-    }
-
-  } catch (err) {
-    console.error("❌ Erreur API note :", err);
+  } catch (e) {
+    console.error("❌ syncNote error:", e);
   } finally {
+    // ✅ LE POINT LE PLUS IMPORTANT
+    this.noteReady = true;
     this.isNoteLoading = false;
-    console.log("✅ Fin du chargement de la note");
   }
 }
-
 
 ,
-async fetchNote(forceRefresh = false) {
-  console.log("📝 Vérification de la note...");
 
-  const noteKey = `userNote_${this.prenom}`;
-  this.isRefreshingNote = forceRefresh;
-this.isNoteLoading = true;
+    async fetchNote(force = false) {
+      const key = `userNote_${this.prenom}`;
+      this.isRefreshingNote = force;
 
-  // 🔁 Si pas de force refresh, charge la note du cache dédié
-if (!forceRefresh) {
-  const localNote = localStorage.getItem(noteKey);
-  if (localNote) {
-    this.note = localNote;
-    console.log("🟢 Note chargée localement");
-    // ❌ surtout pas de return !
-  }
-}
+      if (!force && this.note) {
+        return;
+      }
 
+      await this.syncNoteWithAPI();
+      this.isRefreshingNote = false;
+    },
 
+    async updateNote() {
+      const jwt = await getValidToken();
+      if (!jwt) return;
 
-  // 🔐 Vérification JWT
-const auth = useAuthStore();
-let jwt = auth.jwt || sessionStorage.getItem("jwt") || localStorage.getItem("jwt");
-
-if (!jwt) {
-  console.warn("🧪 Aucun JWT détecté, tentative getValidToken()…");
-  jwt = await getValidToken();
-}
-
-if (!jwt) {
-  console.warn("🔒 JWT manquant ou invalide, redirection !");
-  router.replace("/login");
-  return;
-}
-
-auth.jwt = jwt; // sync si jamais obtenu depuis getValidToken
-
-
-  const proxyURL = this.getProxyURL(this.routes.GET, { route: "getnote", jwt });
-  console.log("📡 URL de la requête API corrigée : ", proxyURL);
-
-  try {
-    const response = await fetch(proxyURL, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      },
-    });
-
-   const text = await response.text();
-
-if (text.startsWith('<!DOCTYPE html>')) {
-  console.warn("❌ Réponse HTML détectée à la place de JSON !");
-  console.warn("🧾 HTML reçu :", text.slice(0, 100));
-  return; // ou affiche un toast d'erreur
-}
-
-const data = JSON.parse(text); // à faire ensuite
-    console.log("📡 Data payload reçue :", data);
-
-    if (data.note !== undefined || (data.notes && data.notes.length)) {
-      const noteFromAPI = data.note || data.notes[0].note || "";
-      this.note = noteFromAPI;
-
-      localStorage.setItem(noteKey, this.note); // ✅ Sauvegarde séparée
-
-      this.noteUpdatedMessage = "✅ Note mise à jour !";
-      setTimeout(() => {
-        this.noteUpdatedMessage = "";
-      }, 3000);
-    }
-  } catch (error) {
-    console.error("❌ Erreur API Bloc-Note :", error);
-  } finally {
-  this.saving = false;
-  this.isRefreshingNote = false;
-  this.isNoteLoading = false; // ← 🔥 C'est CE flag qui fait basculer l'affichage du champ textarea
-  this.isLoading = false;
-}
-
-}
-
-
-
-
-,
-// 🔥 Autosave de la note (avec délai pour éviter spam API)
-async updateNote() {
-  const noteKey = `userNote_${this.prenom}`;
-  localStorage.setItem(noteKey, this.note.trim()); // sauvegarde locale immédiate
-
-  const jwt = await getValidToken();
-  if (!jwt) {
-    console.warn("🔒 JWT expiré ou absent → autosave annulée");
-    return;
-  }
-
-  // Empêche plusieurs autosaves simultanées
-  if (this.debounceTimer) clearTimeout(this.debounceTimer);
-
-  this.debounceTimer = setTimeout(async () => {
-    this.saving = true;
-
-    try {
       const url = this.getProxyPostURL(this.routes.POST);
       const payload = {
         route: "updatenote",
@@ -782,576 +337,184 @@ async updateNote() {
         note: this.note.trim()
       };
 
-      console.log("📤 Autosave note :", payload);
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      console.log("✅ Autosave API :", data);
-
-      if (data.status !== "success") {
-        console.error("❌ Autosave API error :", data.message);
-      }
-    } catch (error) {
-      console.error("❌ Autosave Bloc-Note erreur :", error);
-    } finally {
-      this.saving = false;
-    }
-  }, 1500); // <-- délai autosave plus fluide
-}, // 🔥 Mettre à jour la note en temps réel (autosave)
-
-// ⚡ Sauvegarde immédiate de la note (pour changement de page)
-async saveNoteImmediately() {
-  const noteKey = `userNote_${this.prenom}`;
-  localStorage.setItem(noteKey, this.note.trim()); // sauvegarde locale
-
-  // ✅ Utilise le JWT déjà présent dans le store si possible
-  let jwt = this.$store?.jwt || this.jwt; // ou authStore.jwt si Pinia
-  if (!jwt || isJwtExpired(jwt)) {
-    // ⚠️ JWT absent ou expiré → essaie un refresh, mais sans boucle infinie
-    jwt = await refreshToken(); // refreshToken gère déjà le verrou
-    if (!jwt) {
-      console.warn("🔒 JWT expiré → impossible de sauvegarder immédiatement");
-      return;
-    }
-  }
-
-  this.saving = true;
-
-  try {
-    const url = this.getProxyPostURL(this.routes.POST);
-    const payload = {
-      route: "updatenote",
-      jwt,
-      note: this.note.trim()
-    };
-
-    console.log("📤 SAUVEGARDE INSTANTANÉE de la note :", payload);
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-    console.log("✅ Réponse API instantanée :", data);
-
-    if (data.status !== "success") {
-      console.error("❌ Erreur sauvegarde immédiate :", data.message);
-    }
-  } catch (error) {
-    console.error("❌ Erreur sauvegarde instantanée :", error);
-  } finally {
-    this.saving = false;
-  }
-}
-,
-
-
-
-async fetchStudentData() {
-  const cachedData = localStorage.getItem(this.cacheKey);
-  const cacheExpiration = parseInt(localStorage.getItem(this.cacheExpirationKey), 10);
-
-  if (cachedData && cacheExpiration && Date.now() < cacheExpiration) {
-    try {
-      const parsedData = JSON.parse(cachedData);
-      console.log("⚡ Chargement rapide depuis le cache.");
-      this.updateData(parsedData);
-      this.isLoading = false;
-      return;
-    } catch (error) {
-      console.error("❌ Erreur parsing cache :", error);
-      this.clearCache(); // Supprime le cache corrompu
-    }
-  }
-
-  await this.fetchFromAPI();
-}
-
-,
-clearNote() {
-  console.log("🧹 Nettoyage de la note...");
-  const noteKey = `userNote_${this.prenom}`;
-  
-  this.note = ""; // Reset UI
-  localStorage.removeItem(noteKey); // ✅ Supprime la clé dédiée
-
-  // 🔐 Envoi à l'API si connecté
-  const jwt = sessionStorage.getItem("jwt") || localStorage.getItem("jwt");
-  if (jwt) {
-    this.sendEmptyFeedbackInBackground(jwt);
-  } else {
-    console.warn("🚫 Non connecté, note vidée localement uniquement.");
-  }
-}
-
-
-,
-
-formatDate(dateString) {
-  if (!dateString) return "Date inconnue";
-
-  const [day, month, yearAndTime] = dateString.split("/");
-  const [year, time] = yearAndTime.split(" ");
-
-  return `📅 ${day}/${month}/${year} à ${time}`;
-}
-,
-async sendEmptyFeedbackInBackground(jwt) {
-  try {
-    const url = this.getProxyPostURL(this.routes.POST);
-    const payload = { route: "updatenote", jwt, note: "" };
-    console.log("📤 Envoi de la note vide :", payload);
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-    console.log("✅ Réponse API mise à jour :", data);
-
-    if (data.status === "success") {
-      console.log("✅ Note supprimée avec succès !");
-    } else {
-      console.error("❌ Erreur suppression :", data.message);
-    }
-  } catch (error) {
-    console.error("❌ Erreur API ClearNote :", error);
-  }
-}
-
-,
-async fetchFromAPI(forceRefresh = false) {
-  const auth = useAuthStore();
-  if (auth.isLoggingOut) return;
-
-  if (sessionStorage.getItem(`nonInscrit_${this.prenom}`)) {
-    console.log("⛔ Élève identifié comme non inscrit, on évite l’API.");
-    this.displayError();
-    this.isLoading = false;
-    return;
-  }
-
-  const nonInscritTime = parseInt(sessionStorage.getItem(`nonInscrit_${this.prenom}`), 10);
-  const now = Date.now();
-  const retryAfter = 5 * 60 * 1000;
-
-  if (!isNaN(nonInscritTime) && now - nonInscritTime < retryAfter) {
-    console.log("⛔️ Élève déjà détecté comme non inscrit récemment. API ignorée.");
-    this.displayError();
-    this.isLoading = false;
-    return;
-  }
-
-  if (!forceRefresh && !shouldUpdateCache(this.cacheKey, this.cacheDuration)) {
-    console.log("✅ Cache encore valide, pas d'appel API.");
-    return;
-  }
-
-  let cachedData = JSON.parse(localStorage.getItem(this.cacheKey)) || {};
-  if (!this.email) this.email = localStorage.getItem("email");
-  if (!this.prenom) this.prenom = localStorage.getItem("prenom");
-
-  if (!this.email || !this.prenom) {
-    console.warn("⚠️ Email ou prénom manquant, récupération via JWT...");
-    const userInfo = getUserInfoFromJWT();
-    if (userInfo.email) this.email = userInfo.email;
-    if (userInfo.prenom) this.prenom = userInfo.prenom;
-  }
-
-  if (!this.email || !this.prenom) {
-    console.error("❌ Email et prénom introuvables.");
-    this.isLoading = false;
-    return;
-  }
-
-  const jwt = await getValidToken();
-  if (!jwt) {
-    console.warn("🔒 JWT expiré ou absent, redirection !");
-    router.replace("/login");
-    return;
-  }
-
-  try {
-    let fixedPrenom = this.prenom;
-    try {
-      fixedPrenom = decodeURIComponent(escape(fixedPrenom));
-    } catch (e) {
-      console.warn("⚠️ Pas besoin de corriger UTF-8, prénom lisible.");
-    }
-
-    const encodedPrenom = encodeURIComponent(fixedPrenom);
-    const url = this.getProxyURL(this.routes.GET, {
-      route: "planning",
-      jwt,
-      email: this.email,
-      prenom: encodedPrenom
-    });
-
-    console.log("📡 URL API :", url);
-
-    const response = await fetch(url, { cache: "no-store" });
-
-    const contentType = response.headers.get("content-type") || "";
-    const rawText = await response.text();
-
-    if (!response.ok || !contentType.includes("application/json")) {
-      console.warn("⚠️ Réponse non-JSON ou status HTTP erreur :", response.status, contentType);
-      console.warn("🔎 Contenu brut reçu :", rawText.slice(0, 200));
-      this.isLoading = false;
-      return;
-    }
-
-    const data = JSON.parse(rawText);
-    console.log("📡 Data payload reçue :", data);
-
-    if (data.error === "Élève non inscrit") {
-      sessionStorage.setItem(`nonInscrit_${this.prenom}`, Date.now().toString());
-      console.warn("ℹ️ Élève connecté mais pas encore inscrit à un cours.");
-      this.displayError();
-      this.isLoading = false;
-      return;
-    }
-
-    if (data.error === "Aucune donnée trouvée pour cet utilisateur") {
-      console.warn("ℹ️ Utilisateur sans données (pas encore actif ?)");
-      this.cards = [
-        {
-          icon: "bi bi-calendar-event",
-          title: "Prochain Cours",
-          text: `🎸 Aucun cours prévu pour le moment.<br>
-            <div class="planning-bouton" onclick="window.vueRouterPush && window.vueRouterPush('/Abonnements')"> 📅 Réserver un cours </div>`
-        },
-        {
-          icon: "bi bi-flag",
-          title: "Objectif actuel",
-          text: `🎯 Aucun objectif défini.<br>
-            👉 Prends un cours pour qu’on le définisse ensemble.`
-        }
-      ];
-      this.isLoading = false;
-      return;
-    }
-
-    const payload = data;
-
-    Object.keys(payload).forEach(key => {
-      if (payload[key] !== null && payload[key] !== undefined) {
-        cachedData[key] = payload[key];
-      }
-    });
-
-    localStorage.setItem(this.cacheKey, JSON.stringify(cachedData));
-    console.log("📦 Données avant updateData :", cachedData);
-    this.updateData(cachedData);
-  } catch (error) {
-    console.error("❌ Erreur API (fetchFromAPI) :", error);
-  } finally {
-    this.isLoading = false;
-  }
-}
-
-
-
-
-
-
-
-
-
-
-,
-
-
-isCacheValid(data) {
-  console.log("🧪 Vérif validité cache :", data);
-
-  if (!data || typeof data !== "object") {
-    console.error("❌ Cache invalide détecté : Données absentes ou incorrectes.");
-    return false;
-  }
-
-  if (data.status === "error" || data.error) {
-    if (data.error === "Aucun lien Meet trouvé") {
-      console.warn("⚠️ Aucun lien Meet trouvé, mais ce n'est pas une erreur critique.");
-      return true;
-    }
-
-    console.error("❌ Cache invalide détecté :", data.error || data.message);
-    return false;
-  }
-
-  // 🔍 On récupère aussi les données utilisateur secondaires (objectif, drive, etc)
-  const userInfosKey = `userInfos_${this.prenom}`;
-  const userInfos = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
-
-  const hasValidObjectif =
-    typeof data.objectif === "string" ||
-    typeof userInfos.objectif === "string";
-
-  const hasValidPlanning =
-    Array.isArray(data.planning) &&
-    data.planning.some(c => {
-      const d = new Date(c.date);
-      return d instanceof Date && !isNaN(d);
-    });
-
-  console.log("📆 planning ok ?", hasValidPlanning);
-  console.log("🎯 objectif ok ?", hasValidObjectif);
-
-  // ✅ N'importe lequel suffit pour considérer le cache valide
-  return hasValidPlanning || hasValidObjectif;
-}
-,
-
-    updateData(data) {
-      console.log("🧠 updateData appelée avec :", data);
-  console.trace("🧵 Trace appel updateData");
-if (this.cards.some(card => card.renderAsComponent) && !this.$route.meta.forceRefresh) {
-  return;
-}
-
-
-      if (sessionStorage.getItem(`nonInscrit_${this.prenom}`)) {
-  console.log("✅ Élève non inscrit → cards = version spéciale avec objectif si dispo");
-
-  const userInfosKey = `userInfos_${this.prenom}`;
-  const userInfos = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
-
-  const objectif = userInfos.objectif || `
-  Ton objectif musical n'a pas encore été défini.<br>
-  🧭 <div 
-    class='planning-bouton mt-2 d-inline-block' 
-    onclick="window.vueRouterPush && window.vueRouterPush('/Abonnements')"
-  >
-    Prendre un cours
-  </div> 
-`;
-
-if (this.cards.some(card => card.renderAsComponent)) {
-  console.log("🛑 Cartes personnalisées déjà définies (non inscrit), on ne les écrase pas.");
-  return;
-}
-
-  this.cards = [
-    {
-      icon: "bi bi-calendar-event",
-      title: "Prochain Cours",
-     text: `🎸 Aucun cours prévu pour le moment.<br>
-<div class="planning-bouton" onclick="window.vueRouterPush && window.vueRouterPush('/Abonnements')"> 📅 Réserver un cours </div>
-
-                `
-    },
-    {
-      icon: "bi bi-flag",
-      title: "Objectif actuel",
-  text: this.getObjectif()
-    }
-  ];
-
-  return; // 🚫 Stoppe ici pour ne pas injecter d'autres données
-}
-
-      console.log("🧠 updateData() appelée avec :", data);
-    console.log("📌 Mise à jour des cartes...");
-    console.log("📡 Data reçue :", data);
-
-;
-    // 🔍 Récupération du cache actuel
-    let cachedData = localStorage.getItem(this.cacheKey);
-    cachedData = cachedData ? JSON.parse(cachedData) : {};
-
-    let userInfosKey = `userInfos_${this.prenom}`;
-    let cachedInfos = localStorage.getItem(userInfosKey);
-    cachedInfos = cachedInfos ? JSON.parse(cachedInfos) : {};
-
-    // 🔄 Fusion des anciennes et nouvelles données (hors espace_google_drive et playlist_youtube)
-    const updatedData = { 
-        ...cachedData,
-        ...data,
-    };
-
-  // ✅ Stocker espace_google_drive, playlist_youtube et objectif dans userInfos_{prenom}
-  if (data.espace_google_drive !== undefined) {
-        cachedInfos.espace_google_drive = data.espace_google_drive;
-    }
-    if (data.playlist_youtube !== undefined) {
-        cachedInfos.playlist_youtube = data.playlist_youtube;
-    }
-    if (data.objectif !== undefined) {
-        cachedInfos.objectif = data.objectif; // 🔥 Sauvegarde de l'objectif
-    }
-
-    console.log("💾 Sauvegarde du cache mise à jour :", updatedData);
-    localStorage.setItem(this.cacheKey, JSON.stringify(updatedData));
-// ✅ Sauvegarde planning & prochainCours séparément
-if (updatedData.planning || updatedData.prochainCours) {
-  const planningKey = `userPlanning_${this.prenom}`;
-  const planningData = {
-    planning: updatedData.planning,
-    prochainCours: updatedData.prochainCours,
-  };
-  localStorage.setItem(planningKey, JSON.stringify(planningData));
-}
-
-    console.log("💾 Sauvegarde des infos séparées :", cachedInfos);
-    localStorage.setItem(userInfosKey, JSON.stringify(cachedInfos));
-
-    // 📌 Mise à jour des cartes (exemple pour Dashboard)
- // 📌 Mise à jour des cartes (exemple pour Dashboard)
-if (!Array.isArray(updatedData.planning) || updatedData.planning.length === 0) {
-  this.cards = [
-    {
-      icon: "bi bi-calendar-event",
-      title: "Prochain Cours",
-      renderAsComponent: {
- render() {
-  const RouterLink = resolveComponent("router-link"); // 👈 Résout le composant correctement
-
-  return h("span", { class: "no-course-text" }, [
-
-    "🎸 Aucun cours prévu pour le moment.",
-    h("br"),
-    "👉 ",
-    h(
-      RouterLink,
-      { to: "/Abonnements", class: "planning-link" },
-      { default: () => "Réserver un cours maintenant" }
-    )
-  ]);
-}
+      try {
+        await fetch(url, {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (e) {
+        console.error("❌ updateNote:", e);
       }
     },
-    {
-      icon: "bi bi-flag",
-      title: "Objectif actuel",
-      text: updatedData.objectif || "🎯 Aucun objectif défini"
-    }
-  ];
-  return;
-}
 
+    async saveNoteImmediately() {
+      await this.updateNote();
+    },
 
+    clearNote() {
+      const key = `userNote_${this.prenom}`;
+      this.note = "";
+      localStorage.setItem(key, "");
+      this.updateNote();
+    },
 
-    // 📌 Trouver le prochain cours
-    const now = new Date();
-const prochainCours = updatedData.planning.find(cours => new Date(cours.date) > now);
-updatedData.prochainCours = prochainCours; // ✅ injecte dans ce que tu sauvegardes
+    // -------------------------
+    //  PLANNING / CARDS
+    // -------------------------
+    async loadUserData() {
+      const cached = getCache(this.cacheKey);
 
-localStorage.setItem(this.cacheKey, JSON.stringify(updatedData)); // ✅ tu stockes bien ce qu’il faut
-console.log("💾 Sauvegarde du cache mise à jour :", updatedData);
-
-
-    if (!prochainCours) {
-        this.cards = [
-            {
-                icon: "bi bi-calendar-event",
-                title: "Prochain Cours",
-                text: `🎸 Aucun cours prévu pour le moment.<br>
-<div class="planning-bouton" onclick="window.vueRouterPush && window.vueRouterPush('/Abonnements')"> 📅 Réserver un cours </div>
-
-                `
-            },
-            {
-                icon: "bi bi-flag",
-                title: "Objectif actuel",
-                 text: this.getObjectif()
-            }
-        ];
+      if (this.isCacheValid(cached)) {
+        this.updateData(cached);
         return;
-    }
+      }
 
-    console.log("🎯 Prochain cours sélectionné :", prochainCours);
-
-    this.cards = [
-    {
-        icon: "bi bi-calendar-event",
-        title: "Prochain Cours",
-text: `
-  <div class="course-date mb-2">
-    📅 ${this.getDayName(prochainCours.date)} ${this.getFormattedDate(prochainCours.date)} à ${this.getFormattedTime(prochainCours.date)}
-  </div>
-
-  <div class="meet-button-wrapper">
-    <button class="btn-join-course ${this.isCourseSoon(prochainCours.date) ? 'urgent' : ''}"
-      onclick="window.open('${prochainCours.meet}', '_blank')">
-      🎥 Rejoindre le cours
-    </button>
-    ${this.isCourseSoon(prochainCours.date) ? '<div class="pulse-badge"></div>' : ''}
-  </div>
-
-  <div class="planning-link mt-2" onclick="window.vueRouterPush && window.vueRouterPush('/planning')">
-    📅 Voir le planning des cours
-  </div>
-
-  <div class="planning-link" onclick="window.vueRouterPush && window.vueRouterPush('/feedback')">
-    💬 Voir mon dernier feedback
-  </div>
-`
-
-
-
+      await this.fetchFromAPI(true);
     },
-        {
-            icon: "bi bi-flag",
-            title: "Objectif actuel",
-  text: this.getObjectif() // ✅ utilise la computed !
-        }
-    ];
-    this.$nextTick(() => this.attachPlanningLink()); // ✅ ICI !
 
+    async fetchFromAPI(force = false) {
+      if (!force && !shouldUpdateCache(this.cacheKey)) return;
+
+      const jwt = await getValidToken();
+      if (!jwt) return router.replace("/login");
+
+  const url = this.getProxyURL(this.routes.GET, {
+  route: "planning",
+  jwt,
+  email: this.email,
+  prof_id: this.auth.user?.prof_id
+});
+
+
+      try {
+        const raw = await fetch(url).then(r => r.text());
+        const data = JSON.parse(raw);
+
+        setCache(this.cacheKey, {
+  ...data,
+  role: this.auth.user?.role,
+  prof_id: this.auth.user?.prof_id
+});
+
+        this.updateData(data);
+      } catch (e) {
+        console.error("❌ fetchFromAPI:", e);
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // -------------------------
+    //  UPDATE CARDS
+    // -------------------------
+updateData(data) {
+  if (data.user) {
+    this.auth.user = {
+      ...this.auth.user,
+      ...data.user,
+      role: this.auth.user.role,
+      prof_id: this.auth.user.prof_id,
+    };
+  }
+
+  const now = new Date();
+
+  // 🔥 Liste des statuts interdits (normalisés en UPPERCASE)
+  const bannedStatuses = [
+    "FAIT",
+    "TERMINE",
+    "TERMINEE",
+    "ANNULÉ",
+    "ANNULE",
+    "REPORT_REFUSE",
+    "REFUSE",
+  ];
+
+  const prochain = (data.planning || [])
+    .filter(c => {
+const rawStatus = c.status || c.statut || c.Status || c.STATUT || "";
+const s = rawStatus.toString().toUpperCase().trim();
+      return !bannedStatuses.includes(s); 
+    })
+    .filter(c => {
+      const d = new Date(c.date);
+      return !isNaN(d) && d > now;
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+
+  console.log("🔍 STATUTS REÇUS:", data.planning.map(c => c.status || c.statut));
+  console.log("🎯 prochain cours retenu:", prochain);
+
+  this.cards = [
+    {
+      icon: "bi bi-calendar-event",
+      title: "Prochain Cours",
+      text: prochain ? this.renderProchainCours(prochain) : this.renderNoCourse(),
+    },
+    {
+      icon: "bi bi-flag",
+      title: "Objectif actuel",
+      text: this.auth.user?.objectif || "🎯 Aucun objectif défini",
+    }
+  ];
+
+  this.isLoading = false;
+  this.dashboardReady = true;
 }
-
-
-
-
-
-
-
 
 ,
 
-displayError() {
-  const prenom = this.prenom || localStorage.getItem("prenom") || "";
-  const userInfosKey = `userInfos_${prenom}`;
-  console.log("🔑 Clé recherchée dans localStorage :", userInfosKey);
+    renderNoCourse() {
+      return `
+        🎸 Aucun cours prévu.<br>
+        <div onclick="window.vueRouterPush('/Abonnements')" class="planning-bouton">
+          📅 Réserver
+        </div>
+      `;
+    },
 
-const userInfosRaw = localStorage.getItem(userInfosKey);
-const userDataRaw = localStorage.getItem(`userData_${this.email}`); // ✅ fallback
-const userInfos = JSON.parse(userInfosRaw || "{}");
-const userData = JSON.parse(userDataRaw || "{}");
+    renderProchainCours(c) {
+      return `
+        📅 ${this.getDayName(c.date)} ${this.getFormattedDate(c.date)} à ${this.getFormattedTime(c.date)}
+        <br>
+        <button onclick="window.open('${c.meet}','_blank')" class="btn-join-course">🎥 Rejoindre</button>
+      `;
+    },
 
-const objectif =
-  userInfos.objectif ||
-  userData.objectif ||
-  `
-    Ton objectif musical n'a pas encore été défini.<br>
-  `;
+    // -------------------------
+    // HELPERS
+    // -------------------------
+    isCacheValid(d) {
+      if (!d) return false;
+      return Array.isArray(d.planning) || d.objectif;
+    },
 
- this.cards = [
-  {
-    icon: "bi bi-calendar-event",
-    title: "Prochain Cours",
-renderAsComponent: this.createRouterLinkCard("Tu n'as pas encore de cours prévu.", "/Abonnements")
+    getProxyURL(route, params) {
+      const qs = new URLSearchParams(params).toString();
+      const base = `https://script.google.com/macros/s/${route}?${qs}`;
+      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
+    },
 
-  },
-  {
-    icon: "bi bi-flag",
-    title: "Objectif actuel",
-    text: objectif
-  }
-];
+    getProxyPostURL(route) {
+      const base = `https://script.google.com/macros/s/${route}`;
+      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
+    },
 
+   getDayName(d) {
+  return ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."][new Date(d).getDay()];
 }
+,
 
+    getFormattedDate(d) {
+      const f = new Date(d);
+      return `${f.getDate().toString().padStart(2,"0")}/${(f.getMonth()+1).toString().padStart(2,"0")}/${f.getFullYear()}`;
+    },
+
+    getFormattedTime(d) {
+      const f = new Date(d);
+      return `${f.getHours().toString().padStart(2,"0")}h${f.getMinutes().toString().padStart(2,"0")}`;
+    },
   }
 };
 </script>
@@ -2091,5 +1254,19 @@ button:hover {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+.dashboard-overlay-loader {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+}
+
 
 </style>
