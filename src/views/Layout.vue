@@ -216,19 +216,21 @@
           <router-link to="/moncompte" class="account-link">
             <i class="bi bi-person-gear"></i>
           </router-link>
+          
 
           <div v-if="user?.statut" class="subscription-badge mt-2">
             <template v-if="isSubscribed">
               <span class="badge bg-success">✅ Abonné</span>
             </template>
             <template v-else>
-              <a
-                href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
-                target="_blank"
-                class="badge bg-danger"
-              >
-                ❌ Non abonné
-              </a>
+   <router-link
+  :to="{ name: 'Abonnements' }"
+  class="subscription-badge-link"
+>
+  ❌ Non abonné
+</router-link>
+
+
             </template>
           </div>
         </div>
@@ -2168,21 +2170,39 @@ body.loading-active {
   justify-content: center;
   margin-top:10px;
   margin-left:-50px;
-  font-size: 1.4rem;
-  color: #0d6efd; /* Bleu comme les liens */
+  font-size: 2rem;
+  color: white;
   text-decoration: none;
   cursor: pointer;
   transition: color 0.3s ease-in-out, transform 0.2s ease-in-out;
 }
 
 .account-link:hover {
-  color: #0a58ca;
-  transform: scale(1.1);
+  color: #ca300a;
+  transform: scale(1);
 }
 .hero-banner {
   padding-top: env(safe-area-inset-top);
   background: #000 !important;
 }
 
+.subscription-badge a {
+  text-decoration: none;
+}
+.subscription-badge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #dc3545;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.subscription-badge-link:hover {
+  background: #bb2d3b;
+}
 
 </style>

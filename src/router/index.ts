@@ -37,6 +37,8 @@ import LinkProf from "@/views/LinkProf.vue";
 import DashboardProf from "@/views/dashboard-prof.vue";
 import Abonnements from "@/views/Abonnements.vue";
 import NotFound from "@/views/NotFound.vue";
+import UploadFile from '@/views/UploadFile.vue'
+
 
 // =============================================================
 // 🌍 Base URL (prod = /app/)
@@ -132,6 +134,14 @@ const router = createRouter({
     { path: "/mon-espace", name: "mon-espace", component: MonEspace, meta: { requiresAuth: true } },
     { path: "/planning", name: "planning", component: Planning, meta: { requiresAuth: true } },
     { path: "/replay", name: "replay", component: Replay, meta: { requiresAuth: true } },
+    {
+  path: '/upload-test',
+  name: 'UploadTest',
+  component: UploadFile,
+  meta: {
+    requiresAuth: true
+  }
+},
     { path: "/moncompte", name: "moncompte", component: moncompte, meta: { requiresAuth: true } },
     { path: "/MesRessources", name: "MesRessources", component: MesRessources },
 
@@ -149,6 +159,8 @@ const router = createRouter({
     { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
     { path: "/register", name: "register", component: Register },
     { path: "/registerform", name: "registerform", component: RegisterForm },
+        { path: "/Abonnements", name: "Abonnements", component: Abonnements },
+
 
     // =========================================================
     // ❌ 404

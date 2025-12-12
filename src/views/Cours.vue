@@ -1,17 +1,8 @@
 <template>
-<div class="cours-wrapper"> <!-- 🔥 ROOT UNIQUE -->
 
   <Layout>
     <div class="container-xxl mt-4">
       <h2 class="text-white text-center">📚 Gestion des Cours</h2>
-<!-- 🔗 Bouton vers la page de gestion des reports -->
-<div class="text-center mt-3 mb-3">
-  <button class="btn btn-warning btn-lg reports-btn" @click="router.push('/dashboardreports')">
-    📨 Gérer les demandes de report
-    <span v-if="pendingReportsCount > 0">({{ pendingReportsCount }})</span>
-  </button>
-</div>
-
 
       <!-- ✅ Sélecteur de prénom -->
       <div class="mb-3 text-center">
@@ -59,9 +50,7 @@
   <label for="weekSelect" class="text-white">Sélectionner une semaine :</label>
   <select v-model="selectedWeek" class="form-select mt-2" id="weekSelect">
     <option value="">Toutes les semaines</option>
-<option v-for="week in weeks" :value="week.start.getTime()">
-
-
+    <option v-for="week in weeks" :key="week.start" :value="week">
       {{ week.label }}
     </option>
   </select>
@@ -147,7 +136,7 @@
 
       </div>
     </div>
-  </Layout></div>
+  </Layout>
   <!-- ✅ MODAL DE MODIFICATION -->
 <div v-if="editModalOpen" class="modal show d-block" tabindex="-1">
   <div class="modal-dialog">
@@ -212,17 +201,14 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { getValidToken } from "@/utils/api.ts"; // 🔐 Import sécurisé
 import { useAuthStore } from "@/stores/authStore.js";
-import { storeToRefs } from "pinia";
+
+
 export default {
   name: "Cours",
   components: { Layout },
   setup() {
-    const router = useRouter();
-
     const authStore = useAuthStore();
-const { authReady } = storeToRefs(authStore);
-const pendingReportsCount = computed(() => authStore.pendingReportsCount);
-
+const profId = computed(() => authStore.user?.prof_id);
     const filterUpcoming = ref(false);
     const elevesInscrits = ref([]);
 const selectNextWeekFromNow = () => {
@@ -232,13 +218,8 @@ const selectNextWeekFromNow = () => {
     selectedWeek.value = nextWeek;
   }
 };
-const selectedWeekObj = computed(() =>
-  weeks.value.find(w => w.start.getTime() === selectedWeek.value)
-);
-const goToReports = () => {
-  router.push("/dashboardreports");
-};
 
+    const router = useRouter();
     const coursData = ref([]);
     const loading = ref(true);
     const deleting = ref(false);
@@ -317,29 +298,35 @@ const goToNextWeek = () => {
     }
 
     // ✅ Récupérer les cours depuis Google Sheets
-    const fetchCours = async (noCache = false) => {
+   const fetchCours = async (noCache = false) => {
   loading.value = true;
   try {
-    const jwt = await getValidToken(); // 🔒 Ajoute le token sécurisé
+    const jwt = await getValidToken();
+    if (!profId.value) throw new Error("prof_id manquant");
 
-    // ✅ Construction propre de l'URL
-    const targetBase = "https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec";
-    const fullTargetUrl = `${targetBase}?route=suiviCours${noCache ? `&t=${Date.now()}` : ""}&jwt=${encodeURIComponent(jwt)}`;
-    const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullTargetUrl)}`;
+    const base = "https://script.google.com/macros/s/AKfycbzwpPceOL_F5a9HstA6ajagQuvpeTEeHz_9HwNqANOrr8TfXLaGd0sNiliLj9rWT0vvdg/exec";
+
+    const fullUrl =
+      `${base}?route=suiviCours` +
+      `&prof_id=${encodeURIComponent(profId.value)}` +
+      `&jwt=${encodeURIComponent(jwt)}` +
+      (noCache ? `&t=${Date.now()}` : "");
+
+    const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullUrl)}`;
 
     const response = await axios.get(proxyUrl);
-    if (Array.isArray(response.data)) {
-      coursData.value = response.data;
-    } else {
-      console.error("❌ Format inattendu :", response.data);
-    }
-    console.log("✅ Cours chargés :", response.data);
-  } catch (error) {
-    console.error("❌ Erreur lors du chargement des cours:", error);
+
+    coursData.value = Array.isArray(response.data)
+  ? response.data
+  : Object.values(response.data);
+
+  } catch (e) {
+    console.error("❌ fetchCours:", e);
   } finally {
     loading.value = false;
   }
 };
+
 
 
 
@@ -591,42 +578,23 @@ const selectClosestWeek = () => {
         .padStart(2, "0")}H${dateObj.getMinutes().toString().padStart(2, "0")}`;
     };
 
-onMounted(async () => {
-  try {
-    // 1️⃣ Sécuriser getValidToken
-    const jwt = await getValidToken().catch(() => null);
-    if (!jwt) {
+    onMounted(async () => {
+    try {
+      const jwt = await getValidToken(); // 🔒 Récupère le token sécurisé
+      if (!jwt) throw new Error("Utilisateur non connecté");
+    } catch (error) {
+      console.warn("🔐 Redirection forcée vers login");
       router.replace("/login");
       return;
     }
+await fetchElevesInscrits();
 
-    // 2️⃣ TRY/CATCH INDIVIDUEL PAR FETCH
-    await fetchElevesInscrits().catch(err => {
-      console.error("❌ fetchElevesInscrits a crash :", err);
-    });
-
-    await fetchCours().catch(err => {
-      console.error("❌ fetchCours a crash :", err);
-    });
-
-    // 3️⃣ TRY pour éviter crash si weeks est vide
-    try {
-      selectClosestWeek();
-    } catch (e) {
-      console.warn("⚠️ selectClosestWeek a échoué :", e);
-    }
-
-  } catch (err) {
-    console.error("❌ ERREUR FATALE dans onMounted :", err);
-    // Empêche écran noir → on redirige
-    router.replace("/dashboard");
-  }
-});
-
+    await fetchCours();
+    selectClosestWeek();
+  });
 
     return {
-       router,coursData, loading, deleting, updating, selectedStudent, filterUpcoming,  pendingReportsCount,
- goToReports,filteredCours,
+      coursData, loading, deleting, updating, selectedStudent, filterUpcoming, filteredCours,
       supprimerCours, openEditModal, closeEditModal, updateCours, editModalOpen,goToPreviousWeek,selectNextWeekFromNow
 ,
 
@@ -868,28 +836,6 @@ h2 {
     max-height: none !important; /* Laisse le container gérer le scroll */
     overflow-y: visible !important;
   }
-}
-.reports-btn {
-  background: linear-gradient(90deg, #ff6a00, #ff8800);
-  color: #000;
-  border: none;
-  font-weight: bold;
-  padding: 10px 20px;
-  border-radius: 8px;
-  transition: 0.2s;
-}
-
-.reports-btn:hover {
-  transform: translateY(-2px);
-  opacity: 0.9;
-}
-.reports-btn span {
-  margin-left: 6px;
-  background: #ff6a00;
-  padding: 2px 7px;
-  border-radius: 12px;
-  font-weight: bold;
-  color: black;
 }
 
 </style>
