@@ -465,7 +465,7 @@ this.cards = [
     text: `
       🎼 Partitions, audio, vidéo…<br>
       <div
-        onclick="window.vueRouterPush('/mes-uploads')"
+onclick="window.vueRouterPush('/mes-uploads?cours_id=${prochain.ID_Cours}')"
         class="planning-bouton"
         style="margin-top:8px"
       >

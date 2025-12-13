@@ -1,26 +1,46 @@
 <template>
   <Layout>
     <div class="uploads-page dark-theme">
-     <button class="btn-upload" @click="showUpload = true">
-  ➕ Envoyer un fichier
+
+      <!-- ================= HEADER ================= -->
+      <div class="uploads-header">
+        <div>
+          <h3>📎 Mes documents</h3>
+          <p class="subtitle">
+            Fichiers liés à tes cours
+          </p>
+        </div>
+
+     <button
+  class="upload-cta"
+  @click="showUpload = true"
+>
+  ➕ Ajouter un fichier
 </button>
 
-<UploadModal
+      </div>
+
+      <!-- ================= MODALE UPLOAD ================= -->
+ <UploadModal
   v-if="showUpload"
-  :cours-id="selectedCours || 'GENERAL'"
+  :cours-id="effectiveCoursId"
   @close="showUpload = false"
+  @uploaded="fetchUploads"
 />
 
 
 
-      <!-- Filtres -->
-      <div class="filters mb-3">
+      <!-- ================= FILTRES ================= -->
+      <div class="uploads-filters">
         <select v-model="selectedCours" class="form-select">
-          <option value="">Date d'envoi</option>
-        <option v-for="c in coursList" :key="c" :value="c">
-  {{ coursLabelMap[c] || c }}
-</option>
-
+          <option value="">Tous les cours</option>
+          <option
+            v-for="c in coursList"
+            :key="c"
+            :value="c"
+          >
+            {{ coursLabelMap[c] || c }}
+          </option>
         </select>
 
         <select v-model="selectedType" class="form-select">
@@ -28,73 +48,60 @@
           <option value="audio">Audio</option>
           <option value="video">Vidéo</option>
           <option value="pdf">PDF</option>
-            <option value="image">Image</option>
-
+          <option value="image">Image</option>
         </select>
       </div>
 
-      <!-- Liste -->
-      <div v-if="loading" class="text-center">Chargement...</div>
-
-<div v-else class="uploads-list-table">
-
-  <!-- Header (desktop) -->
-  <div class="upload-row header hide-mobile">
-    <div>Fichier</div>
-    <div>Élève</div>
-    <div>Date</div>
-   
-    <div></div>
-  </div>
-
-  <!-- Rows -->
-  <div
-    v-for="file in filteredUploads"
-    :key="file.upload_id"
-    class="upload-row"
-  >
-    <div class="col-name">
-      {{ file.file_name }}
-    </div>
-
-    <div class="col-meta hide-mobile">
-      {{ auth.user.prenom }}
-    </div>
-
- <div class="col-meta">
-  {{ formatDate(file.created_at) }}
-</div>
-
-   <div class="col-action">
-<button
-  v-if="isPreviewable(file.file_type)"
-  class="open-btn"
-  @click="openPreview(file)"
->
-  👁️
-</button>
-
-<a
-  v-else
-  :href="file.file_url"
-  target="_blank"
-  class="open-btn"
->
-  🔗
-</a>
-
-
-
-</div>
-
-  </div>
-
+      <!-- ================= LISTE ================= -->
+      <div v-if="loading" class="loading">
+        Chargement...
       </div>
-    </div>
 
-    
+      <div v-else>
+        <div
+          v-for="file in filteredUploads"
+          :key="file.upload_id"
+          class="upload-item"
+        >
+          <div class="file-main">
+            <span class="file-icon">
+              📄
+            </span>
+
+            <div class="file-info">
+              <strong class="file-name">
+                {{ file.file_name }}
+              </strong>
+              <small class="file-date">
+                {{ formatDate(file.created_at) }}
+              </small>
+            </div>
+          </div>
+
+         <div class="file-action">
+  <a
+    :href="file.file_url"
+    target="_blank"
+    class="open-btn"
+  >
+    👁️
+  </a>
+</div>
+
+        </div>
+
+        <div
+          v-if="filteredUploads.length === 0"
+          class="empty-state"
+        >
+          Aucun fichier pour ce cours.
+        </div>
+      </div>
+
+    </div>
   </Layout>
 </template>
+
 <script setup>
 // ============================================================================
 // 📎 ELEVE UPLOADS — Page listing des fichiers envoyés par l’élève
@@ -105,10 +112,12 @@
 // ============================================================================
 
 import Layout from "@/views/Layout.vue"
-import { ref, computed, onMounted } from "vue"
+import { ref, computed, onMounted, watch } from "vue"
 import axios from "axios"
 import { useAuthStore } from "@/stores/authStore"
 import UploadModal from "@/components/UploadModal.vue"
+import { useRoute } from "vue-router"
+
 
 // ============================================================================
 // 🔐 AUTH
@@ -117,6 +126,10 @@ const auth = useAuthStore()
 
 // modale
 const showUpload = ref(false)
+// id_cours généré si absent
+const effectiveCoursId = ref(null)
+
+const generateCoursId = () => `GEN_${Date.now()}`
 
 // ============================================================================
 // 🔗 ROUTES APPS SCRIPT (ID de déploiement)
@@ -166,7 +179,9 @@ const formatDate = (d) => {
 const uploads = ref([])        // liste brute des fichiers
 const loading = ref(true)      // loader page
 
-const selectedCours = ref("")  // filtre cours
+const route = useRoute()
+const selectedCours = ref(route.query.cours_id || "")
+
 const selectedType = ref("")   // filtre type
 
 // ============================================================================
@@ -247,6 +262,8 @@ const fetchUploads = async () => {
     console.error("❌ fetchUploads error", err)
   } finally {
     loading.value = false
+    selectedType.value = ""
+
   }
 }
 
@@ -282,6 +299,27 @@ const formatSize = (s) => {
   if (!s) return ""
   return (s / 1024 / 1024).toFixed(2) + " Mo"
 }
+// watch 
+watch(() => route.query.cours_id, v => {
+  selectedCours.value = v || ""
+})
+watch(
+  () => route.query.cours_id,
+  v => {
+    if (v) {
+      effectiveCoursId.value = v
+    } else if (!effectiveCoursId.value) {
+      effectiveCoursId.value = generateCoursId()
+    }
+  },
+  { immediate: true }
+)
+watch(selectedCours, v => {
+  if (v) {
+    effectiveCoursId.value = v
+  }
+})
+
 
 // ============================================================================
 // 🚀 LIFECYCLE
@@ -460,6 +498,63 @@ onMounted(() => {
   .open-btn .icon {
     font-size: 1rem;
   }
+}
+.uploads-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.upload-cta {
+  background: #ff8c00;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  color: #000;
+}
+
+.upload-cta:disabled {
+  opacity: 0.5;
+}
+
+.uploads-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.upload-item {
+  background: #1e1e1e;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.file-main {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.file-icon {
+  font-size: 1.4rem;
+}
+
+.open-link {
+  color: #ff8c00;
+  font-size: 0.85rem;
+  text-decoration: none;
 }
 
 </style>
