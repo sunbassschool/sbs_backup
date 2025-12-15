@@ -202,6 +202,15 @@ noteLoadedFromCache: false,
   //     MOUNTED
   // -----------------------------
 async mounted() {
+  window.goToUploadsAndOpenModal = (coursId) => {
+  router.push({
+    path: "/mes-uploads",
+    query: {
+      cours_id: coursId,
+      openUpload: "1"
+    }
+  })
+}
   const auth = this.auth;
   if (auth.isLoggingOut || this.destroyed) return;
 
@@ -252,6 +261,8 @@ async mounted() {
   this.fetchFromAPI(true);
 
   this.dashboardReady = true;
+
+
 }
 
 
@@ -459,20 +470,21 @@ this.cards = [
       : this.renderNoCourse(),
   },
 
-  {
-    icon: "bi bi-upload",
-    title: "Envoyer un fichier",
-    text: `
-      🎼 Partitions, audio, vidéo…<br>
-      <div
-onclick="window.vueRouterPush('/mes-uploads?cours_id=${prochain.ID_Cours}')"
-        class="planning-bouton"
-        style="margin-top:8px"
-      >
-        📎 Envoyer un fichier
-      </div>
-    `
-  },
+{
+  icon: "bi bi-upload",
+  title: "Envoyer un fichier",
+  text: `
+    🎼 Partitions, audio, vidéo…<br>
+    <div
+      onclick="window.goToUploadsAndOpenModal('${prochain.ID_Cours}')"
+      class="planning-bouton"
+      style="margin-top:8px"
+    >
+      📎 Envoyer un fichier
+    </div>
+  `
+}
+,
 
   {
     icon: "bi bi-flag",

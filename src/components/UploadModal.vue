@@ -7,11 +7,14 @@
       <button class="close-btn" @click="emit('close')">✕</button>
     </div>
 
-   <UploadFileCore
+<UploadFileCore
   :eleve-id="auth.user.user_id"
   :cours-id="coursId"
+  :folder-id="folderId"
   @uploaded="handleUploaded"
 />
+
+
 
   </div>
 </div>
@@ -23,8 +26,11 @@ import { useAuthStore } from "@/stores/authStore"
 import UploadFileCore from "@/components/UploadFileCore.vue"
 
 defineProps({
-  coursId: { type: String, required: true }
+  coursId: { type: String, required: true },
+  folderId: { type: String, default: null }
 })
+
+
 const emit = defineEmits(["close", "uploaded"])
 
 const handleUploaded = () => {

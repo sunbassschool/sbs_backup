@@ -51,7 +51,7 @@ import { getValidToken } from "@/utils/api.ts"
 const auth = useAuthStore()
 const emit = defineEmits(["uploaded"])
 
-const GAS_POST_ROUTE = "AKfycbyeSHSoGZtq5jmhBZZn0ZidvzPyJo4VquV1Do_IPZqgepEExooy0d-sp4HDAAUuOOgLWA"
+const GAS_POST_ROUTE = "AKfycbx8yIzVDWpZgIJpfgsGeyN_jTX50uIKs05C1N-hqz4w8Wo4urOz6IrohlkasYJMl8iHUw"
 
 const getProxyPostURL = () => {
   const baseURL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`
@@ -61,8 +61,10 @@ const getProxyPostURL = () => {
 // 🔧 props dynamiques
 const props = defineProps({
   eleveId: { type: String, required: true },
-  coursId: { type: String, required: true }
+  coursId: { type: String, required: true },
+  folderId: { type: String, default: null } // ✅ dossier cible
 })
+
 
 const file = ref(null)
 const uploading = ref(false)
@@ -135,17 +137,19 @@ const startUpload = async () => {
   const attachRes = await fetch(proxyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      route: "attachfiletocours",
-      jwt,
-      cours_id: props.coursId,
-      prof_id: auth.user.prof_id,
-      eleve_id: props.eleveId,
-      file_url: res.url,
-      file_name: res.name,
-      file_size: res.size,
-      file_type: file.value.type
-    })
+body: JSON.stringify({
+  route: "attachfiletocours",
+  jwt,
+  cours_id: props.coursId,
+  prof_id: auth.user.prof_id,
+  eleve_id: props.eleveId,
+  file_url: res.url,
+  file_name: res.name,
+  file_size: res.size,
+  file_type: file.value.type,
+  parent_id: props.folderId // ✅ clé
+})
+
   }).then(r => r.json())
 
   if (!attachRes.success) {
