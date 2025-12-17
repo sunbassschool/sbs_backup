@@ -8,11 +8,13 @@
     </div>
 
 <UploadFileCore
-  :eleve-id="auth.user.user_id"
+  :eleve-id="eleveId"
   :cours-id="coursId"
-  :folder-id="folderId"
+  v-bind="folderId ? { folderId } : {}"
   @uploaded="handleUploaded"
 />
+
+
 
 
 
@@ -26,17 +28,30 @@ import { useAuthStore } from "@/stores/authStore"
 import UploadFileCore from "@/components/UploadFileCore.vue"
 
 defineProps({
-  coursId: { type: String, required: true },
-  folderId: { type: String, default: null }
+  coursId: {
+    type: String,
+    default: ""
+  },
+  folderId: {
+    type: String,
+    default: ""
+  },
+  eleveId: {
+    type: String,
+    default: ""
+  }
 })
+
+
 
 
 const emit = defineEmits(["close", "uploaded"])
 
-const handleUploaded = () => {
-  emit("uploaded")
+const handleUploaded = (upload) => {
+  emit("uploaded", upload)
   emit("close")
 }
+
 
 const auth = useAuthStore()
 </script>

@@ -2146,9 +2146,14 @@ export async function logoutUser() {
   // ---------------------------------------------------------
   // 🗃 5) Nettoyage IndexedDB
   // ---------------------------------------------------------
+  
   console.log("🗑️ Nettoyage IndexedDB…");
   await clearIndexedDBData();
   console.log("✅ IndexedDB nettoyée !");
+
+  // nettoyage explorer user 
+sessionStorage.clear()
+
 
   // ---------------------------------------------------------
   // 🔄 6) Redirection propre

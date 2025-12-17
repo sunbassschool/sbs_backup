@@ -134,6 +134,8 @@ const router = createRouter({
     { path: "/mon-espace", name: "mon-espace", component: MonEspace, meta: { requiresAuth: true } },
     { path: "/planning", name: "planning", component: Planning, meta: { requiresAuth: true } },
     { path: "/replay", name: "replay", component: Replay, meta: { requiresAuth: true } },
+        { path: "/LinkProf", name: "LinkProf", component: LinkProf, meta: { requiresAuth: true } },
+
     {
   path: '/upload-test',
   name: 'UploadTest',

@@ -2,9 +2,9 @@
   <Layout>
     <div class="uploads-page dark-theme">
 
-      <!-- =================================================================== -->
+      <!-- ===================================================== -->
       <!-- 🧭 HEADER -->
-      <!-- =================================================================== -->
+      <!-- ===================================================== -->
       <div class="uploads-header">
         <div>
           <h3>📎 Mes documents</h3>
@@ -12,367 +12,269 @@
         </div>
 
         <button
-          class="upload-cta"
-          @click="showUpload = true"
+          ref="addBtn"
+          class="add-btn"
+          :class="{ active: addMenu.visible }"
+          @click.stop="openAddMenuFromButton"
         >
-          ➕ Ajouter un fichier
+          <span class="icon">＋</span>
+          Ajouter
         </button>
-        <button
-  class="upload-cta secondary"
-  @click="createFolder"
->
-  ➕ Dossier
-</button>
-
       </div>
 
-      <!-- =================================================================== -->
-      <!-- 📤 MODALE UPLOAD -->
-      <!-- =================================================================== -->
-   <UploadModal
-  v-if="showUpload"
-  :cours-id="effectiveCoursId"
-  :folder-id="currentFolderId"
-  @close="showUpload = false"
-  @uploaded="fetchUploads"
-/>
-
-
-      <!-- =================================================================== -->
-      <!-- 🎛️ FILTRES (cours / type uniquement) -->
-      <!-- =================================================================== -->
-      <div class="uploads-filters">
-
-        <!-- Filtre cours -->
-        <select v-model="selectedCours" class="form-select">
-          <option value="">Tous les cours</option>
-          <option
-            v-for="c in coursList"
-            :key="c"
-            :value="c"
+      <!-- ===================================================== -->
+      <!-- ➕ MENU AJOUT -->
+      <!-- ===================================================== -->
+      <div
+        v-if="addMenu.visible && !isDragging"
+        class="context-backdrop"
+        @click="closeAddMenu"
+      >
+        <div
+          class="context-menu"
+          :style="{ top: addMenu.y + 'px', left: addMenu.x + 'px' }"
+          @click.stop
+        >
+          <div class="context-item" @click="addFile">📄 Ajouter un fichier</div>
+          <div
+            class="context-item"
+            @click="() => { closeAddMenu(); createFolder() }"
           >
-            {{ coursLabelMap[c] || c }}
-          </option>
-        </select>
-
-        <!-- Filtre type -->
-        <select v-model="selectedType" class="form-select">
-          <option value="">Tous les types</option>
-          <option value="audio">Audio</option>
-          <option value="video">Vidéo</option>
-          <option value="pdf">PDF</option>
-          <option value="image">Image</option>
-        </select>
-
-      </div>
-
- <!-- =================================================================== -->
-<!-- 🧱 BREADCRUMB (navigation dossiers) -->
-<!-- =================================================================== -->
-<div class="breadcrumb finder-breadcrumb">
-<span
-  class="crumb root"
-@click="currentFolderId = null"
-  @dragover.prevent
-  @drop.prevent="handleDropOnFolder('')"
->
- 🏠 Home
-</span>
-
-<span
-  v-for="f in breadcrumb"
-  :key="f.folder_id"
-  class="crumb"
-  @click="currentFolderId = f.folder_id"
-  @dragover.prevent
-  @drop.prevent="handleDropOnFolder(f.folder_id)"
->
-  {{ f.name }}
-</span>
-
-
-</div>
-
-
-      <!-- =================================================================== -->
-      <!-- ⏳ LOADER -->
-      <!-- =================================================================== -->
-      <div v-if="loading" class="loading">
-        Chargement...
-      </div>
-
-      <!-- =================================================================== -->
-<!-- 📁 EXPLORATEUR (DOSSIERS + FICHIERS) -->
-<!-- =================================================================== -->
-<div
-  class="explorer-zone"
-   @mousedown="onMouseDown"
-  @mousemove="onMouseMove"
-  @mouseup="onMouseUp"
-  :class="{ dragging: isDragging }"
-  @click.self="clearSelection"
-  @contextmenu.prevent="openEmptyMenu($event)"
-  @dragover.prevent
-  @drop.prevent="handleDropOnFolder(currentFolderId)"
-
- 
->
-
-
-        <!-- -------------------- -->
-        <!-- 📁 DOSSIERS -->
-   <transition-group name="fade-slide" tag="div">
-     <!-- -------------------- -->
-<div
-  v-for="folder in visibleFolders"
-  :key="folder.folder_id"
-:class="[
-  'upload-item',
-  'folder',
-  {
-    active: currentFolderId === folder.folder_id,
-    selected: selectedFolders.includes(folder.folder_id),
-    empty: uploads.every(u => u.folder_id !== folder.folder_id)
-  }
-]"
-
-  data-type="folder"
-  :data-id="folder.folder_id"
-  draggable="true"
-  @dragstart="onFolderDragStart(folder)"
-  @dragend="onDragEnd"
-  @click.stop="toggleSelectFolder(folder, $event)"
-  @dblclick.stop="enterFolder(folder)"
-  @contextmenu.prevent="openFolderMenu($event, folder)"
->
-  <div class="folder-main">
-    <span class="folder-icon">📁</span>
-
-    <!-- affichage normal -->
-    <strong
-      v-if="editingFolderId !== folder.folder_id"
-      class="folder-name"
-    >
-      {{ folder.name }}
-    </strong>
-    
-
-    <!-- rename inline -->
-    <input
-      v-else
-      v-model="editingFolderName"
-      class="rename-input folder-rename"
-      @keyup.enter="confirmRenameFolder(folder)"
-      @keyup.esc="cancelRenameFolder"
-      @blur="confirmRenameFolder(folder)"
-      autofocus
-    /><small class="folder-count">
-  {{ uploads.filter(u => (u.folder_id ?? null) === folder.folder_id).length }} fichiers
-</small>
-
-  </div>
-</div>
-</transition-group>
-
-
-
-
-
-        <!-- -------------------- -->
-        <!-- 📄 FICHIERS -->
-        <!-- -------------------- -->
-         <transition-group name="fade-slide" tag="div">
-
-<div
-  v-for="file in visibleFiles"
-  :key="file.upload_id"
-  class="upload-item"
-    data-type="file"
-  :data-id="file.upload_id"
- :class="{
-    optimistic: file._optimistic,
-    selected: selectedFiles.includes(file.upload_id),
-    cut: clipboard.mode === 'cut' &&
-         clipboard.uploads.includes(file.upload_id)
-         
-  }"
-  :draggable="editingId !== file.upload_id"
-  @dragstart="onDragStart($event, file)"
-  @dragend="onDragEnd"
-
-  @click="toggleSelect(file, $event)"
-  @contextmenu.prevent="openFileMenu($event, file)"
->
-
-
-
-          <div class="file-main">
-            <span class="file-icon">📄</span>
-
-            <div class="file-info">
-
-              <!-- Nom fichier / rename inline -->
-              <strong
-                v-if="editingId !== file.upload_id"
-                class="file-name"
-              >
-                {{ file.file_name }}
-                  <span v-if="file._optimistic" class="sync-badge">⏳</span>
-
-              </strong>
-
-              <input
-                v-else
-
-                v-model="editingName"
-                class="rename-input"
-                @keyup.enter="confirmRename(file)"
-                @keyup.esc="cancelRename"
-                @blur="confirmRename(file)"
-                autofocus
-              />
-
-              <small class="file-date">
-                {{ formatDate(file.created_at) }}
-              </small>
-            </div>
+            📁 Nouveau dossier
           </div>
 
-          <!-- Actions fichier -->
-          <div class="file-action">
-            <a
-              :href="file.file_url"
-              target="_blank"
-              class="open-btn"
-            >
-              👁️
-            </a>
-
-            <button
-              class="edit-btn"
-              @click="startRename(file)"
-            >
-              ✏️
-            </button>
-
-       
-
-          <button
-  class="delete-btn"
-@click.stop="deleteAction(contextMenu.target)"
->
-  🗑️
-</button>
-
+          <div
+            v-if="clipboard.uploads.length"
+            class="context-item"
+            @click="pasteFromContext"
+          >
+            📋 Coller
           </div>
-        </div></transition-group>
-
-        <!-- -------------------- -->
-        <!-- 🫥 ÉTAT VIDE -->
-        <!-- -------------------- -->
-   <div
-  v-if="!loading && visibleFolders.length === 0 && visibleFiles.length === 0"
-  class="empty-state"
->
-  Aucun fichier dans ce dossier.
-</div>
-
-
+        </div>
       </div>
+
+      <!-- ===================================================== -->
+      <!-- ⬆️ MODALE UPLOAD -->
+      <!-- ===================================================== -->
+      <UploadModal
+        v-if="showUpload"
+        :cours-id="effectiveCoursId"
+        :folder-id="effectiveFolderId || undefined"
+        :eleve-id="effectiveEleveId || undefined"
+        @uploaded="onUploadSuccess"
+        @close="showUpload = false"
+      />
+
+      <!-- ===================================================== -->
+      <!-- 🧱 BREADCRUMB -->
+      <!-- ===================================================== -->
+      <div class="breadcrumb finder-breadcrumb">
+        <span
+          v-if="isProfLike"
+          class="crumb root"
+          @click="goHome"
+          @dragover.prevent
+          @drop.prevent="handleDropOnFolder(null)"
+        >
+          🏠 Home
+        </span>
+
+        <span
+          v-for="(f, i) in breadcrumb"
+          :key="f.folder_id"
+          class="crumb"
+          @click="i < breadcrumb.length - 1 && (currentFolderId = f.folder_id)"
+          @dragover.prevent
+          @drop.prevent="handleDropOnFolder(f.folder_id)"
+        >
+          {{ getDisplayFolderName(f) }}
+        </span>
+      </div>
+
+      <!-- ===================================================== -->
+      <!-- 📦 EXPLORER -->
+      <!-- ===================================================== -->
+      <div
+        class="explorer-zone"
+        :class="{ dragging: isDragging, disabled: creatingWorkspace }"
+        @click.self="clearSelection"
+        @contextmenu.prevent="openEmptyMenu($event)"
+        @dragover.prevent
+        @drop.prevent="handleDropOnFolder(currentFolderId)"
+      >
+     <!-- ================= LOADER ================= -->
+<div v-if="showLoader" class="loader-overlay">
+  <div class="workflow-loader">
+    <div class="dots">
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
 
-        <!-- -------------------- -->
-     <!-- ================= CONTEXT MENU ================= -->
-<div
-  v-if="contextMenu.visible"
-  class="context-backdrop"
-  @click="closeContextMenu"
->
-  <div
-    class="context-menu"
-    :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
-    @click.stop
-  >
-
-    <!-- ================= FILE ================= -->
-<template v-if="contextMenu.type === 'file'">
-  <div class="context-item" @click="startRename(contextMenu.target)">
-    ✏️ Renommer
-  </div>
-
-  <div class="context-item" @click="copyFromContext(contextMenu.target)">
-    📋 Copier
-  </div>
-
-  <div class="context-item" @click="cutFromContext(contextMenu.target)">
-    ✂️ Couper
-  </div>
-
-  <div
-    class="context-item"
-    :class="{ disabled: !clipboard.uploads.length }"
-    @click="pasteFromContext"
-  >
-    📥 Coller
-  </div>
-
-<div class="context-item danger"
-     @click.stop="deleteAndClose(contextMenu.target)">
-  🗑️ Supprimer
-</div>
-
-</template>
-
-
-    <!-- ================= FOLDER ================= -->
- <!-- ================= FOLDER ================= -->
-<template v-else-if="contextMenu.type === 'folder'">
-  <div class="context-item" @click="startRenameFolder(contextMenu.target)">
-    ✏️ Renommer
-  </div>
-
- <div
-  class="context-item danger"
-  @click="deleteFolderAction(contextMenu.target)"
->
-  🗑️ Supprimer le dossier
-</div>
-
-</template>
-
-
-    <!-- ================= EMPTY / ZONE ================= -->
-    <template v-else-if="contextMenu.type === 'empty'">
-      <div
-        class="context-item"
-        :class="{ disabled: !selectedFiles.length }"
-        @click="copySelection"
-      >
-        📋 Copier
-      </div>
-
-      <div
-        class="context-item"
-        :class="{ disabled: !selectedFiles.length }"
-        @click="cutSelection"
-      >
-        ✂️ Couper
-      </div>
-
-      <div
-        class="context-item"
-        :class="{ disabled: !clipboard.uploads.length }"
-        @click="pasteFromContext"
-      >
-        📥 Coller
-      </div>
-    </template>
-
+    <strong>{{ loaderText }}</strong>
+    <span class="sub">{{ loaderSub }}</span>
   </div>
 </div>
 
+
+
+        <!-- ================= CONTENT ================= -->
+        <div
+          v-if="foldersLoaded"
+          class="explorer-content"
+          :key="explorerKey"
+        >
+
+          <!-- ================================================= -->
+          <!-- 📁 DOSSIERS -->
+          <!-- ================================================= -->
+           <!-- 👨‍🎓 VUE ÉLÈVES (PROF) -->
+
+          <transition-group name="fade-slide" tag="div">
+            <div
+              v-for="folder in visibleFolders"
+              :key="folder.folder_id"
+              class="upload-item folder"
+              :class="{
+                active: currentFolderId === folder.folder_id,
+                selected: selectedFolders.includes(folder.folder_id)
+              }"
+              @dragover.prevent
+              @drop.prevent="handleDropOnFolder(folder.folder_id)"
+              @click.stop="toggleSelectFolder(folder, $event)"
+              @dblclick.stop="enterFolder(folder)"
+              @contextmenu.prevent="openFolderMenu($event, folder)"
+            >
+              <div
+                class="folder-main"
+                draggable="true"
+                @dragstart="onFolderDragStart($event, folder)"
+                @dragend="onDragEnd"
+              >
+                <span class="folder-icon">📁</span>
+
+                <strong v-if="editingFolderId !== folder.folder_id">
+                  {{ getDisplayFolderName(folder) }}
+                </strong>
+
+                <input
+                  v-else
+                  :ref="el => setFolderRenameRef(el, folder.folder_id)"
+                  v-model="editingFolderName"
+                  class="rename-input"
+                  @keyup.enter="confirmRenameFolder(folder)"
+                  @keyup.esc="cancelRenameFolder"
+                  @blur="confirmRenameFolder(folder)"
+                />
+              </div>
+            </div>
+          </transition-group>
+
+          <!-- ================================================= -->
+          <!-- 📄 FICHIERS -->
+          <!-- ================================================= -->
+          <transition-group name="fade-slide" tag="div">
+            <div
+              v-for="file in visibleFiles"
+              :key="file.upload_id"
+              class="upload-item"
+              :class="{
+                optimistic: file._optimistic,
+                selected: selectedFiles.includes(file.upload_id),
+                cut: clipboard.mode === 'cut' && clipboard.uploads.includes(file.upload_id)
+              }"
+              draggable="true"
+              @dragstart="onDragStart($event, file)"
+              @dragend="onDragEnd"
+              @click="toggleSelect(file, $event)"
+              @dblclick="openFile(file)"
+              @contextmenu.prevent="openFileMenu($event, file)"
+            >
+              <div class="file-main">
+                <span class="file-icon">📄</span>
+
+                <div class="file-info">
+                  <strong v-if="editingId !== file.upload_id">
+                    {{ file.file_name }}
+                    <span v-if="file._optimistic" class="sync-badge">⏳</span>
+                  </strong>
+
+                  <input
+                    v-else
+                    :ref="el => setFileRenameRef(el, file.upload_id)"
+                    v-model="editingName"
+                    class="rename-input"
+                    @keyup.enter="confirmRename(file)"
+                    @keyup.esc="cancelRename"
+                    @blur="confirmRename(file)"
+                  />
+
+                  <small class="file-date">
+                    {{ formatDate(file.created_at) }}
+                  </small>
+                </div>
+              </div>
+            </div>
+          </transition-group>
+
+          <!-- ================================================= -->
+          <!-- 🫥 EMPTY -->
+          <!-- ================================================= -->
+          <div
+            v-if="
+              foldersLoaded &&
+              visibleFolders.length === 0 &&
+              visibleFiles.length === 0
+            "
+            class="empty-state"
+          >
+            <p>Dossier vide</p>
+
+         <UploadFileCore
+  :eleve-id="effectiveEleveId"
+  :cours-id="effectiveCoursId"
+  :folder-id="currentFolderId"
+  @uploaded="onUploadSuccess"
+/>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ===================================================== -->
+      <!-- 📋 CONTEXT MENU -->
+      <!-- ===================================================== -->
+      <div
+        v-if="contextMenu.visible && !isDragging"
+        class="context-backdrop"
+        @click="closeContextMenu"
+      >
+        <div
+          class="context-menu"
+          :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+          @click.stop
+        >
+          <template v-if="contextMenu.type === 'file'">
+            <div class="context-item" @click="startRename(contextMenu.target)">✏️ Renommer</div>
+            <div class="context-item" @click="copyFromContext(contextMenu.target)">📋 Copier</div>
+            <div class="context-item" @click="cutFromContext(contextMenu.target)">✂️ Couper</div>
+            <div class="context-item danger" @click="deleteAndClose(contextMenu.target)">🗑️ Supprimer</div>
+          </template>
+
+          <template v-else-if="contextMenu.type === 'folder'">
+            <div class="context-item" @click="startRenameFolder(contextMenu.target)">✏️ Renommer</div>
+            <div class="context-item danger" @click="deleteFolderAction(contextMenu.target)">
+              🗑️ Supprimer le dossier
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </div>
   </Layout>
 </template>
+
 
 <script setup>
 // ============================================================================
@@ -384,38 +286,187 @@
 // ============================================================================
 
 import Layout from "@/views/Layout.vue"
-import { ref, computed, onMounted, watch, onUnmounted} from "vue"
+import { ref, computed, onMounted, watch, onUnmounted,nextTick,watchEffect } from "vue"
 import axios from "axios"
 import { useAuthStore } from "@/stores/authStore"
 import UploadModal from "@/components/UploadModal.vue"
 import { useRoute } from "vue-router"
+import UploadFileCore from "@/components/UploadFileCore.vue"
+
 
 // ============================================================================
 // 🔐 AUTH + ROUTE
 // ============================================================================
 const auth = useAuthStore()
 const route = useRoute()
+const uiReady = ref(false)
+const loading = computed(() => false)
+
+const userId = computed(() =>
+  auth.user?.user_id || auth.user?.id || null
+)
+const profId = computed(() => auth.user?.prof_id || null)
+const role = computed(() => (auth.user?.role || "").toLowerCase())
+
+const isProfLike = computed(() =>
+  role.value === "prof" || role.value === "admin"
+)
+const showEmpty = computed(() =>
+  firstDataResolved.value &&
+  uploads.value.length === 0 &&
+  folders.value.length === 0
+)
+
+const CACHE_VERSION = "v1"
+const t0 = performance.now()
+const profRootId = ref(null)
+const suppressTransitions = ref(false)
+const mountedDone = ref(false)
+
+const isMovingFolder = ref(false)
+const hydratedFromCache = ref(false)
+const hasProfWorkspace = computed(() =>
+  folders.value.some(f => f.parent_id === null)
+)
+const cacheStart = ref(performance.now())
 
 // ============================================================================
 // 🔗 ROUTES APPS SCRIPT (ID de déploiement)
 // ⚠️ Doit être IDENTIQUE à tes autres vues (Planning.vue etc.)
 // ============================================================================
 const routes = {
-  POST: "AKfycbxJSnApoeZbwmHaTGRrg81veORbN1ubPRnSPIrwAUhuFA3if-i96SCmc13ZeqVVcjWBZQ/exec"
+  POST: "AKfycbyqUv7-h3Ue2OunPDzVmi9yUU01O00zQ3uZ2Mc5pl5ahJvYXLUkNt8jvFzkaqkeHoC78A/exec"
 }
+const loaderStep = ref("init")
+
+const loaderText = computed(() => {
+  switch (loaderStep.value) {
+    case "prof-root":
+      return "Initialisation de ton espace"
+    case "eleve-root":
+      return "Création des dossiers élèves"
+    case "folders":
+      return "Organisation des dossiers"
+    case "uploads":
+      return "Chargement des fichiers"
+    default:
+      return "Préparation de ton espace"
+  }
+})
+
+const loaderSub = computed(() => {
+  switch (loaderStep.value) {
+    case "prof-root":
+      return "Mise en place de la structure"
+    case "eleve-root":
+      return "Un espace par élève"
+    case "folders":
+      return "Hiérarchie en cours…"
+    case "uploads":
+      return "Synchronisation des contenus"
+    default:
+      return "Merci de patienter…"
+  }
+})
 
 // ============================================================================
 // 🌍 Helper : Apps Script via proxy Vercel (POST)
 // ============================================================================
+// 🔥 HYDRATATION SYNCHRONE AU SETUP
+const hasEleveWorkspace = () =>
+  folders.value.some(f =>
+    f.owner_type === "eleve" &&
+    f.owner_id === userId.value &&
+    f.name === "Racine élève"
+  )
+
+console.log("🧩 EleveUploads INSTANCE", Math.random())
+
+const getFoldersCacheKey = (ownerType, ownerId) =>
+  `folders_${profId.value}_${ownerType}_${ownerId}_${CACHE_VERSION}`
+
+const readFoldersCache = (ownerType, ownerId) => {
+  try {
+    const raw = sessionStorage.getItem(
+      getFoldersCacheKey(ownerType, ownerId)
+    )
+    const parsed = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const writeFoldersCache = (ownerType, ownerId, folders) => {
+  if (!Array.isArray(folders))  return
+  sessionStorage.setItem(
+    getFoldersCacheKey(ownerType, ownerId),
+    JSON.stringify(folders)
+  )
+}
+
+
+const fileRenameRefs = new Map()
+
+const setFileRenameRef = (el, id) => {
+  if (el) fileRenameRefs.set(id, el)
+}
+
+const startRename = async (file) => {
+  closeContextMenu()
+  editingId.value = file.upload_id
+  editingName.value = file.file_name
+
+  await nextTick()
+  fileRenameRefs.get(file.upload_id)?.focus()
+  fileRenameRefs.get(file.upload_id)?.select()
+}
+
+
+// ================= CACHE uploads (sessionStorage) =================
+const uploadsHydrated = ref(false)
+
+const getUploadsCacheKey = (ownerType, ownerId) =>
+  `uploads_${profId.value}_${ownerType}_${ownerId}_${CACHE_VERSION}`
+
+
+const readUploadsCache = (ownerType, ownerId) => {
+  try {
+    const raw = sessionStorage.getItem(
+      getUploadsCacheKey(ownerType, ownerId)
+    )
+    const parsed = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const writeUploadsCache = (ownerType, ownerId, uploads) => {
+  if (!Array.isArray(uploads)) return
+  sessionStorage.setItem(
+    getUploadsCacheKey(ownerType, ownerId),
+    JSON.stringify(uploads)
+  )
+}
+
+
+const invalidateCaches = (ownerType, ownerId) => {
+  sessionStorage.removeItem(getUploadsCacheKey(ownerType, ownerId))
+  sessionStorage.removeItem(getFoldersCacheKey(ownerType, ownerId))
+}
+
 const getProxyPostURL = (routeId) => {
   const baseURL = `https://script.google.com/macros/s/${routeId}`
   return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`
 }
+const itemEls = ref(new Map()) // id -> element
 
 // ============================================================================
 // 🧰 Utils
 // ============================================================================
 const log = (...args) => console.log("📎 ELEVE UPLOADS", ...args)
+const folderRenameInput = ref(null)
 
 const formatDate = (d) => {
   if (!d) return ""
@@ -427,12 +478,21 @@ const formatDate = (d) => {
 }
 const currentFolderId = ref(null)
 
+const firstDataResolved = computed(() =>
+  uploadsLoaded.value && foldersLoaded.value
+)
 
 
-const isBoxSelecting = ref(false)
-const boxStart = ref({ x: 0, y: 0 })
-const boxEnd = ref({ x: 0, y: 0 })
 
+
+
+const currentEleveId = ref(null)
+
+
+const isElevesView = computed(() =>
+  isProfLike.value &&
+  currentFolderId.value === profElevesFolderId.value
+)
 
 
 
@@ -446,7 +506,6 @@ const draggedFiles = ref([])
 // drag&drop==================
 
 const uploads = ref([])            // liste brute des fichiers (API)
-const loading = ref(true)          // loader page
 
 // Upload modal
 const showUpload = ref(false)
@@ -456,6 +515,13 @@ const generateCoursId = () => `GEN_${Date.now()}`
 // Filtres existants (cours / type)
 const selectedCours = ref(route.query.cours_id || "")
 const selectedType = ref("")
+const effectiveEleveId = computed(() => {
+  if (isProfLike.value) {
+    return currentEleveId.value || ""
+  }
+  return userId.value || ""
+})
+
 
 // Explorer dossiers (navigation)
 
@@ -467,8 +533,10 @@ const editingName = ref("")        // valeur du nom édité
 const showPreview = ref(false)
 const previewFile = ref(null)
 
+
 // ref
 const folders = ref([]) 
+
 
 
 // [{ folder_id, parent_id, name }]
@@ -486,20 +554,177 @@ const onBreadcrumbHover = (folderId) => {
 const editingFolderId = ref(null)
 const editingFolderName = ref("")
 
+const uploadsLoaded = ref(false)
+const foldersLoaded = ref(false)
 
+// ===== MENU AJOUT =====
+const addMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0
+})
+const isTempFolder = (id) =>
+  typeof id === "string" && id.startsWith("TMP_")
+
+const addBtn = ref(null)
+
+const openAddMenuFromButton = () => {
+  const rect = addBtn.value.getBoundingClientRect()
+  const MENU_WIDTH = 200
+  const PADDING = 8
+
+  let x = rect.right - MENU_WIDTH
+  let y = rect.bottom + 6
+
+  if (x < PADDING) x = PADDING
+  if (x + MENU_WIDTH > window.innerWidth) {
+    x = window.innerWidth - MENU_WIDTH - PADDING
+  }
+
+  addMenu.value = {
+    visible: true,
+    x,
+    y
+  }
+}
+
+
+
+const closeAddMenu = () => {
+  addMenu.value.visible = false
+}
+
+const uploadFolderId = ref(null)
+
+const addFile = () => {
+  const folder = folders.value.find(
+    f => f.folder_id === currentFolderId.value
+  )
+
+  // 👨‍🎓 élève → toujours OK
+  if (!isProfLike.value) {
+    uploadFolderId.value = currentFolderId.value
+    showUpload.value = true
+    closeAddMenu()
+    return
+  }
+
+  // 👨‍🏫 prof
+  const isEleveFolder =
+    folder?.owner_type === "eleve"
+
+  // ❌ dossier élève sans élève sélectionné
+  if (isEleveFolder && !currentEleveId.value) {
+    alert("Sélectionne un élève")
+    return
+  }
+
+  // ✅ dossier prof OU dossier élève valide
+  uploadFolderId.value = currentFolderId.value
+  showUpload.value = true
+  closeAddMenu()
+}
+
+
+
+const canAddFile = computed(() => {
+  const role = (auth.user?.role || "").toLowerCase()
+  const isAdmin = role === "admin"
+
+  // prof sans élève sélectionné
+  if (isProfLike.value && !currentEleveId.value) return false
+
+  // pas de dossier courant → interdit
+  if (!currentFolderId.value) return false
+
+  const folder = folders.value.find(
+    f => f.folder_id === currentFolderId.value
+  )
+
+  // dossier system → interdit sauf admin
+  if (folder?.is_system && !isAdmin) return false
+
+  return true
+})
+
+
+
+const foldersById = computed(() => {
+  const map = {}
+  for (const f of folders.value) {
+    map[f.folder_id] = f
+  }
+  return map
+})
+
+
+
+const foldersCacheKey = computed(() =>
+  `folders_${profId.value}_${effectiveOwnerType.value}_${effectiveOwnerId.value}`
+)
 
 // ============================================================================
 // 🧮 COMPUTED
 // ============================================================================
+const isCurrentFolderEmpty = computed(() =>
+  uploadsHydrated.value &&
+  visibleFolders.value.length === 0 &&
+  visibleFiles.value.length === 0
+)
+
+
+const showLoader = computed(() => {
+  if (hydratedFromCache.value) return false
+  return creatingWorkspace.value || !foldersLoaded.value
+})
+
+
+
+
+
+const foldersByParentCache = computed(() => {
+  const map = Object.create(null)
+
+  for (const f of folders.value) {
+    if (f.deleted_at) continue
+    const key = f.parent_id ?? null
+    if (!map[key]) map[key] = []
+    map[key].push(f)
+  }
+
+  return map
+})
+
+
+
+
+
+const filesByFolder = computed(() => {
+  const map = Object.create(null)
+
+  for (const u of uploads.value) {
+    const key = u.folder_id ?? null
+    if (!map[key]) map[key] = []
+    map[key].push(u)
+  }
+
+  return map
+})
+
+
+
 
 // Map cours_id -> date lisible (pour l'UI)
 const coursLabelMap = computed(() => {
-  const map = {}
-  uploads.value.forEach(u => {
-    if (!map[u.cours_id]) map[u.cours_id] = formatDate(u.created_at)
-  })
+  const map = Object.create(null)
+  for (const u of uploads.value) {
+    if (!map[u.cours_id]) {
+      map[u.cours_id] = formatDate(u.created_at)
+    }
+  }
   return map
 })
+
 
 // Liste unique des cours
 const coursList = computed(() => {
@@ -507,43 +732,103 @@ const coursList = computed(() => {
 })
 
 // Breadcrumb : ["Cours", "Cours/Exos", "Cours/Exos/Slap"]
-const breadcrumb = computed(() => {
-  const chain = []
-  let id = currentFolderId.value
+const lastValidBreadcrumb = ref([])
+const lastBreadcrumbFolderId = ref(null)
 
-  while (id) {
-    const f = folders.value.find(x => x.folder_id === id)
+const breadcrumb = computed(() => {
+  const targetId = currentFolderId.value
+  if (!targetId) return []
+
+  const chain = []
+  let id = targetId
+  let guard = 0
+
+  while (id && guard++ < 20) {
+    const f = foldersById.value[id]
+
+    // TMP pas encore résolu → stop mais on garde ce qu’on a
     if (!f) break
+
+    // sécurité élève
+    if (!isProfLike.value && !f._optimistic) {
+      if (f.owner_type !== "eleve" || f.owner_id !== userId.value) break
+    }
+
     chain.unshift(f)
     id = f.parent_id
   }
 
+if (chain.length) {
+  lastValidBreadcrumb.value = chain
+  lastBreadcrumbFolderId.value = targetId
   return chain
+}
+
+// 🔥 FIX ÉLÈVE : fallback safe
+if (!isProfLike.value) {
+  return lastValidBreadcrumb.value
+}
+
+return []
+
 })
 
+
+
+
+
+
+
 // Dossiers visibles au niveau courant (déduits des folder_path)
+
+
 const visibleFolders = computed(() =>
-  folders.value.filter(f => {
-    const pid = f.parent_id ?? null
-    return (
-      (currentFolderId.value === null && (pid === null || pid === "")) ||
-      pid === currentFolderId.value
-    )
-  })
+  foldersByParentCache.value[currentFolderId.value ?? null] || []
 )
+
+
+
+
 
 
 const clearSelection = () => {
   selectedFiles.value = []
 }
-
+const uploadsByFolder = computed(() => {
+  const map = new Map()
+  for (const u of uploads.value) {
+    const k = u.folder_id ?? null
+    if (!map.has(k)) map.set(k, [])
+    map.get(k).push(u)
+  }
+  return map
+})
 // Fichiers du dossier courant uniquement
 const visibleFiles = computed(() =>
-  uploads.value.filter(u => (u.folder_id ?? null) === currentFolderId.value)
+  filesByFolder.value[currentFolderId.value ?? null] || []
 )
 
 
+
+
+
+const effectiveFolderId = computed(() => {
+  // dossier courant = vérité absolue
+  if (currentFolderId.value) {
+    return currentFolderId.value
+  }
+
+  // aucun dossier → rien
+  return null
+})
+
+
+let lastKey = 0
+
 const onKeyDown = (e) => {
+   const now = performance.now()
+  if (now - lastKey < 30) return
+  lastKey = now
   if (e.key === "Escape") {
     closeContextMenu()
     cancelRename()
@@ -574,6 +859,17 @@ if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
   e.preventDefault()
 pasteSelection(currentFolderId.value)
 }
+// ADD FILE
+if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "u") {
+  e.preventDefault()
+  showUpload.value = true
+}
+
+// ADD FOLDER
+if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "n") {
+  e.preventDefault()
+  createFolder()
+}
 
 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
   e.preventDefault()
@@ -581,6 +877,7 @@ if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
   selectedFiles.value = visibleFiles.value.map(f => f.upload_id)
   selectedFolders.value = visibleFolders.value.map(f => f.folder_id)
 }
+
 
 
   // UNDO
@@ -605,6 +902,22 @@ if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
 
 }
 // FUNCTIONS
+const openEleve = (eleveId) => {
+  const root = folders.value.find(f =>
+    f.owner_type === "eleve" &&
+    f.owner_id === eleveId &&
+    f.name === "Racine élève"
+  )
+
+  if (!root) {
+    console.error("❌ racine élève introuvable", eleveId)
+    return
+  }
+
+  currentEleveId.value = eleveId
+  currentFolderId.value = root.folder_id
+}
+
 const deleteAndClose = (target) => {
   deleteAction(target)
   closeContextMenu()
@@ -625,7 +938,39 @@ const toggleSelectFolder = (folder, e) => {
   }
 
   currentFolderId.value = folder.folder_id
+
+  // ✅ PATCH CRITIQUE
+  if (isProfLike.value && folder.owner_type === "eleve") {
+    currentEleveId.value = folder.owner_id
+    console.log("🟢 currentEleveId set =", currentEleveId.value)
+  }
 }
+
+
+
+const onUploadSuccess = (upload) => {
+  upload.folder_id = currentFolderId.value ?? null   // 👈 AVANT
+
+  uploads.value.unshift(upload)
+
+  selectedFiles.value = [upload.upload_id]
+
+writeUploadsCache(
+  "eleve",
+  effectiveEleveId.value,
+  uploads.value
+)
+
+}
+
+
+
+
+
+
+
+
+
 const deleteSelectedFolders = async () => {
   const ids = [...selectedFolders.value]
   if (!ids.length) return
@@ -637,11 +982,7 @@ closeContextMenu() // ✅ ICI
   const foldersSnapshot = [...folders.value]
   const uploadsSnapshot = [...uploads.value]
   const prevFolder = currentFolderId.value
-  const enterFolder = (folder) => {
-  currentFolderId.value = folder.folder_id
-  selectedFolders.value = []
-  selectedFiles.value = []
-}
+
 
 
   // ⚡ UI instant
@@ -667,11 +1008,18 @@ closeContextMenu() // ✅ ICI
         axios.post(url, {
           route: "softdeletefolder",
           jwt: auth.jwt,
-          prof_id: auth.user.prof_id,
+          prof_id: profId.value,
           folder_id
         })
       )
     )
+      writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+      writeFoldersCache(
+  effectiveOwnerType.value,
+  effectiveOwnerId.value,
+  folders.value
+)
+
   } catch (e) {
     folders.value = foldersSnapshot
     uploads.value = uploadsSnapshot
@@ -695,56 +1043,127 @@ const deleteAction = (file = null) => {
   }
 }
 
+const elevesMap = ref({}) // eleve_id -> prénom (ou prénom.email)
+
+const getDisplayFolderName = (folder) => {
+  // 👨‍🏫 PROF → racine élève = prénom
+  if (
+    isProfLike.value &&
+    folder.owner_type === "eleve" &&
+    folder.name === "Racine élève"
+  ) {
+    return elevesMap.value[folder.owner_id] || "Élève"
+  }
+
+  // 👨‍🎓 ÉLÈVE → sa propre racine
+  if (
+    !isProfLike.value &&
+    folder.owner_type === "eleve" &&
+    folder.name === "Racine élève"
+  ) {
+    return "Mes documents"
+  }
+
+  return folder.name
+}
+
+
+
+
+const ensureEleveRoot = async () => {
+  console.group("🧱 ensureEleveRoot")
+
+  if (!userId.value) {
+    console.error("❌ userId manquant (élève)")
+    console.groupEnd()
+    return null
+  }
+
+  const url = getProxyPostURL(routes.POST) // ✅ FIX
+
+  try {
+    creatingWorkspace.value = true
+
+    const { data } = await axios.post(url, {
+      route: "get_or_create_eleve_root",
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      eleve_id: userId.value
+    })
+
+    const rootId =
+      data?.root_folder_id ||
+      data?.folder_id ||
+      data?.eleve_root_id ||
+      null
+
+    if (!data?.success || !rootId) {
+      throw new Error("eleve root failed")
+    }
+
+    currentFolderId.value = rootId
+    console.log("📁 root élève =", rootId)
+
+    return rootId
+
+  } catch (e) {
+    console.error("❌ ensureEleveRoot", e)
+    return null
+  } finally {
+    creatingWorkspace.value = false
+    console.groupEnd()
+  }
+}
+
+
+
+
+
+
+
 const onDrop = async (targetFolderId) => {
   if (!draggedFiles.value.length) return
 
-  const target = targetFolderId || ""
+  const target = targetFolderId ?? ""
 
-  // snapshot pour rollback
   const previous = draggedFiles.value.map(f => ({
     file: f,
-    folder_id: f.folder_id || ""
+    folder_id: f.folder_id ?? ""
   }))
 
-  // ✅ update visuel immédiat
+  // UI instant
   draggedFiles.value.forEach(f => {
     f.folder_id = target
   })
 
-selectedFiles.value = []
-draggedFiles.value = []
-
-
-
   try {
-    const url = getProxyPostURL(routes.POST)
-
-    // appels backend en parallèle
     await Promise.all(
       previous.map(p =>
-        axios.post(url, {
+        axios.post(getProxyPostURL(routes.POST), {
           route: "moveuploadtofolder",
           jwt: auth.jwt,
-          prof_id: auth.user.prof_id,
+          prof_id: profId.value,
           upload_id: p.file.upload_id,
           folder_id: target
         })
       )
     )
 
+    writeUploadsCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      uploads.value
+    )
 
   } catch (e) {
-    console.error("❌ multi move", e)
-
-    // 🔁 rollback
+    // rollback
     previous.forEach(p => {
       p.file.folder_id = p.folder_id
     })
-
-
     alert("Erreur déplacement")
   }
 }
+
 const getAutoRenamed = (name, siblings) => {
   const dotIndex = name.lastIndexOf(".")
   const rawBase = dotIndex !== -1 ? name.slice(0, dotIndex) : name
@@ -765,58 +1184,10 @@ const getAutoRenamed = (name, siblings) => {
 
   return candidate
 }
-const onMouseDown = (e) => {
-  // clic vide uniquement
-  if (e.target.closest('.upload-item')) return
-
-  isBoxSelecting.value = true
-  boxStart.value = { x: e.clientX, y: e.clientY }
-  boxEnd.value = { x: e.clientX, y: e.clientY }
-
-  selectedFiles.value = []
-  selectedFolders.value = []
-}
-
-const onMouseMove = (e) => {
-  if (!isBoxSelecting.value) return
-  boxEnd.value = { x: e.clientX, y: e.clientY }
-
-  selectItemsInBox()
-}
-
-const onMouseUp = () => {
-  isBoxSelecting.value = false
-}
-const selectItemsInBox = () => {
-  const box = {
-    left: Math.min(boxStart.value.x, boxEnd.value.x),
-    right: Math.max(boxStart.value.x, boxEnd.value.x),
-    top: Math.min(boxStart.value.y, boxEnd.value.y),
-    bottom: Math.max(boxStart.value.y, boxEnd.value.y)
-  }
-
-  selectedFiles.value = []
-  selectedFolders.value = []
-
-  document.querySelectorAll('.upload-item').forEach(el => {
-    const r = el.getBoundingClientRect()
-    const hit =
-      r.right > box.left &&
-      r.left < box.right &&
-      r.bottom > box.top &&
-      r.top < box.bottom
-
-    if (!hit) return
-
-    const id = el.dataset.id
-    const type = el.dataset.type
-
-    if (type === 'file') selectedFiles.value.push(id)
-    if (type === 'folder') selectedFolders.value.push(id)
-  })
-}
 
 
+
+const creatingWorkspace = ref(false)
 
 const copyFromContext = (file) => {
   // sélection implicite si pas déjà sélectionné
@@ -849,6 +1220,33 @@ const pasteFromContext = () => {
   closeContextMenu()
 }
 
+const ensureProfRoot = async () => {
+  if (currentEleveId.value) return null
+
+  const { data } = await axios.post(getProxyPostURL(routes.POST), {
+    route: "get_or_create_prof_root",
+    jwt: auth.jwt,
+    prof_id: profId.value
+  })
+
+  if (!data?.success || !data.prof_root_id) return null
+
+  profRootId.value = data.prof_root_id
+
+  if (!currentFolderId.value) {
+    currentFolderId.value = data.prof_root_id
+  }
+
+  profElevesFolderId.value = data.eleves_folder_id || null
+
+  return data.prof_root_id
+}
+
+
+
+
+
+
 
 
 
@@ -872,82 +1270,187 @@ const selectedFiles = ref([]) // array d'upload_id
 // 📡 API — Fetch uploads
 // ============================================================================
 const fetchUploads = async () => {
-  log("fetchUploads() called")
+  if (!auth.user?.prof_id) return
+  if (!auth.jwt) return
 
-  // Sécurité auth
-  if (!auth.jwt) {
-    log("❌ JWT manquant")
-    loading.value = false
+  const eleveIdToFetch = isProfLike.value
+    ? currentEleveId.value
+    : userId.value
+
+  if (isProfLike.value && !eleveIdToFetch) {
+    uploadsLoaded.value = true
     return
   }
 
-  if (!auth.user?.prof_id || !auth.user?.user_id) {
-    log("❌ IDs manquants", auth.user)
-    loading.value = false
-    return
-  }
+  // ✅ 1️⃣ CACHE D’ABORD
+const cached = readUploadsCache(
+  effectiveOwnerType.value,
+  effectiveOwnerId.value
+)
+
+
+if (Array.isArray(cached)) {
+  uploads.value = cached.map(u => ({ ...u }))
+  uploadsLoaded.value = true
+}
+
+
+
+
+  // ⏳ 2️⃣ PAS DE CACHE → loader seulement ici
+  uploadsLoaded.value = false
 
   try {
-    const url = getProxyPostURL(routes.POST)
-
-    log("POST URL", url)
-    log("PAYLOAD", {
-      route: "getuploadsbyeleve",
-      prof_id: auth.user.prof_id,
-      eleve_id: auth.user.user_id
-    })
-
-    const res = await axios.post(url, {
+    const res = await axios.post(getProxyPostURL(routes.POST), {
       route: "getuploadsbyeleve",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
-      eleve_id: auth.user.user_id
+      prof_id: profId.value,
+      eleve_id: eleveIdToFetch
     })
 
-    log("API RESPONSE", res.data)
-
-    if (!res.data?.success) {
-      throw new Error(res.data?.message || "API error")
-    }
+    if (!res.data?.success) throw new Error()
 
     uploads.value = res.data.uploads || []
-    log(`✅ ${uploads.value.length} upload(s) chargé(s)`)
+   writeUploadsCache(
+  effectiveOwnerType.value,
+  effectiveOwnerId.value,
+  uploads.value
+)
 
-  } catch (err) {
-    console.error("❌ fetchUploads error", err)
+
+  } catch (e) {
+    console.error(e)
   } finally {
-    loading.value = false
-    selectedType.value = "" // reset léger (optionnel)
+    uploadsLoaded.value = true
+    uploadsHydrated.value = true
   }
 }
 
-// recup dossier
-const fetchFolders = async () => {
-  try {
-    const url = getProxyPostURL(routes.POST)
 
-    const res = await axios.post(url, {
-      route: "getfolderstree",
+const effectiveOwnerType = computed(() =>
+  isProfLike.value ? "prof" : "eleve"
+)
+
+const effectiveOwnerId = computed(() =>
+  isProfLike.value ? profId.value : userId.value
+)
+// recup dossier
+const fetchFolders = async (force = false) => {
+  console.log(
+  "🧪 FOLDERS FRONT =",
+  folders.value.map(f => `${f.owner_type}:${f.name}`)
+)
+  // =========================================================================
+  // 1️⃣ CACHE IMMÉDIAT (UX)
+  // =========================================================================
+  if (!force) {
+    const cached = readFoldersCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value
+    )
+
+    if (Array.isArray(cached) && cached.length) {
+      folders.value = cached.map(f => ({ ...f }))
+      foldersLoaded.value = true
+      hydratedFromCache.value = true
+    }
+  }
+
+  // =========================================================================
+  // 2️⃣ LOADER UNIQUEMENT SI PAS DE CACHE
+  // =========================================================================
+  if (!hydratedFromCache.value && !force) {
+    foldersLoaded.value = false
+  }
+
+  if (!auth.jwt || !profId.value) return
+
+  const eleveId = isProfLike.value ? currentEleveId.value : userId.value
+  if (!eleveId && !isProfLike.value) return
+
+  const isInTmp = currentFolderId.value?.startsWith("TMP_")
+
+  // =========================================================================
+  // 3️⃣ BACKEND (BACKGROUND, TMP-SAFE)
+  // =========================================================================
+  try {
+    const res = await axios.post(getProxyPostURL(routes.POST), {
+      route: isProfLike.value ? "getfoldersbyprof" : "getfolderstree",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
-      owner_type: "eleve",
-      owner_id: auth.user.user_id
+      prof_id: profId.value,
+      eleve_id: eleveId || null,
+      role: auth.user?.role || ""
     })
 
-    if (!res.data?.success) throw new Error("folders error")
+    if (!res.data?.success) throw new Error("fetchFolders failed")
 
-    folders.value = (res.data.folders || [])
-      .filter(f => !f.deleted_at) // sécurité soft delete
-      .map(f => ({
-        folder_id: f.folder_id,
-        parent_id: f.parent_id || null,
-        name: f.folder_name || f.name || "Sans nom"
-      }))
+    const fresh = (res.data.folders || []).map(f => ({
+      folder_id: f.folder_id,
+      parent_id:
+        f.parent_id && typeof f.parent_id === "string" && f.parent_id !== "null"
+          ? f.parent_id
+          : null,
+      name: f.folder_name || f.name || "Sans nom",
+      owner_id: f.owner_id,
+      owner_type: f.owner_type
+    }))
+
+    // ───────────────────────────────────────────────────────────────────────
+    // 🔥 MERGE TMP (sans flash)
+    // ───────────────────────────────────────────────────────────────────────
+    if (isInTmp) {
+      const tmps = folders.value.filter(f => f._optimistic)
+      folders.value = fresh
+
+      for (const tmp of tmps) {
+        if (!folders.value.find(f => f.folder_id === tmp.folder_id)) {
+          folders.value.push(tmp)
+        }
+      }
+    } else {
+      folders.value = fresh
+    }
+
+    // =========================================================================
+    // 4️⃣ CACHE (APRÈS ÉTAT STABLE)
+    // =========================================================================
+    writeFoldersCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      folders.value
+    )
+
+    // =========================================================================
+    // 5️⃣ ROOT FINAL (SAFE)
+    // =========================================================================
+    if (!currentFolderId.value) {
+      const root = isProfLike.value
+        ? folders.value.find(f => f.parent_id === null)
+        : folders.value.find(
+            f =>
+              f.owner_type === "eleve" &&
+              f.owner_id === userId.value &&
+              f.name === "Racine élève"
+          )
+
+      currentFolderId.value = root?.folder_id || null
+    }
 
   } catch (e) {
     console.error("❌ fetchFolders", e)
+  } finally {
+    foldersLoaded.value = true
   }
 }
+
+
+
+
+
+
+
+
+const profElevesFolderId = ref(null)
 
 
 
@@ -957,7 +1460,8 @@ const fetchFolders = async () => {
 const openEmptyMenu = (e) => {
   e.preventDefault()
   e.stopPropagation()
-
+closeAddMenu()
+  closeContextMenu()
   contextMenu.value = {
     visible: true,
     x: e.clientX,
@@ -965,53 +1469,154 @@ const openEmptyMenu = (e) => {
     type: "empty",
     target: null
   }
+  closeAddMenu()
+
 }
 
 
+// === PATCH createFolder (anti re-render / anti clignotement) ===
 const createFolder = async () => {
+  console.group("📁 CREATE FOLDER")
+
+  // ===============================
+  // 0️⃣ Nom
+  // ===============================
   const name = prompt("Nom du dossier")
-  if (!name?.trim()) return
+  if (!name?.trim()) {
+    console.log("❌ nom vide → abort")
+    console.groupEnd()
+    return
+  }
 
-  // 🔥 UI INSTANT (temp)
-const tempFolder = {
-  folder_id: `TMP_${crypto.randomUUID()}`,
-  parent_id: currentFolderId.value ?? null, // ✅ JAMAIS ""
-  name: name.trim(),
-  _optimistic: true
-}
+  const parentId = currentFolderId.value ?? null
+  const isEleveContext = !isProfLike.value
 
+  console.log("📂 parentId =", parentId)
+  console.log("👤 context =", isEleveContext ? "élève" : "prof")
 
-  folders.value.push(tempFolder)
+  // ===============================
+  // 1️⃣ TMP immédiat
+  // ===============================
+  const tmpId = `TMP_${crypto.randomUUID()}`
+  const tmpFolder = {
+    folder_id: tmpId,
+    parent_id: parentId,
+    name: name.trim(),
+    owner_type: isEleveContext ? "eleve" : "prof",
+    owner_id: isEleveContext ? userId.value : profId.value,
+    _optimistic: true
+  }
+
+  folders.value.push(tmpFolder)
+
+  console.log("🧪 TMP ajouté =", tmpId)
+  console.log("👀 visibles =", visibleFolders.value.map(f => f.folder_id))
+
+  // rename inline
+  editingFolderId.value = tmpId
+  editingFolderName.value = tmpFolder.name
+
+  await nextTick()
+  folderRenameRefs.get(tmpId)?.focus()
+  folderRenameRefs.get(tmpId)?.select()
+
+  // état navigation
+  const wasInside = currentFolderId.value === tmpId
+  let realFolder = null
 
   try {
-    const url = getProxyPostURL(routes.POST)
+    // ===============================
+    // 2️⃣ BACKEND
+    // ===============================
+    console.log("🌍 backend createfolder…")
 
-const res = await axios.post(url, {
-  route: "createfolder",
-  jwt: auth.jwt,
-  prof_id: auth.user.prof_id,
-  owner_type: "eleve",
-  owner_id: auth.user.user_id,
-  parent_id: tempFolder.parent_id ?? null, // ✅
-  name: tempFolder.name
-})
+    const res = await axios.post(getProxyPostURL(routes.POST), {
+      route: "createfolder",
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      owner_type: tmpFolder.owner_type,
+      owner_id: tmpFolder.owner_id,
+      parent_id: parentId,
+      name: tmpFolder.name
+    })
 
+    if (!res.data?.success || !res.data.folder) {
+      throw new Error("backend failed")
+    }
 
-    if (!res.data?.success) throw new Error()
+    realFolder = res.data.folder
+    console.log("✅ BACKEND OK =", realFolder.folder_id)
 
-    // 🔁 remplace le TMP par le vrai
-    folders.value = folders.value.map(f =>
-      f.folder_id === tempFolder.folder_id
-        ? res.data.folder
-        : f
+    // ===============================
+    // 3️⃣ TMP → REAL (anti-flash)
+    // ===============================
+    suppressTransitions.value = true
+    await nextTick()
+
+    const idx = folders.value.findIndex(f => f.folder_id === tmpId)
+    if (idx !== -1) {
+      folders.value.splice(idx, 1, {
+        ...folders.value[idx],
+        folder_id: realFolder.folder_id,
+        parent_id: parentId,
+        name:
+          realFolder.name ||
+          realFolder.folder_name ||
+          folders.value[idx].name,
+        _optimistic: false
+      })
+    } else {
+      console.warn("⚠️ TMP introuvable au replace")
+    }
+
+    await nextTick()
+    suppressTransitions.value = false
+
+    // ===============================
+    // 4️⃣ ÉTAT UI FINAL
+    // ===============================
+    if (editingFolderId.value === tmpId) {
+      editingFolderId.value = realFolder.folder_id
+    }
+
+    selectedFolders.value = [realFolder.folder_id]
+
+    // 🔥 CLÉ : rester dans le dossier
+    if (currentFolderId.value === tmpId) {
+      currentFolderId.value = realFolder.folder_id
+      console.log("🔁 currentFolderId realigned =", realFolder.folder_id)
+    }
+
+    writeFoldersCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      folders.value
+    )
+
+    console.log(
+      "👀 visibles après REAL =",
+      visibleFolders.value.map(f => f.folder_id)
     )
 
   } catch (e) {
+    console.error("❌ createFolder error", e)
+
     // rollback
-    folders.value = folders.value.filter(f => f !== tempFolder)
+    folders.value = folders.value.filter(f => f.folder_id !== tmpId)
     alert("Erreur création dossier")
+
+  } finally {
+    editingFolderId.value = null
+    editingFolderName.value = ""
+    console.groupEnd()
   }
 }
+
+
+
+
+
+
 
 
 // ============================================================================
@@ -1029,15 +1634,21 @@ const deleteUpload = async (file) => {
     const res = await axios.post(url, {
       route: "softdeleteupload",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
+      prof_id: profId.value,
       upload_id: file.upload_id
     })
+  writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
 
     if (!res.data?.success) throw new Error()
   } catch (e) {
     uploads.value = snapshot
+writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+
     alert("Erreur suppression fichier")
   }
+}
+const safeAddFile = () => {
+  addFile()
 }
 
 const deleteSelectedUploads = async () => {
@@ -1064,14 +1675,18 @@ const deleteSelectedUploads = async () => {
         axios.post(url, {
           route: "softdeleteupload",
           jwt: auth.jwt,
-          prof_id: auth.user.prof_id,
+          prof_id: profId.value,
           upload_id
         })
       )
     )
+  writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+
   } catch (e) {
     // 🔁 rollback
     uploads.value = snapshot
+writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+
     alert("Erreur suppression fichiers")
   }
 }
@@ -1120,14 +1735,21 @@ const deleteFolder = async (folder) => {
     const res = await axios.post(url, {
       route: "softdeletefolder",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
+      prof_id: profId.value,
       folder_id: folder.folder_id
     })
+
+
 
     if (!res.data?.success) {
       throw new Error("delete folder failed")
     }
-
+  writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+writeFoldersCache(
+  effectiveOwnerType.value,
+  effectiveOwnerId.value,
+  folders.value
+)
   } catch (e) {
     // =============================
     // 🔁 ROLLBACK
@@ -1144,11 +1766,27 @@ const deleteFolder = async (folder) => {
 // ============================================================================
 // ✏️ Rename inline (Enter / Blur = save, Esc = cancel)
 // ============================================================================
-const startRename = (file) => {
-  editingId.value = file.upload_id
-  editingName.value = file.file_name
-  closeContextMenu()
+
+const loadProfEleves = async () => {
+  if (!isProfLike.value) return
+
+  const url = getProxyPostURL(routes.POST)
+
+  const { data } = await axios.post(url, {
+    route: "get_prof_eleves",
+    jwt: auth.jwt,
+    prof_id: profId.value
+  })
+
+  if (!data?.success || !data.eleves?.length) return
+
+  elevesMap.value = {}
+  data.eleves.forEach(e => {
+    elevesMap.value[e.eleve_id] = e.name
+  })
+
 }
+
 
 
 const cancelRename = () => {
@@ -1183,10 +1821,11 @@ const confirmRename = async (file) => {
     const res = await axios.post(url, {
       route: "renameupload",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
+      prof_id: profId.value,
       upload_id: file.upload_id,
       new_name: newName
     })
+  writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
 
     if (!res.data?.success) throw new Error()
 
@@ -1201,7 +1840,8 @@ const confirmRename = async (file) => {
 const openFolderMenu = (e, folder) => {
   e.preventDefault()
   e.stopPropagation()
-
+closeAddMenu()
+  closeContextMenu()
   contextMenu.value = {
     visible: true,
     x: e.clientX,
@@ -1209,11 +1849,23 @@ const openFolderMenu = (e, folder) => {
     type: "folder",
     target: folder
   }
+  closeAddMenu()
+
+
 }
-const startRenameFolder = (folder) => {
+const folderRenameRefs = new Map()
+
+const setFolderRenameRef = (el, id) => {
+  if (el) folderRenameRefs.set(id, el)
+}
+const startRenameFolder = async (folder) => {
+  closeContextMenu()
   editingFolderId.value = folder.folder_id
   editingFolderName.value = folder.name
-  closeContextMenu()
+
+  await nextTick()
+  folderRenameRefs.get(folder.folder_id)?.focus()
+  folderRenameRefs.get(folder.folder_id)?.select()
 }
 
 const cancelRenameFolder = () => {
@@ -1256,10 +1908,15 @@ while (existingNames.includes(newName)) {
     const res = await axios.post(url, {
       route: "renamefolder",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
+      prof_id: profId.value,
       folder_id: folder.folder_id,
       new_name: newName
     })
+ writeFoldersCache(
+    effectiveOwnerType.value,
+    effectiveOwnerId.value,
+    folders.value
+  )
 
     if (!res.data?.success) throw new Error()
 
@@ -1269,6 +1926,12 @@ while (existingNames.includes(newName)) {
     alert("Erreur renommage dossier")
   }
 }
+const openFile = (file) => {
+  // si preview activée
+  if (file.file_url) {
+    window.open(file.file_url, "_blank")
+  }
+}
 
 
 // Open file menu
@@ -1276,7 +1939,8 @@ const openFileMenu = (e, file) => {
   // ⛔ empêche le click implicite
   e.preventDefault()
   e.stopPropagation()
-
+closeAddMenu()
+  closeContextMenu()
   // ✅ si le fichier n’est PAS déjà sélectionné → sélection unique
   if (!selectedFiles.value.includes(file.upload_id)) {
     selectedFiles.value = [file.upload_id]
@@ -1289,6 +1953,9 @@ const openFileMenu = (e, file) => {
     type: "file",
     target: file
   }
+  closeAddMenu()
+
+
 }
 
 
@@ -1332,62 +1999,106 @@ const onDragStart = (e, file) => {
 
 const onDragEnd = () => {
   isDragging.value = false
+  draggedFiles.value = []
   draggedFolder.value = null
-  // ❌ ne PAS vider draggedFiles ici
 }
 
 
 
 
-const onFolderDragStart = (folder) => {
-  // 🔥 reset total
+
+const onFolderDragStart = (e, folder) => {
+  console.group("📦 FOLDER DRAG START")
+  console.log("folder =", folder)
+
   draggedFiles.value = []
   selectedFiles.value = []
 
   isDragging.value = true
   draggedFolder.value = folder
+
+  e.dataTransfer.effectAllowed = "move"
+  e.dataTransfer.setData("text/plain", `folder:${folder.folder_id}`)
+
+  console.log("draggedFolder =", draggedFolder.value)
+  console.groupEnd()
 }
 
 
+
+const explorerKey = ref(0)
 
 const onFolderDrop = async (targetParentId) => {
   if (!draggedFolder.value) return
 
-  const folder = draggedFolder.value
-const previousParent = folder.parent_id ?? null
-folder.parent_id = targetParentId ?? null
+  isMovingFolder.value = true
 
+  const folder = draggedFolder.value
+  const previousParent = folder.parent_id ?? null
+
+  folder.parent_id = targetParentId ?? null
+  currentFolderId.value = targetParentId ?? null
+  explorerKey.value++
 
   try {
-    const url = getProxyPostURL(routes.POST)
-
-    await axios.post(url, {
+    await axios.post(getProxyPostURL(routes.POST), {
       route: "movefolder",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
+      prof_id: profId.value,
       folder_id: folder.folder_id,
-new_parent_id: targetParentId ?? null
+      new_parent_id: targetParentId ?? null
     })
+
+    writeFoldersCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      folders.value
+    )
+
   } catch (e) {
     folder.parent_id = previousParent
     alert("Erreur déplacement dossier")
   } finally {
+    isMovingFolder.value = false
     draggedFolder.value = null
   }
 }
 
+
+
 const handleDropOnFolder = (folderId) => {
-  // 🟢 priorité au fichier
+  console.group("📥 DROP")
+  console.log("targetFolderId =", folderId)
+  console.log("draggedFiles =", draggedFiles.value.map(f => f.upload_id))
+  console.log("draggedFolder =", draggedFolder.value?.folder_id)
+  console.log("isDragging =", isDragging.value)
+
   if (draggedFiles.value.length) {
+    console.log("➡️ DROP FILES")
     onDrop(folderId)
+    console.groupEnd()
     return
   }
 
-  // 🟠 sinon dossier
   if (draggedFolder.value) {
+    console.log("➡️ DROP FOLDER")
     onFolderDrop(folderId)
+    console.groupEnd()
+    return
   }
+
+  console.warn("⚠️ DROP SANS PAYLOAD")
+  console.groupEnd()
 }
+
+const filesCountByFolder = computed(() => {
+  const map = {}
+  uploads.value.forEach(u => {
+    const k = u.folder_id ?? null
+    map[k] = (map[k] || 0) + 1
+  })
+  return map
+})
 
 // ============================================================================
 // 📁 Move upload -> folder_path (simple prompt pour l’instant)
@@ -1412,17 +2123,55 @@ const copySelection = () => {
 const pasteSelection = async (target = null) => {
   const finalTarget = target ?? currentFolderId.value ?? ""
   if (!clipboard.value.uploads.length) return
-  let clones = [] // ✅ DÉCLARATION UNIQUE ICI
 
-  // fichiers encore présents
- // fichiers sources dans l’ordre de sélection
-const files = clipboard.value.uploads
-  .map(id => uploads.value.find(u => u.upload_id === id))
-  .filter(Boolean)
+  const files = clipboard.value.uploads
+    .map(id => uploads.value.find(u => u.upload_id === id))
+    .filter(Boolean)
 
-// 📋 COPY → duplication visuelle + renommage MULTI
-if (clipboard.value.mode === "copy") {
-  clones = []
+  if (!files.length) return
+
+  const allSameFolder = files.every(
+    f => (f.folder_id || "") === finalTarget
+  )
+  if (allSameFolder) return
+
+  pushUndo()
+
+  const url = getProxyPostURL(routes.POST)
+
+  // ================= CUT =================
+  if (clipboard.value.mode === "cut") {
+    files.forEach(f => f.folder_id = finalTarget)
+
+    try {
+      await Promise.all(
+        files.map(f =>
+          axios.post(url, {
+            route: "moveuploadtofolder",
+            jwt: auth.jwt,
+            prof_id: profId.value,
+            upload_id: f.upload_id,
+            folder_id: finalTarget
+          })
+        )
+      )
+
+      clipboard.value = { mode: null, uploads: [] }
+      selectedFiles.value = []
+writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+
+    } catch (e) {
+      const last = undoStack.value.pop()
+      if (last) uploads.value = last.uploads
+writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
+
+      alert("Erreur déplacement")
+    }
+    return
+  }
+
+  // ================= COPY =================
+  let clones = []
 
   files.forEach(original => {
     const siblings = uploads.value
@@ -1442,125 +2191,51 @@ if (clipboard.value.mode === "copy") {
   })
 
   uploads.value.push(...clones)
-}
-
-
-  if (!files.length) return
-
-  // ⛔ inutile si même dossier
-  const allSameFolder = files.every(
-    f => (f.folder_id || "") === finalTarget
-  )
-  if (allSameFolder) return
-
-  // =============================
-  // 🔁 UNDO (AVANT toute modif UI)
-  // =============================
-  pushUndo()
-
-  const url = getProxyPostURL(routes.POST)
-
-  // =============================
-  // ⚡ UI INSTANT
-  // =============================
-
-  // ✂️ CUT → déplacement visuel
-  if (clipboard.value.mode === "cut") {
-    files.forEach(f => {
-      f.folder_id = finalTarget
-    })
-  }
-
-  // 📋 COPY → duplication visuelle
-// 📋 COPY → duplication visuelle + renommage
-if (clipboard.value.mode === "copy") {
-  clones = []
-
-  files.forEach(original => {
-    const siblings = uploads.value
-      .concat(clones)
-      .filter(u => (u.folder_id ?? "") === finalTarget)
-
-    const newName = getAutoRenamed(original.file_name, siblings)
-
-    clones.push({
-      ...original,
-      upload_id: `TMP_${crypto.randomUUID()}`,
-      original_id: original.upload_id, // 🔥 IMPORTANT
-      folder_id: finalTarget,
-      file_name: newName,
-      _optimistic: true
-    })
-  })
-
-  uploads.value.push(...clones)
-}
-
-
 
   try {
-    // =============================
-    // 🌍 BACKEND
-    // =============================
+const res = await axios.post(url, {
+  route: "copyuploads_batch",
+  jwt: auth.jwt,
+  prof_id: profId.value,
+  uploads: clones.map(c => ({
+    upload_id: c.original_id,
+    target_folder_id: finalTarget,
+    new_name: c.file_name
+  }))
+})
 
-    // CUT (one-shot)
-    if (clipboard.value.mode === "cut") {
-      await Promise.all(
-        files.map(f =>
-          axios.post(url, {
-            route: "moveuploadtofolder",
-            jwt: auth.jwt,
-            prof_id: auth.user.prof_id,
-            upload_id: f.upload_id,
-            folder_id: finalTarget
-          })
-        )
-      )
+res.data.uploads.forEach((real, i) => {
+  const tmp = clones[i]
 
-      // vider clipboard APRÈS cut
-      clipboard.value.mode = null
-      clipboard.value.uploads = []
-    }
-
-    // COPY (collage multiple autorisé)
-    if (clipboard.value.mode === "copy") {
-   await Promise.all(
-  clones.map(c =>
-    axios.post(url, {
-      route: "copyupload",
-      jwt: auth.jwt,
-      prof_id: auth.user.prof_id,
-      upload_id: c.original_id,   // 👈 ID source
-      target_folder_id: finalTarget,
-      new_name: c.file_name       // 👈 NOM FINAL
-    })
-  )
+  tmp.upload_id  = real.upload_id
+  tmp.file_url   = real.file_url
+  tmp.file_size  = real.file_size
+  tmp.file_type  = real.file_type
+  tmp.created_at = real.created_at
+  delete tmp._optimistic
+})
+writeUploadsCache(
+  effectiveOwnerType.value,
+  effectiveOwnerId.value,
+  uploads.value.filter(u => !u._optimistic)
 )
 
-      // remplace les TMP par les vrais
-      await fetchUploads()
-    }
+
+  
 
     selectedFiles.value = []
-
   } catch (e) {
-    // =============================
-    // 🔁 ROLLBACK VIA UNDO
-    // =============================
     const last = undoStack.value.pop()
-    if (last) {
-      uploads.value = last.uploads
-      folders.value = last.folders
-      currentFolderId.value = last.currentFolderId
-    }
+    if (last) uploads.value = last.uploads
+writeUploadsCache(effectiveOwnerType.value, effectiveOwnerId.value, uploads.value)
 
-    alert("Erreur collage")
+    alert("Erreur copie")
   }
 }
 
 
 
-
+const isNavigating = ref(false)
 
 const cutSelection = () => {
   if (!selectedFiles.value.length) return
@@ -1570,6 +2245,20 @@ clipboard.value = {
 }
 
 }
+
+const enterFolder = (folder) => {
+  currentFolderId.value = folder.folder_id
+
+  // 🔥 CLÉ
+  if (isProfLike.value && folder.folder_id === profElevesFolderId.value) {
+    currentEleveId.value = null
+  }
+
+  if (isProfLike.value && folder.owner_type === "eleve") {
+    currentEleveId.value = folder.owner_id
+  }
+}
+
 
 
 const undoStack = ref([])
@@ -1586,6 +2275,26 @@ const pushUndo = () => {
   }
 }
 
+const goHome = () => {
+  // reset sélection
+  selectedFiles.value = []
+  selectedFolders.value = []
+
+  // élève → racine élève
+  if (!isProfLike.value) {
+    const root = folders.value.find(f =>
+      f.owner_type === "eleve" &&
+      f.owner_id === userId.value &&
+      f.name === "Racine élève"
+    )
+    currentFolderId.value = root?.folder_id || null
+    return
+  }
+
+  // prof → racine prof
+  const root = folders.value.find(f => f.parent_id === null)
+  currentFolderId.value = root?.folder_id || null
+}
 
 // ============================================================================
 // 👁️ Preview (si tu remets une modale preview plus tard)
@@ -1601,14 +2310,112 @@ const closePreview = () => {
 }
 
 // ============================================================================
-// 👀 WATCHERS (cours_id depuis query -> selectedCours + effectiveCoursId)
+// 👀 WATCHERS — SAFE (clean sans changer le comportement)
 // ============================================================================
+watchEffect(() => {
+  console.log("🧭 isElevesView =", isElevesView.value,
+    "currentFolderId =", currentFolderId.value,
+    "elevesFolderId =", profElevesFolderId.value
+  )
+})
+
+watch(currentFolderId, () => {
+  isNavigating.value = true
+  requestAnimationFrame(() => {
+    isNavigating.value = false
+  })
+})
+watch(showLoader, v =>
+  console.log("⏳ showLoader =", v, {
+    creatingWorkspace: creatingWorkspace.value,
+    foldersLoaded: foldersLoaded.value,
+    hydratedFromCache: hydratedFromCache.value
+  })
+)
+
+// ------------------------------------------------------------
+// PERF / UI RESET
+// ------------------------------------------------------------
+watch(currentFolderId, () => {
+ if (!isDragging.value) {
+    draggedFiles.value = []
+    draggedFolder.value = null
+  }
+
+  closeAddMenu()
+  itemEls.value.clear()
+})
+
+// ------------------------------------------------------------
+// PERF / TIMING LOGS (one-shot)
+// ------------------------------------------------------------
+watch(
+  () => foldersLoaded.value,
+  v => {
+    if (v) {
+      console.log(
+        "📁 DOSSIERS AFFICHÉS EN",
+        (performance.now() - t0).toFixed(1),
+        "ms"
+      )
+    }
+  },
+  { once: true }
+)
+
+watch(
+  () => uploadsHydrated.value,
+  v => {
+    if (v) {
+      const t = performance.now()
+      console.log("⚡ CACHE HYDRATÉ EN", (t - cacheStart.value).toFixed(1), "ms")
+    }
+  },
+  { once: true }
+)
+
+
+// ------------------------------------------------------------
+// INIT ROOT (utilisé ailleurs → ON GARDE)
+// ------------------------------------------------------------
+const rootInitialized = ref(false)
+
+// ------------------------------------------------------------
+// CHANGEMENT D’ÉLÈVE (PROF)
+// ⚠️ logique DATA uniquement
+// ------------------------------------------------------------
+watch(currentEleveId, (id, prev) => {
+  if (!mountedDone.value) return          // 🔥 FIX PRINCIPAL
+  if (isMovingFolder.value) return
+  if (!id || id === prev) return
+  if (currentFolderId.value === null) return
+
+  invalidateCaches(effectiveOwnerType.value, prev)
+  fetchFolders(true)
+  fetchUploads()
+})
+
+
+
+
+
+// ------------------------------------------------------------
+// UI / ÉTATS TRANSVERSAUX
+// ------------------------------------------------------------
+watch(
+  () => firstDataResolved.value,
+  v => {
+    if (v) creatingWorkspace.value = false
+  }
+)
+
+// ------------------------------------------------------------
+// ROUTE → cours
+// ------------------------------------------------------------
 watch(
   () => route.query.cours_id,
   v => {
     selectedCours.value = v || ""
-
-    // effectiveCoursId alimente UploadModal (pour rattacher le fichier au cours)
     if (v) {
       effectiveCoursId.value = v
     } else if (!effectiveCoursId.value) {
@@ -1622,32 +2429,243 @@ watch(selectedCours, v => {
   if (v) effectiveCoursId.value = v
 })
 
-watch(currentFolderId, () => {
-  selectedFiles.value = []
-  // ❌ NE PAS vider clipboard ici
-})
+// ------------------------------------------------------------
+// DEBUG (optionnel, tu peux virer plus tard)
+// ------------------------------------------------------------
+watch(currentEleveId, v => console.log("👤 currentEleveId =", v))
+watch(currentFolderId, v => console.log("📁 currentFolderId =", v))
 
 
 
+const blockNativeContextMenu = (e) => {
+  if (contextMenu.value.visible || addMenu.value.visible) {
+    e.preventDefault()
+  }
+}
 // ============================================================================
 // 🚀 LIFECYCLE
 // ============================================================================
-onMounted(() => {
-  log("component mounted")
+onMounted(async () => {
+  console.group("🚀 ELEVEUPLOADS MOUNT")
+
+  // ===============================
+  // RESET UI
+  // ===============================
+  addMenu.value.visible = false
+  contextMenu.value.visible = false
+  isDragging.value = false
+  selectedFiles.value = []
+  selectedFolders.value = []
+
+ // ===============================
+// 👨‍🎓 MODE ÉLÈVE
+// ===============================
+if (!isProfLike.value) {
+  console.log("👨‍🎓 MODE ÉLÈVE")
+
+  // 0️⃣ garde identité
+  if (!userId.value) {
+    console.error("❌ userId manquant (élève)")
+    return
+  }
+
+  // 1️⃣ cache (optionnel)
+  const cachedFolders = readFoldersCache(
+    effectiveOwnerType.value,
+    effectiveOwnerId.value
+  )
+
+  if (Array.isArray(cachedFolders) && cachedFolders.length) {
+    folders.value = cachedFolders.map(f => ({ ...f }))
+    foldersLoaded.value = true
+    hydratedFromCache.value = true
+
+    const root = cachedFolders.find(f =>
+      f.owner_type === "eleve" &&
+      f.owner_id === userId.value &&
+      f.name === "Racine élève"
+    )
+
+    currentFolderId.value = root?.folder_id || null
+    console.log("⚡ cache élève chargé =", cachedFolders.length)
+  }
+
+  // 2️⃣ RACINE ÉLÈVE = SOURCE DE VÉRITÉ
+  if (!currentFolderId.value) {
+    console.log("🧱 ensureEleveRoot (obligatoire)")
+    loaderStep.value = "eleve-root"
+
+    const rootId = await ensureEleveRoot()
+
+    if (!rootId) {
+      console.error("❌ impossible de créer la racine élève")
+      return
+    }
+
+    currentFolderId.value = rootId
+  }
+
+  console.log("📁 root élève =", currentFolderId.value)
+
+  // 3️⃣ dossiers (FORCE backend)
+  loaderStep.value = "folders"
+
+  await fetchFolders(true)
+
+  // 4️⃣ uploads (bg)
+  loaderStep.value = "uploads"
+
   fetchUploads()
-  fetchFolders()
-  window.addEventListener("keydown", onKeyDown)
+
+  console.log("✅ ÉLÈVE READY")
+  return
+}
+
+  
+// ===============================
+// 👨‍🏫 MODE PROF (cache-aware, root-safe)
+// ===============================
+console.group("👨‍🏫 MODE PROF")
+
+creatingWorkspace.value = false
+hydratedFromCache.value = false
+
+// -------------------------------------------------
+// 0️⃣ CACHE IMMÉDIAT (AVANT RÉSEAU)
+// -------------------------------------------------
+console.log("⚡ cache prof: lecture…")
+const cachedFolders = readFoldersCache(
+  effectiveOwnerType.value,
+  effectiveOwnerId.value
+)
+
+const hasCache = Array.isArray(cachedFolders) && cachedFolders.length
+
+if (hasCache) {
+  folders.value = cachedFolders.map(f => ({ ...f }))
+  foldersLoaded.value = true
+  hydratedFromCache.value = true
+  uploadsLoaded.value = true
+
+  const root = folders.value.find(f => f.parent_id === null) || null
+  if (!currentFolderId.value) currentFolderId.value = root?.folder_id || null
+
+  console.log("⚡ cache prof hydraté =", cachedFolders.length)
+  console.log("📁 root(cache) =", currentFolderId.value)
+} else {
+  console.log("❌ aucun cache prof")
+  foldersLoaded.value = false
+  uploadsLoaded.value = false
+}
+
+// -------------------------------------------------
+// 1️⃣ ensureProfRoot
+// -------------------------------------------------
+console.log("🧱 ensureProfRoot…")
+
+if (hasCache) {
+  // cache → background
+  ensureProfRoot().then(rootId => {
+    console.log("📁 profRootId =", rootId)
+  })
+} else {
+  // ❗ PAS DE CACHE → BLOQUANT
+  loaderStep.value = "prof-root"
+
+  const rootId = await ensureProfRoot()
+  console.log("📁 profRootId =", rootId)
+  console.log("📁 currentFolderId =", currentFolderId.value)
+}
+
+// -------------------------------------------------
+// 2️⃣ fetchFolders
+// -------------------------------------------------
+console.log("📦 fetchFolders…")
+
+if (hasCache) {
+  // revalidation silencieuse
+  fetchFolders(true)
+} else {
+  // ❗ root garanti → fetch réel
+  loaderStep.value = "folders"
+
+  await fetchFolders(true)
+}
+
+// -------------------------------------------------
+// 3️⃣ uploads (toujours non bloquant)
+// -------------------------------------------------
+console.log("📄 fetchUploads (bg)…")
+loaderStep.value = "uploads"
+
+fetchUploads()
+
+// -------------------------------------------------
+// 4️⃣ autres données non critiques
+// -------------------------------------------------
+loadProfEleves().then(() =>
+  console.log("👥 élèves chargés =", Object.keys(elevesMap.value).length)
+)
+
+console.log("✅ PROF READY")
+console.groupEnd()
+
+
+
+  // 3️⃣ folders (SEULEMENT APRÈS ROOT)
+  console.log("📦 fetchFolders…")
+  await fetchFolders(true)
+
+  console.log(
+    "📁 folders chargés =",
+    folders.value.length,
+    "| visibles =",
+    visibleFolders.value.length
+  )
+
+  // 4️⃣ uploads (background)
+  console.log("📄 fetchUploads (bg)")
+  fetchUploads()
+
+  creatingWorkspace.value = false
+  mountedDone.value = true
+
+  console.log("✅ PROF READY")
+  console.log("🧪 elevesMap =", elevesMap.value)
+
+  console.groupEnd()
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeyDown)
+    window.removeEventListener("contextmenu", blockNativeContextMenu)
+
 })
 
 </script>
 
 <style lang="css" scoped>
 
-  /* ==========================================================================
+/* ==========================================================================
    🌑 THÈME GLOBAL
    ========================================================================== */
 .dark-theme {
@@ -1682,47 +2700,18 @@ onUnmounted(() => {
 }
 
 /* ==========================================================================
-   🎛️ FILTRES
-   ========================================================================== */
-.uploads-filters {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-/* Select custom */
-.uploads-page select.form-select {
-  background-color: #2a2a2a;
-  color: #f1f1f1;
-  border: 1px solid #ff8c00;
-  border-radius: 6px;
-  height: 36px;
-  padding: 4px 10px;
-  font-size: 0.9rem;
-}
-
-.uploads-page select.form-select:focus {
-  outline: none;
-  box-shadow: none;
-  border-color: #ffa733;
-  background-color: #2f2f2f;
-}
-
-.uploads-page select.form-select option {
-  background-color: #2a2a2a;
-  color: #f1f1f1;
-}
-
-
-
-/* ==========================================================================
    📦 ZONE EXPLORER
    ========================================================================== */
 .explorer-zone {
-  min-height: 60vh;
+  min-height: calc(100vh - 260px);
   width: 100%;
   padding: 12px;
+  position: relative;
+}
+
+/* ⚠️ DND SAFE : jamais bloquer pointer-events */
+.explorer-zone.disabled {
+  opacity: 0.85;
 }
 
 .explorer-zone.dragging {
@@ -1731,7 +2720,7 @@ onUnmounted(() => {
 }
 
 /* ==========================================================================
-   📄 ITEM (FICHIER / DOSSIER)
+   📄 ITEM COMMUN (FICHIER / DOSSIER)
    ========================================================================== */
 .upload-item {
   background: linear-gradient(180deg, #1f1f1f, #191919);
@@ -1739,12 +2728,12 @@ onUnmounted(() => {
   border-radius: 12px;
   padding: 12px 14px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
+/* hover */
 .upload-item:hover {
   border-color: #ff8c00;
   background: rgba(255, 140, 0, 0.08);
@@ -1757,19 +2746,16 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.25) inset;
 }
 
-/* drag */
-.upload-item[draggable="true"] {
+/* draggable cursor */
+.upload-item[draggable="true"],
+.folder-main[draggable="true"] {
   cursor: grab;
 }
 
+.folder-main[draggable="true"]:active,
 .upload-item[draggable="true"]:active {
   cursor: grabbing;
   opacity: 0.6;
-}
-
-/* cut */
-.upload-item.cut {
-  opacity: 0.45;
 }
 
 /* optimistic */
@@ -1778,30 +2764,49 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+/* cut */
+.upload-item.cut {
+  opacity: 0.45;
+}
+
 /* ==========================================================================
    📁 DOSSIER
    ========================================================================== */
-.folder {
+.upload-item.folder {
   background: linear-gradient(180deg, #222, #1b1b1b);
   border: 1px dashed #444;
   font-weight: 600;
   color: #ffb347;
 }
 
-.folder:hover {
+.upload-item.folder.active {
   border-color: #ff8c00;
-  background: rgba(255, 140, 0, 0.12);
+  background: rgba(255, 140, 0, 0.18);
+}
+
+/* contenu dossier */
+.folder-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
-   📄 CONTENU FICHIER
+   📄 FICHIER
    ========================================================================== */
 .file-main {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: 1;
-  min-width: 0; /* ellipsis */
+  min-width: 0;
 }
 
 .file-icon {
@@ -1815,65 +2820,9 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.file-name {
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .file-date {
   font-size: 0.75rem;
   color: #888;
-}
-
-/* ==========================================================================
-   ⚙️ ACTIONS FICHIER
-   ========================================================================== */
-.file-action {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-left: 12px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.upload-item:hover .file-action {
-  opacity: 1;
-}
-
-/* boutons */
-.open-btn,
-.edit-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-}
-
-.open-btn {
-  border: 1px solid #ff8c00;
-  color: #ffb347;
-  text-decoration: none;
-}
-
-.open-btn:hover {
-  background: rgba(255, 140, 0, 0.1);
-}
-
-.edit-btn {
-  background: transparent;
-  border: 1px solid #ffaa00;
-  color: #ffcc66;
-  cursor: pointer;
-}
-
-.edit-btn:hover {
-  background: rgba(255, 170, 0, 0.15);
 }
 
 /* ==========================================================================
@@ -1887,6 +2836,8 @@ onUnmounted(() => {
   color: #fff;
   font-size: 0.9rem;
   width: 70%;
+  height: 28px;
+  line-height: 28px;
 }
 
 /* ==========================================================================
@@ -1922,6 +2873,7 @@ onUnmounted(() => {
   background: rgba(255, 80, 80, 0.15);
 }
 
+/* ⚠️ backdrop n’intercepte pas le drag */
 .context-backdrop {
   position: fixed;
   inset: 0;
@@ -1929,14 +2881,13 @@ onUnmounted(() => {
 }
 
 /* ==========================================================================
-   🫥 EMPTY / SELECTION BOX
+   🫥 EMPTY STATE
    ========================================================================== */
 .empty-state {
   margin-top: 24px;
   text-align: center;
   font-size: 0.9rem;
   color: #777;
-  opacity: 0;
   animation: emptyFadeIn 0.15s ease forwards;
 }
 
@@ -1945,82 +2896,29 @@ onUnmounted(() => {
   to   { opacity: 1; }
 }
 
-
-.selection-box {
-  position: fixed;
-  border: 1px dashed #4da3ff;
-  background: rgba(77, 163, 255, 0.15);
-  pointer-events: none;
-  z-index: 9999;
-}
-
 /* ==========================================================================
    🎞️ TRANSITIONS
    ========================================================================== */
-.fade-slide-enter-active,
+.fade-slide-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
 .fade-slide-leave-active {
-  transition: all 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .fade-slide-enter-from {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(4px);
 }
 
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-2px);
 }
 
 /* ==========================================================================
-   🔄 SYNC / OPTIMISTIC
+   🧭 BREADCRUMB
    ========================================================================== */
-.sync-badge {
-  margin-left: 6px;
-  font-size: 0.8em;
-  opacity: 0.7;
-}
-
-
-/* 📁 DOSSIER — layout finder-like */
-
-
-.folder-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.folder-icon {
-  font-size: 1.4rem;
-  flex-shrink: 0;
-}
-
-.folder-name {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-/* ✏️ rename full width */
-.folder-rename {
-  width: 100%;
-  max-width: 100%;
-}
-.upload-item.folder.active {
-  border-color: #ff8c00;
-  background: rgba(255, 140, 0, 0.18);
-}
-
-/* ==========================================================================
-   🧭 BREADCRUMB — style Finder
-   ========================================================================== */
-
 .finder-breadcrumb {
   display: flex;
   align-items: center;
@@ -2032,11 +2930,9 @@ onUnmounted(() => {
   margin-bottom: 14px;
 }
 
-/* item */
 .finder-breadcrumb .crumb {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   padding: 6px 12px;
   background: linear-gradient(180deg, #2a2a2a, #222);
   border-radius: 999px;
@@ -2044,60 +2940,145 @@ onUnmounted(() => {
   color: #e0e0e0;
   cursor: pointer;
   border: 1px solid #333;
-  transition: all 0.15s ease;
 }
 
-
-/* chevron entre les niveaux */
-.finder-breadcrumb .crumb::after {
-  content: "›";
-  margin-left: 8px;
-  color: #555;
-  font-size: 1rem;
-}
-
-
-/* dernier élément (dossier courant) */
 .finder-breadcrumb .crumb:last-child {
   background: linear-gradient(180deg, #ff9f2d, #ff8c00);
   color: #000;
   font-weight: 700;
   border-color: #ff8c00;
-  box-shadow: 0 2px 8px rgba(255,140,0,0.4);
 }
 
-
-/* pas de chevron sur le dernier */
-.finder-breadcrumb .crumb:last-child::after {
-  content: "";
+/* ==========================================================================
+   ⏳ LOADER
+   ========================================================================== */
+.loader-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
 }
 
-/* hover */
-.finder-breadcrumb .crumb:hover {
-  background: #2f2f2f;
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 4px solid rgba(255, 140, 0, 0.25);
+  border-top-color: #ff8c00;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.workspace-text {
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   ➕ BOUTON AJOUTER
+   ========================================================================== */
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ff9f2d, #ff8c00);
+  color: #000;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(255,140,0,0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.add-btn:hover {
   transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255,140,0,0.45);
 }
 
-
-/* Racine un peu différente */
-.finder-breadcrumb .crumb:first-child {
-  background: #1e1e1e;
-  color: #aaa;
+.add-btn.active {
+  box-shadow: 0 0 0 3px rgba(255,140,0,0.35);
 }
 
-.finder-breadcrumb .crumb.root {
+.loader-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 12, 16, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.workflow-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  animation: fadeIn 0.25s ease;
+}
+
+.workflow-loader strong {
+  font-size: 15px;
   font-weight: 600;
-  color: #bbb;
-}
-/* Racine — centré visuellement */
-.finder-breadcrumb .crumb:first-child {
-  padding-right: 12px; /* annule l’espace du chevron */
+  letter-spacing: 0.2px;
 }
 
-/* pas de chevron pour Racine */
-.finder-breadcrumb .crumb:first-child::after {
-  content: "";
-  margin: 0;
+.workflow-loader .sub {
+  font-size: 13px;
+  opacity: 0.55;
+}
+
+/* 🔵 animation workflow */
+.dots {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6c7cff;
+  animation: dotPulse 1.4s infinite ease-in-out;
+  opacity: 0.6;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: .15s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: .3s;
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0 }
+  to { opacity: 1 }
 }
 
 </style>

@@ -645,7 +645,7 @@ const isEleve = computed(() =>
     const isRefreshing = computed(() => authStore.isRefreshingToken);
 
     watch(authLoading, val => {
-      showOverlay.value = val;
+  showOverlay.value = false // ⛔ désactiver overlay global
       document.body.classList.toggle("loading-active", val);
 
       if (val) {

@@ -114,8 +114,8 @@ const regenLoading = ref(false);
 
 // === ROUTES ===
 const routes = {
-  GET: "AKfycbzZxvUx0RFAsAszO9bvA2zInIqbrWsntDw1YYZiHQ993nRYboPx266McgZrSH2RH2KpNw/exec",
-  POST: "AKfycbzZxvUx0RFAsAszO9bvA2zInIqbrWsntDw1YYZiHQ993nRYboPx266McgZrSH2RH2KpNw/exec",
+  GET: "AKfycbyWlj_R4pyEvXVWC8oOiq8Y8QuJfdG5ravSujWuplES9e5ztvhF4n0a2TSGyyZ-aDRHbg/exec",
+  POST: "AKfycbyWlj_R4pyEvXVWC8oOiq8Y8QuJfdG5ravSujWuplES9e5ztvhF4n0a2TSGyyZ-aDRHbg/exec",
 };
 
 // === HELPERS API ===
@@ -139,6 +139,24 @@ function buildPost() {
 // ======================================================================
 // 📌 API CALLS AVEC LOGS
 // ======================================================================
+async function copyLink() {
+  if (!inviteLink.value) return
+
+  try {
+    await navigator.clipboard.writeText(inviteLink.value)
+    console.log("✅ Lien copié :", inviteLink.value)
+  } catch (err) {
+    console.warn("⚠️ Clipboard API failed, fallback")
+
+    // fallback vieux navigateurs
+    const input = document.createElement("input")
+    input.value = inviteLink.value
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand("copy")
+    document.body.removeChild(input)
+  }
+}
 
 async function fetchEleves() {
   try {

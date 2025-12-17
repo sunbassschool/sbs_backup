@@ -46,7 +46,7 @@ export default {
       error: null,
 
       routes: {
-        POST: "AKfycbyWwPxBmmP2K3CkZV7Q8q_nbAVMb3sNMeTQKrB-fFaqMBV-TqhkOenmGp7Koa--t0y4lw/exec"
+        POST: "AKfycbywZhwHpJhNALl-hTb8UsUY8UwQj1PVLdqgiQrxz5EXEU0cwvsUPt9ZCT3eSYD51TQMLQ/exec"
       }
     };
   },
@@ -97,6 +97,27 @@ export default {
       if (!json.success) {
         this.error = json.message || "Erreur lors de l'association.";
       }
+
+// 🔥 PATCH STORE — SOURCE DE VÉRITÉ = API
+if (auth.user) {
+  auth.user = {
+    ...auth.user,
+    prof_id: json.prof_id
+  }
+}
+
+// 🧠 optionnel mais safe : sync local cache user
+if (auth.user?.email) {
+  localStorage.setItem(
+    `userData_${auth.user.email}`,
+    JSON.stringify({
+      ...(JSON.parse(localStorage.getItem(`userData_${auth.user.email}`) || "{}")),
+      prof_id: json.prof_id
+    })
+  )
+}
+
+
 
     } catch (err) {
       console.error("❌ link-prof error:", err);

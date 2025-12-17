@@ -202,68 +202,89 @@ noteLoadedFromCache: false,
   //     MOUNTED
   // -----------------------------
 async mounted() {
+  // --------------------------------------------------
+  // 🔗 helper global upload
+  // --------------------------------------------------
   window.goToUploadsAndOpenModal = (coursId) => {
-  router.push({
-    path: "/mes-uploads",
-    query: {
-      cours_id: coursId,
-      openUpload: "1"
-    }
-  })
-}
+    router.push({
+      path: "/mes-uploads",
+      query: {
+        cours_id: coursId,
+        openUpload: "1",
+      },
+    });
+  };
+
   const auth = this.auth;
   if (auth.isLoggingOut || this.destroyed) return;
 
   await this.$nextTick();
 
-  // 1️⃣ Email & prénom si absents
+  // --------------------------------------------------
+  // 1️⃣ Identité fallback (sécurité)
+  // --------------------------------------------------
   if (!this.email) this.email = getUserInfoFromJWT()?.email || "";
   if (!this.prenom) this.prenom = getUserInfoFromJWT()?.prenom || "";
 
-  // 2️⃣ Gestion du cache NOTE
+  // --------------------------------------------------
+  // 2️⃣ NOTE — affichage instantané si cache
+  // --------------------------------------------------
   const noteKey = `userNote_${this.prenom}`;
   const cachedNote = localStorage.getItem(noteKey);
 
   if (cachedNote !== null) {
-    // ✅ Cache trouvé → on affiche DIRECTEMENT
     this.note = cachedNote;
     this.noteReady = true;
+    this.isNoteLoading = false;
   } else {
-    // ❌ Pas de cache → on montre le loader
     this.note = "";
     this.noteReady = false;
+    this.isNoteLoading = true;
   }
 
   this.noteLoadedFromCache = cachedNote !== null;
 
-  // 🔄 On synchronise AVEC l’API dans tous les cas
+  // 🔄 sync silencieux avec l’API
   this.syncNoteWithAPI();
 
-  // 3️⃣ Planning cache ?
-  const cachedPlanning = getCache(this.cacheKey);
-  const hasPlanningCache = Array.isArray(cachedPlanning?.planning);
+  // --------------------------------------------------
+  // 3️⃣ DASHBOARD — cache
+  // --------------------------------------------------
+  const cachedDashboard = getCache(this.cacheKey);
 
-  // 4️⃣ Objectif déjà dans le store ?
+  const hasPlanningCache =
+    cachedDashboard &&
+    (Array.isArray(cachedDashboard.planning) ||
+      cachedDashboard.planning === undefined); // élève sans prof OK
+
   const hasObjectif = auth.user?.objectif !== undefined;
 
-  // 5️⃣ 🚀 Dashboard instantané SI tout est déjà en cache
+  // --------------------------------------------------
+  // 4️⃣ 🚀 RENDER IMMÉDIAT si cache exploitable
+  // --------------------------------------------------
   if (hasPlanningCache && hasObjectif) {
-    this.updateData(cachedPlanning);
+    this.updateData(cachedDashboard || {});
     this.dashboardReady = true;
 
-    // Chargement silencieux en arrière‑plan
+    // 🔄 refresh en arrière-plan (non bloquant)
     this.fetchFromAPI(true);
     return;
   }
 
-  // 6️⃣ Sinon : chargement normal
-  this.loadUserData();
-  this.fetchFromAPI(true);
+  // --------------------------------------------------
+  // 5️⃣ FALLBACK — pas de cache exploitable
+  // --------------------------------------------------
+  this.isLoading = true;
 
-  this.dashboardReady = true;
-
-
+  try {
+    await this.loadUserData(); // peut utiliser le cache
+    await this.fetchFromAPI(true);
+  } finally {
+    this.isLoading = false;
+    this.dashboardReady = true;
+  }
 }
+
 
 
 
@@ -424,20 +445,26 @@ goToUploads() {
     // -------------------------
     //  UPDATE CARDS
     // -------------------------
-updateData(data) {
-  if (data.user) {
+updateData(data = {}) {
+  // 🛡️ NORMALISATION TOTALE
+  const planning = Array.isArray(data.planning) ? data.planning : [];
+  const user = data.user && typeof data.user === "object" ? data.user : {};
+
+  // 🧠 USER (sans écraser role / prof_id)
+  if (Object.keys(user).length) {
     this.auth.user = {
       ...this.auth.user,
-      ...data.user,
-      role: this.auth.user.role,
-      prof_id: this.auth.user.prof_id,
+      ...user,
+      role: this.auth.user?.role,
+      prof_id: this.auth.user?.prof_id,
     };
   }
 
+  // 🕒 DATE
   const now = new Date();
 
-  // 🔥 Liste des statuts interdits (normalisés en UPPERCASE)
-  const bannedStatuses = [
+  // 🚫 STATUTS INTERDITS
+  const bannedStatuses = new Set([
     "FAIT",
     "TERMINE",
     "TERMINEE",
@@ -445,22 +472,32 @@ updateData(data) {
     "ANNULE",
     "REPORT_REFUSE",
     "REFUSE",
-  ];
+  ]);
 
-  const prochain = (data.planning || [])
+  // 🔍 DEBUG SAFE
+  console.log(
+    "🔍 STATUTS REÇUS:",
+    planning.map(c => c?.status || c?.statut || "")
+  );
+
+  // 🎯 PROCHAIN COURS
+  const prochain = planning
     .filter(c => {
-const rawStatus = c.status || c.statut || c.Status || c.STATUT || "";
-const s = rawStatus.toString().toUpperCase().trim();
-      return !bannedStatuses.includes(s); 
+      const s = (c?.status || c?.statut || "")
+        .toString()
+        .toUpperCase()
+        .trim();
+      return s && !bannedStatuses.has(s);
     })
     .filter(c => {
-      const d = new Date(c.date);
+      const d = new Date(c?.date);
       return !isNaN(d) && d > now;
     })
-    .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+    .sort((a, b) => new Date(a.date) - new Date(b.date))[0] || null;
 
-  console.log("🔍 STATUTS REÇUS:", data.planning.map(c => c.status || c.statut));
-  console.log("🎯 prochain cours retenu:", prochain);
+  // 🧱 CARDS (TOUJOURS VALIDE)
+const hasProf = !!this.auth.user?.prof_id;
+
 this.cards = [
   {
     icon: "bi bi-calendar-event",
@@ -470,34 +507,48 @@ this.cards = [
       : this.renderNoCourse(),
   },
 
-{
-  icon: "bi bi-upload",
-  title: "Envoyer un fichier",
-  text: `
-    🎼 Partitions, audio, vidéo…<br>
-    <div
-      onclick="window.goToUploadsAndOpenModal('${prochain.ID_Cours}')"
-      class="planning-bouton"
-      style="margin-top:8px"
-    >
-      📎 Envoyer un fichier
-    </div>
-  `
-}
-,
+  // 👇 CARD UNIQUEMENT SI PROF
+  ...(hasProf
+    ? [{
+        icon: "bi bi-upload",
+        title: "Envoyer un fichier",
+        text: prochain
+          ? `
+            🎼 Partitions, audio, vidéo…<br>
+            <div
+              onclick="window.goToUploadsAndOpenModal('${prochain.ID_Cours}')"
+              class="planning-bouton"
+              style="margin-top:8px"
+            >
+              📎 Envoyer un fichier
+            </div>
+          `
+          : `
+            🎼 Partitions, audio, vidéo…<br>
+             <div
+            onclick="window.goToUploadsAndOpenModal(null)"
+            class="planning-bouton"
+            style="margin-top:8px"
+          >
+            📁 Accéder aux documents
+          </div>
+          `
+      }]
+    : []),
 
   {
     icon: "bi bi-flag",
     title: "Objectif actuel",
     text: this.auth.user?.objectif || "🎯 Aucun objectif défini",
-  }
+  },
 ];
 
 
-
+  // ✅ FIN PROPRE
   this.isLoading = false;
   this.dashboardReady = true;
 }
+
 
 ,
 

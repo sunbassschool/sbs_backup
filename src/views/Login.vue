@@ -135,7 +135,7 @@ async function onSubmit(values) {
     // -------------------------
     const deviceInfo = `${navigator.platform} - ${navigator.userAgent}`;
     const apiURL =
-      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbwJFk2QqR-fAFzX4dxJl_Php49AMKnwdNv3IpWQaMmEwKLcsG7uFUkSMjl5QYmd86JCkw/exec";
+      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbzzRgV71jm0jCKVr5UUBsD2IT532tzbmNCP2qB7te9cUHh69EaeNRQm6ELyt-LltVAT2A/exec";
 
     fetchStart = performance.now();
     const response = await fetch(apiURL, {

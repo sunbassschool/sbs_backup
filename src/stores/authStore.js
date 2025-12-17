@@ -13,6 +13,8 @@ import {
   isJwtExpired,
   decodeJwt
 } from "@/utils/api.ts";
+const REFRESH_OWNER_KEY = "sbs_refresh_owner"
+const REFRESH_PING_KEY  = "sbs_refresh_ping"
 
 let _refreshTimer = null;
 let _refreshPromise = null;
@@ -115,6 +117,7 @@ export const useAuthStore = defineStore("auth", {
   // --------------------------------------------------------------------------
   // ACTIONS
   // --------------------------------------------------------------------------
+  
   actions: {
     // ⏏️ Ouvre ou ferme le menu de navigation
     toggleMenu() {
@@ -134,7 +137,7 @@ export const useAuthStore = defineStore("auth", {
         const jwt = this.jwt;
         if (!jwt) return;
 
-        const url = `https://script.google.com/macros/s/AKfycbzZxvUx0RFAsAszO9bvA2zInIqbrWsntDw1YYZiHQ993nRYboPx266McgZrSH2RH2KpNw/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
+        const url = `https://script.google.com/macros/s/AKfycbxpZtZQq9TVZZGEt2SilXH9RQ1liviv1TYIgC6gm6O7P6lba0xR8mKyxLSW3VVJNS6m5w/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
         const proxy = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
         const res = await fetch(proxy);
@@ -226,7 +229,7 @@ export const useAuthStore = defineStore("auth", {
     return false;
   }
 
-  const routeID = "AKfycbxIxwk_bWeGN5_I_GPdxPD1LjPxnz2_7eCpnxr9cYWzH0v84DspNehx89KtHjlrsNiWSg";
+  const routeID = "AKfycbxpZtZQq9TVZZGEt2SilXH9RQ1liviv1TYIgC6gm6O7P6lba0xR8mKyxLSW3VVJNS6m5w";
   const rawUrl = `https://script.google.com/macros/s/${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(jwtString)}`;
   const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(rawUrl)}`;
 
@@ -246,7 +249,7 @@ export const useAuthStore = defineStore("auth", {
 
     const jwtRole = payload?.role ?? null;
     const jwtProfId = payload?.prof_id ?? null;
-    const jwtUserId = payload?.id ?? null;
+    const jwtUserId = payload?.user_id ?? null;
 
     // 🔥 Harmonisation rôle : backend renvoie "statut", JWT renvoie "role"
 let finalRole = null;
@@ -278,17 +281,30 @@ else if (data.role) {
       user_id: data.user_id ?? jwtUserId ?? null,
 
       // 🆕 PROF_ID (backend → sinon JWT → jamais ancient store)
-      prof_id: data.prof_id ?? jwtProfId ?? null,
+prof_id:
+  data.prof_id !== undefined && data.prof_id !== ""
+    ? data.prof_id
+    : jwtProfId ?? this.user?.prof_id ?? null,
 
       // 🆕 ROLE (JWT > backend)
 role: finalRole,
     };
 
     // 3️⃣ Mise à jour du store
-    this.user = {
-      ...(this.user || {}),
-      ...builtUser
-    };
+this.user = {
+  ...(this.user || {}),
+  ...builtUser,
+
+  // 🔒 IDs canoniques
+  user_id: this.user?.user_id ?? builtUser.user_id ?? null,
+
+  prof_id:
+    builtUser.prof_id !== undefined && builtUser.prof_id !== null
+      ? builtUser.prof_id
+      : this.user?.prof_id ?? null,
+};
+
+
 
     // 4️⃣ Cache local
     localStorage.setItem(`userData_${data.email}`, JSON.stringify(builtUser));
@@ -329,6 +345,7 @@ role: finalRole,
         // Mise à jour du JWT
         this.jwt = jwtString;
         localStorage.setItem("jwt", jwtString);
+localStorage.setItem(REFRESH_PING_KEY, Date.now().toString())
 
         // Mise à jour du refreshToken si fourni
         if (result.refreshToken) {
@@ -383,93 +400,136 @@ role: finalRole,
     },
 
     // ⏰ Planifie l’auto‑refresh du JWT avant expiration (avec timer)
-    startAutoRefresh() {
-      // Nettoyage d'un ancien timer si présent
-      if (_refreshTimer) {
-        clearTimeout(_refreshTimer);
-        _refreshTimer = null;
-      }
+startAutoRefresh() {
+  const REFRESH_OWNER_KEY = "sbs_refresh_owner"
+  const OWNER_TTL = 15000 // 15 sec
 
-      const jwt = this.jwt;
-      if (!jwt) return;
+  // =====================================================
+  // 🧠 TAB ID STABLE
+  // =====================================================
+  let tabId = sessionStorage.getItem("tab_id")
+  if (!tabId) {
+    tabId = crypto.randomUUID()
+    sessionStorage.setItem("tab_id", tabId)
+  }
 
-      const payload = decodeJwt(jwt);
-      const exp = payload?.exp ? payload.exp * 1000 : null;
+  // =====================================================
+  // 🧹 CLEAN TIMER
+  // =====================================================
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer)
+    _refreshTimer = null
+  }
 
-      if (!exp) return;
+  // =====================================================
+  // 🔐 JWT CHECK
+  // =====================================================
+  if (!this.jwt) {
+    console.log("⛔ [AutoRefresh] annulé → pas de JWT")
+    return
+  }
 
-      const now = Date.now();
+  const payload = decodeJwt(this.jwt)
+  const exp = payload?.exp ? payload.exp * 1000 : null
+  if (!exp) {
+    console.log("⛔ [AutoRefresh] annulé → exp manquant")
+    return
+  }
 
-      // On planifie le refresh 2 minutes avant expiration, mais au moins dans 5 sec
-      const refreshDelay = Math.max(exp - now - 120000, 5000);
+  // =====================================================
+  // 👑 OWNER / FOLLOWER AVEC TTL
+  // =====================================================
+  let owner = null
+  const rawOwner = localStorage.getItem(REFRESH_OWNER_KEY)
 
-      console.log("⏳ Auto-refresh dans", Math.round(refreshDelay / 1000), "sec");
+  if (rawOwner) {
+    try {
+      owner = JSON.parse(rawOwner)
+    } catch {
+      localStorage.removeItem(REFRESH_OWNER_KEY)
+      owner = null
+    }
+  }
 
-      _refreshTimer = setTimeout(async () => {
-        // Si logout en cours → on annule auto‑refresh
-        if (this.isLoggingOut) {
-          console.log("⛔ Auto-refresh annulé : logout en cours");
-          return;
-        }
+ const now = Date.now()
+const ownerExpired = !owner?.ts || (now - owner.ts > OWNER_TTL)
 
-        // Si hors-ligne, attendre retour réseau
-        if (!navigator.onLine) {
-          console.warn("📡 Offline → auto-refresh suspendu");
-          window.addEventListener("online", () => this.startAutoRefresh(), { once: true });
-          return;
-        }
+// 🔥 takeover immédiat si seul onglet actif
+if (document.visibilityState === "visible" && document.hasFocus()) {
+  owner = null
+}
 
-        // Si un refresh est déjà en cours, attendre
-        if (_refreshPromise) {
-          console.log("⏳ Refresh déjà en cours → on attend");
-          await _refreshPromise;
-          this.startAutoRefresh();
-          return;
-        }
+if (!owner || ownerExpired || owner.tabId === tabId) {
+  localStorage.setItem(
+    REFRESH_OWNER_KEY,
+    JSON.stringify({ tabId, ts: now })
+  )
+  console.log("👑 [AutoRefresh] OWNER")
+} else {
+  console.log("👂 [AutoRefresh] FOLLOWER")
+  return
+}
 
-        console.log("🔄 Auto-refresh lancé…");
 
-        _refreshPromise = refreshToken()
-          .then(async (newJwt) => {
-            if (!newJwt?.jwt) {
-              console.error("❌ Refresh impossible → logout…");
-              await this.logout();
-              return null;
-            }
+  // =====================================================
+  // ⏳ DELAY (TEST / PROD)
+  // =====================================================
+  // const refreshDelay = Math.max(exp - now - 120000, 5000) // PROD
+const refreshDelay = Math.max(exp - now - 120000, 5000) // 2 min avant exp
 
-            // Mise à jour du store
-            this.jwt = newJwt.jwt;
-            localStorage.setItem("jwt", newJwt.jwt);
 
-            if (newJwt.refreshToken)
-              localStorage.setItem("refreshToken", newJwt.refreshToken);
+  console.log(
+    "⏳ [AutoRefresh] programmé dans",
+    Math.round(refreshDelay / 1000),
+    "sec"
+  )
 
-            if (newJwt.sessionId)
-              localStorage.setItem("sessionId", newJwt.sessionId);
+  // =====================================================
+  // 🔁 TIMER
+  // =====================================================
+  _refreshTimer = setTimeout(async () => {
+    if (this.isLoggingOut) {
+      console.log("⛔ [AutoRefresh] abort → logout")
+      return
+    }
 
-            // Sauvegarde en IndexedDB
-            await saveSessionData({
-              jwt: newJwt.jwt,
-              refreshToken: newJwt.refreshToken,
-              sessionId: newJwt.sessionId,
-            });
+    if (!navigator.onLine) {
+      console.log("📡 [AutoRefresh] offline → attente réseau")
+      window.addEventListener(
+        "online",
+        () => this.startAutoRefresh(),
+        { once: true }
+      )
+      return
+    }
 
-            console.log("✅ Refresh OK → replanning");
+    if (this.isRefreshingToken) {
+      console.log("⏳ [AutoRefresh] refresh déjà en cours → skip")
+      this.startAutoRefresh()
+      return
+    }
 
-            return newJwt.jwt;
-          })
-          .catch((err) => {
-            console.error("⚠️ Erreur refresh :", err);
-          })
-          .finally(() => {
-            _refreshPromise = null;
-            this.startAutoRefresh(); // replanification
-          });
+    // heartbeat owner
+    localStorage.setItem(
+      REFRESH_OWNER_KEY,
+      JSON.stringify({ tabId, ts: Date.now() })
+    )
 
-        await _refreshPromise;
+    console.log("🔄 [AutoRefresh] déclenché")
 
-      }, refreshDelay);
-    },
+    try {
+      await this.refreshJwt()
+      console.log("✅ [AutoRefresh] succès")
+    } catch (err) {
+      console.error("❌ [AutoRefresh] erreur", err)
+    } finally {
+      this.startAutoRefresh()
+    }
+  }, refreshDelay)
+}
+
+
+,
 
     // 🔐 Déconnexion complète (backend + nettoyage local)
     async logout() {
@@ -530,6 +590,17 @@ role: finalRole,
 }
 
       }
+window.addEventListener("storage", (e) => {
+  if (e.key !== REFRESH_PING_KEY) return
+
+  console.log("🔄 JWT mis à jour dans un autre onglet")
+
+  const jwt = localStorage.getItem("jwt")
+  if (jwt) {
+    const auth = useAuthStore()
+    auth.jwt = jwt
+  }
+})
 
       // 3️⃣ Normalisation du JWT (string)
       const finalJwt = typeof jwt === "string" ? jwt : jwt?.jwt;
@@ -544,26 +615,53 @@ role: finalRole,
       await new Promise(r => setTimeout(r, 0));
 
       // 5️⃣ Extraire infos du JWT
-      const payload = decodeJwt(finalJwt);
-      const email = payload?.email;
+     const payload = decodeJwt(finalJwt);
+const email = payload?.email;
 
-      this.user = this.user ?? {};
+this.user = {
+  role: payload?.role ?? null,
+  user_id: payload?.user_id ?? null,
+  prof_id: payload?.prof_id ?? null
+}
+console.log("🟢 AFTER JWT BUILD", JSON.parse(JSON.stringify(this.user)))
 
-      if (payload?.role) this.user.role = payload.role;
-      if (payload?.prof_id) this.user.prof_id = payload.prof_id;
+
+
 
       // 6️⃣ Charger le cache utilisateur si existant
       const cacheKey = email ? `userData_${email}` : null;
       const cached = cacheKey ? localStorage.getItem(cacheKey) : null;
 
       if (cached) {
-        const cachedUser = JSON.parse(cached);
+       const cachedUser = JSON.parse(cached)
+console.log("🟠 BEFORE CACHE MERGE", {
+  base: JSON.parse(JSON.stringify(this.user)),
+  cached: JSON.parse(cached)
+})
 
-        Object.assign(this.user, {
-          ...cachedUser,
-          role: this.user.role,    // Ne pas écraser role
-          prof_id: this.user.prof_id // Ni prof_id
-        });
+// 🔥 MERGE SAFE (jamais toucher aux IDs canoniques)
+Object.assign(this.user, {
+  ...cachedUser,
+
+  // 🔒 identités protégées
+  user_id: this.user.user_id,
+  prof_id: this.user.prof_id,
+  role: this.user.role,
+})
+;
+if (
+  this.user.user_id &&
+  this.user.prof_id &&
+  this.user.user_id === this.user.prof_id
+) {
+  console.error("💥 ID CORROMPU APRÈS CACHE", {
+    user_id: this.user.user_id,
+    prof_id: this.user.prof_id,
+    cachedUser
+  })
+}
+console.log("🔵 AFTER CACHE MERGE", JSON.parse(JSON.stringify(this.user)))
+
 
         // En parallèle, récupérer des données fraîches
         setTimeout(() => this.fetchUserData(), 0);
