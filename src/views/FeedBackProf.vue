@@ -103,8 +103,8 @@ export default {
       feedbackError: null,
       feedbackLoading: false,
       routes: {
-        GET: "AKfycbwCrvZUTP9W0dGCzgMO_wdfgQWXeke3xAWLiXIIR8TdT57IWE3V90xj_E2JZOxrtx4n2A/exec",
-        POST: "AKfycbwCrvZUTP9W0dGCzgMO_wdfgQWXeke3xAWLiXIIR8TdT57IWE3V90xj_E2JZOxrtx4n2A/exec",
+        GET: "AKfycbwwC5QwBDh0kXeBAk2bGsNW_PGd-wfQGzxLHVKiCg63jqKaJXadg1iooD-tbbAUr2bg5Q/exec",
+        POST: "AKfycbwwC5QwBDh0kXeBAk2bGsNW_PGd-wfQGzxLHVKiCg63jqKaJXadg1iooD-tbbAUr2bg5Q/exec",
       },
     };
   },
@@ -132,9 +132,15 @@ export default {
     if (data.feedbacks) {
       const all = data.feedbacks;
 
-      // 🔍 Identifier les feedbacks principaux : ceux dont ID_Cours ne commence pas par "ID"
-      const principaux = all.filter(fb => !fb.ID_Cours.startsWith("ID")); // Feedbacks principaux
-      const reponses = all.filter(fb => fb.ID_Cours && fb.ID_Cours.startsWith("ID")); // Réponses associées
+     const principaux = all.filter(fb => {
+  const idCours = fb.ID_Cours
+  return typeof idCours !== "string" || !idCours.startsWith("ID")
+})
+
+const reponses = all.filter(fb => {
+  const idCours = fb.ID_Cours
+  return typeof idCours === "string" && idCours.startsWith("ID")
+})
 
       // 💬 Associer chaque feedback à ses réponses via ID_Cours
       this.feedbacks = principaux.reverse().map(fb => ({
@@ -306,13 +312,13 @@ async toggleReadStatus(feedback) {
 getProxyURL(routeId, params = {}) {
   const baseURL = `https://script.google.com/macros/s/${routeId}`;
   const query = new URLSearchParams(params).toString();
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(`${baseURL}?${query}`)}`;
+  return `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(`${baseURL}?${query}`)}`;
 },
 
 // Méthode pour générer l'URL du proxy pour POST
 getProxyPostURL(routeId) {
   const baseURL = `https://script.google.com/macros/s/${routeId}`;
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`;
+  return `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(baseURL)}`;
 },
 
 // Méthode pour formater les dates

@@ -284,31 +284,36 @@ userData: {},
     },
   computed: {
 filteredFeedbacks() {
-  let list = this.feedbacks;
+  let list = this.feedbacks
 
-  // filtre par mois (déjà existant)
   if (this.selectedMonth) {
     list = list.filter(fb => {
-      const date = new Date(fb.Date_Cours || fb.Date_Publication);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      return key === this.selectedMonth;
-    });
+      const d = new Date(fb.Date_Cours || fb.Date_Publication)
+      if (isNaN(d)) return false
+
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      return key === this.selectedMonth
+    })
   }
 
-  // 🔥 filtre par statut
   if (this.filterStatut !== "ALL") {
     list = list.filter(fb => {
-      const statut = fb.Statut?.toLowerCase() || "";
-      if (this.filterStatut === "nonlu") return statut === "non lu";
-      if (this.filterStatut === "attente") return statut === "en attente";
-      if (this.filterStatut === "valide") return statut === "validé";
-      return true;
-    });
+      const statut = (fb.Statut || "").toLowerCase()
+      if (this.filterStatut === "nonlu") return statut === "non lu"
+      if (this.filterStatut === "attente") return statut === "en attente"
+      if (this.filterStatut === "valide") return statut === "validé"
+      return true
+    })
   }
 
-  return list;
+  return list
 }
+
+
+
 ,
+
+
  countNonLu() {
     return this.feedbacks.filter(fb =>
       (fb.Statut || "").toLowerCase() === "non lu"
@@ -347,16 +352,28 @@ filteredFeedbacks() {
   }
 },
 
-  async mounted() {
-  const auth = useAuthStore();
+async mounted() {
+  const auth = useAuthStore()
 
-  this.email = auth.user?.email || null;
-  this.prenom = auth.user?.prenom || null;
-  this.userData = auth.user || {};
+  this.email = auth.user?.email || null
+  this.prenom = auth.user?.prenom || null
+  this.userData = auth.user || {}
 
-  await this.fetchFeedbacks();
-  this.setDefaultMonth();
-},
+  await this.fetchFeedbacks()
+  await this.$nextTick()
+
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+
+  this.selectedMonth =
+    this.availableMonths.find(m => m.value === currentMonth)?.value
+    || this.availableMonths[0]?.value
+    || ""
+}
+
+
+,
+
   
     methods: {
         async deleteFeedback(id) {
@@ -396,6 +413,21 @@ filteredFeedbacks() {
 }
 
 
+,
+initCurrentMonth() {
+  if (!this.feedbacks.length) return
+
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+
+  const exists = this.feedbacks.some(fb => {
+    const d = new Date(fb.Date_Cours || fb.Date_Publication)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    return key === currentMonth
+  })
+
+  if (exists) this.selectedMonth = currentMonth
+}
 ,
 setDefaultMonth() {
   if (!this.feedbacks.length) return;

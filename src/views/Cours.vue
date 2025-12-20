@@ -201,6 +201,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { getValidToken } from "@/utils/api.ts"; // 🔐 Import sécurisé
 import { useAuthStore } from "@/stores/authStore.js";
+import { useCoursStore } from "@/stores/coursStore"
 
 
 export default {
@@ -218,6 +219,8 @@ const selectNextWeekFromNow = () => {
     selectedWeek.value = nextWeek;
   }
 };
+const coursStore = useCoursStore()
+const TTL = 15 * 60 * 1000 // 15 min
 
     const router = useRouter();
     const coursData = ref([]);
@@ -254,7 +257,35 @@ const fetchElevesInscrits = async () => {
     console.error("Erreur fetchElevesInscrits :", err);
   }
 };
+const CACHE_KEY = "cours_cache"
 
+
+const loadFromStore = () => {
+  const raw = localStorage.getItem(CACHE_KEY)
+  if (!raw) return false
+
+  try {
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > TTL) return false
+
+    coursData.value = data
+    return true
+  } catch {
+    return false
+  }
+}
+
+const saveToStore = () => {
+  localStorage.setItem(
+    CACHE_KEY,
+    JSON.stringify({
+      data: coursData.value,
+      ts: Date.now()
+    })
+  )
+}
+
+;
 const goToPreviousWeek = () => {
   if (!selectedWeek.value || weeks.value.length === 0) return;
 
@@ -299,7 +330,6 @@ const goToNextWeek = () => {
 
     // ✅ Récupérer les cours depuis Google Sheets
    const fetchCours = async (noCache = false) => {
-  loading.value = true;
   try {
     const jwt = await getValidToken();
     if (!profId.value) throw new Error("prof_id manquant");
@@ -319,12 +349,11 @@ const goToNextWeek = () => {
     coursData.value = Array.isArray(response.data)
   ? response.data
   : Object.values(response.data);
+saveToStore()
 
   } catch (e) {
     console.error("❌ fetchCours:", e);
-  } finally {
-    loading.value = false;
-  }
+  } 
 };
 
 
@@ -578,20 +607,34 @@ const selectClosestWeek = () => {
         .padStart(2, "0")}H${dateObj.getMinutes().toString().padStart(2, "0")}`;
     };
 
-    onMounted(async () => {
-    try {
-      const jwt = await getValidToken(); // 🔒 Récupère le token sécurisé
-      if (!jwt) throw new Error("Utilisateur non connecté");
-    } catch (error) {
-      console.warn("🔐 Redirection forcée vers login");
-      router.replace("/login");
-      return;
-    }
-await fetchElevesInscrits();
+onMounted(async () => {
+  // 1️⃣ sécurité auth
+  try {
+    await getValidToken()
+  } catch {
+    router.replace("/login")
+    return
+  }
 
-    await fetchCours();
-    selectClosestWeek();
-  });
+  // 2️⃣ tentative cache
+  const hasCache = loadFromStore()
+  console.log("🧠 COURS CACHE ?", hasCache, coursStore.ts)
+
+  if (hasCache) {
+    loading.value = false
+    selectClosestWeek()
+    return // ⛔ STOP ICI
+  }
+
+  // 3️⃣ pas de cache → fetch
+  loading.value = true
+  await fetchElevesInscrits()
+  await fetchCours()
+  selectClosestWeek()
+  loading.value = false
+})
+
+;
 
     return {
       coursData, loading, deleting, updating, selectedStudent, filterUpcoming, filteredCours,

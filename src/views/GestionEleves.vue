@@ -116,6 +116,7 @@
   import Layout from "@/views/Layout.vue";
   import { getValidToken } from "@/utils/api.ts";
   import { useAuthStore } from "@/stores/authStore.js";
+import { useGestionElevesStore } from "@/stores/gestionElevesStore"
 
   export default {
     name: "GestionEleves",
@@ -123,6 +124,7 @@
     data() {
       return {
             auth: useAuthStore(),   // ← nécessaire sinon this.auth = undefined
+store: useGestionElevesStore(),
 
         editing: {},
          updated: {},
@@ -145,11 +147,16 @@ champs: [
       };
     },
     async mounted() {
-      await this.fetchEleves();
-    },
+  const hasCache = this.loadFromStore()
+  this.loading = !hasCache
+
+  this.fetchEleves().finally(() => {
+    this.loading = false
+  })
+}
+,
     methods: {
     async fetchEleves() {
-  this.loading = true;
   this.error = null;
 
   const jwt = await getValidToken();
@@ -170,29 +177,44 @@ champs: [
 
   const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
 
-  try {
-    const res = await fetch(url);
-    const result = await res.json();
-    console.log("📦 Résultat brut getelevesbyprof :", result);
+ try {
+  const res = await fetch(url)
+  const result = await res.json()
+  console.log("📦 Résultat brut getelevesbyprof :", result)
 
-    if (result?.success && Array.isArray(result.eleves)) {
-      this.eleves = result.eleves.sort((a, b) => {
-        if (a.statut === b.statut) return 0;
-        return a.statut === "inscrit" ? -1 : 1;
-      });
-    } else {
-      this.error = result.message || "Format inattendu reçu depuis le serveur.";
-    }
+  if (result?.success && Array.isArray(result.eleves)) {
+    this.eleves = result.eleves.sort((a, b) => {
+      if (a.statut === b.statut) return 0
+      return a.statut === "inscrit" ? -1 : 1
+    })
 
-  } catch (err) {
-    console.error("❌ Erreur fetchEleves :", err);
-    this.error = "Erreur de connexion au serveur.";
-  } finally {
+    this.saveToStore()
+  } else {
+    this.error = result.message || "Format inattendu reçu depuis le serveur."
+  }
+
+} catch (err) {
+  console.error("❌ Erreur fetchEleves :", err)
+  this.error = "Erreur de connexion au serveur."
+}
+finally {
     this.loading = false;
   }
 }
 ,
 
+loadFromStore() {
+  const TTL = 2 * 60 * 1000
+  if (!this.store.eleves) return false
+  if (Date.now() - this.store.ts > TTL) return false
+
+  this.eleves = this.store.eleves
+  return true
+},
+saveToStore() {
+  this.store.eleves = this.eleves
+  this.store.ts = Date.now()
+},
 
 
       toggleExpand(email) {

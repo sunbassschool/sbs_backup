@@ -1,12 +1,37 @@
 import { createApp } from "vue";
+import { saveSessionData } from "@/utils/AuthDBManager"
+import piniaPersist from "pinia-plugin-persistedstate"
 import App from "@/App.vue";
 import { createPinia } from "pinia";
-export const pinia = createPinia();
+
+// 🔒 BOOTSTRAP SESSION AVANT VUE / PINIA (NON BLOQUANT)
+const jwt = localStorage.getItem("jwt")
+const refreshToken = localStorage.getItem("refreshToken")
+const sessionId = localStorage.getItem("sessionId")
+
+if (jwt && refreshToken && sessionId) {
+  saveSessionData({ jwt, refreshToken, sessionId })
+    .catch(() => {})
+}
+
+export const pinia = createPinia()
+pinia.use(piniaPersist)
+
+const app = createApp(App)
+app.use(pinia)
 
 import router from "./router";
-window.vueRouterPush = (path) => {
-  router.push(path)
+declare global {
+  interface Window {
+    vueRouterPush: (path: string) => void
+  }
 }
+
+// ✅ FONCTION GLOBALE SAFE
+window.vueRouterPush = (path: string) => {
+  if (path) router.push(path)
+}
+
 import { useAuthStore } from "@/stores/authStore.js";
 
 // Ajoute ça :
@@ -30,7 +55,12 @@ import {
 // ============================================================
 // 🎸 SunBassSchool — Service Worker UI Helpers
 // ============================================================
-
+let deviceId = localStorage.getItem("device_id")
+if (!deviceId) {
+  deviceId = crypto.randomUUID()
+  localStorage.setItem("device_id", deviceId)
+}
+export { deviceId }
 function showUpdateToast(registration: ServiceWorkerRegistration) {
   let toast = document.getElementById("update-toast");
 

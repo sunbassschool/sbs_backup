@@ -49,3 +49,6 @@ body {
     padding: 0 !important;
   }
 }
+body {
+  scrollbar-gutter: stable;
+}

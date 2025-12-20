@@ -456,8 +456,6 @@ import Layout from "@/views/Layout.vue";
 import { getValidToken } from "@/utils/api.ts";
 import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
-import { useAuthStore } from "@/stores/authStore.js";
-
 export default {
   name: "AdminFeedback",
   components: { Layout,    QuillEditor,
@@ -465,8 +463,7 @@ export default {
   
   data() {
     return {
-          auth: useAuthStore(), // ✅ AJOUT ICI
-
+      
       eleves: [],
           elevesHorsInscrits: [], // ⬅️ Ajout ici
 
@@ -503,7 +500,7 @@ isLoadingEleves: false,
       nouveauFeedback: "",
       feedbackSentMessage: "",
       feedbacks: [],
-      apiURL: "https://script.google.com/macros/s/AKfycbxhmAc6g0xleZ6IzroltS82Sj_ZXdvj0E4-V6qUQ3kpqoQbqVzEAB09lMz36GP2QVKnKg/exec"
+      apiURL: "https://script.google.com/macros/s/AKfycbwipEXouCRxHRYp1R-hHvAp1vJbaQeqZag1f4vl3KBnfhtu5vU6XXM9v-LlhafPPy6q/exec"
     };
     
   },
@@ -799,7 +796,10 @@ async fetchPlanningForEleve(emailVal, prenomVal) {
     this.datesCoursEleve = [];
   }
 }
-
+,
+limitedFeedbacks() {
+  return this.filteredFeedbacksByMonth.slice(0, this.feedbackDisplayLimit);
+}
 ,
 toggleFeedbackDetails(fbID) {
   if (this.openedFeedbacks.includes(fbID)) {
@@ -848,56 +848,43 @@ async exportPDF() {
 ,
 
 async fetchEleves() {
-  this.isLoadingEleves = true;
-
-  const profId = this.auth.user?.prof_id;
-  if (!profId) {
-    console.warn("❌ prof_id manquant");
-    this.isLoadingEleves = false;
-    return;
-  }
+    this.isLoadingEleves = true; // 🟡 début chargement
 
   const url = this.getProxyURL({ route: "geteleves" });
+  console.log("📡 URL utilisée pour geteleves :", url);
 
   try {
-  console.log("👤 prof_id store :", this.auth.user?.prof_id);
-console.log("🌐 URL geteleves :", url);
-
     const res = await fetch(url);
     const data = await res.json();
-console.log("📥 geteleves RAW :", data);
+    console.log("📥 Réponse reçue :", data);
 
-const rows = Object.values(data).filter(
-  e => typeof e === "object" && e.email
-);
+    if (Array.isArray(data)) {
+      // 🧹 Filtrer les non-admins
+const nonAdmins = data.filter(e => !e.role || e.role.toLowerCase() !== "admin");
+const ins = nonAdmins.filter(e => e.statut === "inscrit");
+const hors = nonAdmins.filter(e => e.statut !== "inscrit");
 
-const profId = this.auth.user?.prof_id;
-if (!profId) return;
-
-// ✅ FILTRE PAR PROF
-const elevesDuProf = rows.filter(e => e.prof_id === profId);
-
-this.eleves = elevesDuProf
+console.log("Élèves inscrits :", ins.length, ins);
+console.log("Élèves non inscrits :", hors.length, hors);
+this.eleves = nonAdmins
   .filter(e => e.statut === "inscrit")
-  .sort((a, b) =>
-    a.prenom.localeCompare(b.prenom, "fr", { sensitivity: "base" })
-  );
+  .sort((a, b) => a.prenom.localeCompare(b.prenom, 'fr', { sensitivity: 'base' }));
 
-this.elevesHorsInscrits = elevesDuProf
+this.elevesHorsInscrits = nonAdmins
   .filter(e => e.statut !== "inscrit")
-  .sort((a, b) =>
-    a.prenom.localeCompare(b.prenom, "fr", { sensitivity: "base" })
-  );
+  .sort((a, b) => a.prenom.localeCompare(b.prenom, 'fr', { sensitivity: 'base' }));
 
 
+      console.log("✅ Éleves triés (hors admins) :", this.eleves.map(e => e.prenom));
+    } else {
+      console.warn("❌ Format inattendu reçu :", data);
+    }
   } catch (err) {
-    console.error("❌ Erreur geteleves :", err);
-  } finally {
-    this.isLoadingEleves = false;
+    console.error("❌ Erreur lors du fetch geteleves :", err);
+  }finally {
+    this.isLoadingEleves = false; // ✅ fin chargement
   }
 }
-
-
 
 ,
     resetEleveSelection() {

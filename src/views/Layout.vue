@@ -286,21 +286,20 @@
       <router-link v-if="isEleve" to="/dashboard" class="nav-link">
         <i class="bi bi-house"></i><span>Accueil</span>
       </router-link>
-
-      <router-link v-if="isEleve" to="/moncompte" class="nav-link">
-        <i class="bi bi-person"></i><span>Mon compte</span>
-      </router-link>
-
       <router-link v-if="isEleve" to="/Feedback" class="nav-link">
         <i class="bi bi-chat-left"></i><span>Feedback</span>
       </router-link>
+           <router-link v-if="isEleve" to="/replay" class="nav-link">
+        <i class="bi bi-play-btn"></i><span>Replay</span>
+      </router-link>
+
 
       <router-link v-if="isEleve" to="/planning" class="nav-link">
         <i class="bi bi-calendar-check"></i><span>Plannings</span>
       </router-link>
 
-      <router-link v-if="isEleve" to="/replay" class="nav-link">
-        <i class="bi bi-play-btn"></i><span>Replay</span>
+   <router-link v-if="isEleve" to="/mes-uploads" class="nav-link">
+        <i class="bi bi-calendar-check"></i><span>Drive</span>
       </router-link>
 
       <router-link v-if="isEleve" to="/videos" class="nav-link">
@@ -317,42 +316,28 @@
 
 
       <!-- Prof -->
+        <router-link v-if="isProf" to="/dashboard" class="nav-link">
+        <i class="bi bi-house"></i><span>Accueil</span>
+      </router-link>
       <router-link v-if="isProf" to="/dashboard-prof" class="nav-link">
         <i class="bi bi-speedometer2"></i><span>Dashboard</span>
       </router-link>
 
       <router-link v-if="isProf" to="/FeedBackProf" class="nav-link">
-        <i class="bi bi-chat"></i><span>Mes Feedbacks </span>
+        <i class="bi bi-chat"></i><span>Feedbacks </span>
       </router-link>
 
       <router-link v-if="isProf" to="/gestioneleves" class="nav-link">
-        <i class="bi bi-people"></i><span>Mes élèves</span>
+        <i class="bi bi-people"></i><span>Élèves</span>
       </router-link>
-
+<router-link v-if="isProf" to="/cours" class="nav-link">
+  <i class="bi bi-tools"></i><span>Planning</span>
+</router-link>
       <router-link v-if="isProf" to="/CreatePlanning" class="nav-link">
   <i class="bi bi-calendar-event"></i><span>Créer planning</span>
 </router-link>
 
-<router-link v-if="isProf" to="/cours" class="nav-link">
-  <i class="bi bi-tools"></i><span>Gestion des cours</span>
-</router-link>
-      <!-- Admin -->
-      <router-link v-if="isAdmin" to="/AdminFeedBack" class="nav-link">
-        <i class="bi bi-pencil-square"></i><span>Feedbacks Admin</span>
-      </router-link>
-
-      <router-link v-if="isAdmin" to="/CreatePlanning" class="nav-link">
-        <i class="bi bi-calendar-event"></i><span>Planning</span>
-      </router-link>
-
-      <router-link v-if="isAdmin" to="/register-cursus" class="nav-link">
-        <i class="bi bi-person-plus"></i><span>Ajouter élève</span>
-      </router-link>
-
-      <router-link v-if="isAdmin" to="/cours" class="nav-link">
-        <i class="bi bi-tools"></i><span>Cours</span>
-      </router-link>
-
+  
  
 
     </div>
@@ -445,7 +430,6 @@ export default {
     const router = useRouter();
     const route = useRoute();
 
-    console.log("💥 USER STORE (Layout):", authStore.user);
 
 /* ------------------------------------------------------------------------
    👤 USER & ROLES — VERSION SAAS MULTI-PROF (FIX CASE-SENSITIVE)

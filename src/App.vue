@@ -1,5 +1,6 @@
 
 <template>
+  
   <div class="app-container">
 
     <!-- 🔐 Message + loader lors de la déconnexion -->

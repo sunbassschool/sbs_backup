@@ -2,22 +2,30 @@
   <div class="upload-form">
 
     <!-- DROP ZONE -->
-    <label class="drop-zone">
-      <input
-        type="file"
-        class="file-input"
-        @change="onFileSelect"
-      />
+<label
+  class="drop-zone"
+  @dragover.prevent
+  @drop.prevent
+>
+   <input
+  type="file"
+  class="file-input"
+  multiple
+  @change="onFileSelect"
+/>
 
-      <div v-if="!file" class="drop-placeholder">
+
+<div v-if="!currentFile" class="drop-placeholder">
+
         📂 Dépose un fichier ici<br />
         <span>ou clique pour choisir</span>
       </div>
 
       <div v-else class="file-selected">
-        <strong>{{ file.name }}</strong>
-        <small>{{ (file.size / 1024 / 1024).toFixed(2) }} Mo</small>
-      </div>
+<strong>{{ currentFile?.name }}</strong>
+<small v-if="currentFile">
+  {{ (currentFile.size / 1024 / 1024).toFixed(2) }} Mo
+</small>      </div>
     </label>
 
     <!-- PROGRESS -->
@@ -28,7 +36,7 @@
     <!-- ACTIONS -->
     <button
       class="upload-btn"
-      :disabled="!file || uploading"
+      :disabled="!currentFile || uploading"
       @click="startUpload"
     >
       <span v-if="!uploading">📤 Envoyer</span>
@@ -44,14 +52,14 @@
 
 
 <script setup>
-import { ref,computed } from "vue"
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getValidToken } from "@/utils/api.ts"
 
 const auth = useAuthStore()
-const emit = defineEmits(["uploaded"])
+const emit = defineEmits(["uploaded", "done"])
 
-const GAS_POST_ROUTE = "AKfycbzScowGkxqaoGKkGlldLEtGCBelWuRbd015UQZ2MOF-WU3gmtNdqtYTZRK4oha5vMgM1A"
+const GAS_POST_ROUTE = "AKfycbywruw_pMa_mKp01OFXrlzpj2bXGdpppFW59S5jKa-666sxavdw5vLF-PQLlR77dkkB_A"
 
 const getProxyPostURL = () => {
   const baseURL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`
@@ -68,7 +76,11 @@ const props = defineProps({
 
 
 
+const filesQueue = ref([])
+const currentFile = ref(null)
+
 const file = ref(null)
+
 const uploading = ref(false)
 const progress = ref(0)
 const successUrl = ref("")
@@ -82,131 +94,160 @@ const isEleveContext = computed(() => {
 })
 
 const onFileSelect = e => {
-  file.value = e.target.files[0]
+  // ⛔ si un upload est déjà en cours via drop
+  if (filesQueue.value.length || uploading.value) return
+
+  filesQueue.value = Array.from(e.target.files)
   error.value = ""
+  startNextUpload()
 }
 
-const startUpload = async () => {
-  if (!file.value) return
 
- // ⛔ élève connecté → eleveId obligatoire
+const uploadSingleFile = (file) => {
+  return new Promise(async (resolve, reject) => {
+    if (!file) return resolve()
 
+    uploading.value = true
+    progress.value = 0
+    error.value = ""
+    successUrl.value = ""
 
+    try {
+      const jwt = await getValidToken()
+      if (!jwt) throw new Error("JWT manquant")
 
-  uploading.value = true
-  progress.value = 0
-  error.value = ""
-  successUrl.value = ""
+      const proxyUrl = getProxyPostURL()
 
-  try {
-    const jwt = await getValidToken()
-    if (!jwt) throw new Error("JWT manquant")
-
-    const proxyUrl = getProxyPostURL()
-const tokenPayload = {
-  route: "getuploadtoken",
-  jwt,
-  prof_id: auth.user.prof_id
-}
-
-if (props.eleveId) tokenPayload.eleve_id = props.eleveId
-if (props.coursId) tokenPayload.cours_id = props.coursId
-
-    // 1️⃣ TOKEN
- const tokenRes = await fetch(proxyUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(tokenPayload)
-}).then(r => r.json())
-
-
-    if (!tokenRes.success) throw new Error(tokenRes.error)
-
-    // 2️⃣ UPLOAD PHP
-    const formData = new FormData()
-    formData.append("token", tokenRes.token)
-    formData.append("file", file.value)
-
-    const xhr = new XMLHttpRequest()
-    xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
-
-    xhr.upload.onprogress = e => {
-      if (e.lengthComputable) {
-        progress.value = Math.round((e.loaded / e.total) * 100)
+      const tokenPayload = {
+        route: "getuploadtoken",
+        jwt,
+        prof_id: auth.user.prof_id
       }
+      if (props.eleveId) tokenPayload.eleve_id = props.eleveId
+      if (props.coursId) tokenPayload.cours_id = props.coursId
+
+      const tokenRes = await fetch(proxyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tokenPayload)
+      }).then(r => r.json())
+
+      if (!tokenRes.success) throw new Error(tokenRes.error)
+
+      const formData = new FormData()
+      formData.append("token", tokenRes.token)
+      formData.append("file", file)
+
+      const xhr = new XMLHttpRequest()
+      xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
+
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          progress.value = Math.round((e.loaded / e.total) * 100)
+        }
+      }
+
+      xhr.onload = async () => {
+        try {
+          const res = JSON.parse(xhr.responseText)
+          if (!res.success) throw new Error(res.error)
+
+          const attachPayload = {
+            route: "attachfiletocours",
+            jwt,
+            prof_id: auth.user.prof_id,
+            file_url: res.url,
+            file_name: res.name,
+            file_size: res.size,
+            file_type: file.type,
+            folder_id: props.folderId
+          }
+          if (props.eleveId) attachPayload.eleve_id = props.eleveId
+          if (props.coursId) attachPayload.cours_id = props.coursId
+
+          const attachRes = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(attachPayload)
+          }).then(r => r.json())
+
+          if (!attachRes.success) throw new Error("Erreur Google Sheet")
+
+          emit("uploaded", {
+            upload_id: attachRes.upload_id,
+            cours_id: props.coursId,
+            eleve_id: props.eleveId,
+            file_name: res.name,
+            file_url: res.url,
+            file_size: res.size,
+            file_type: file.type,
+            folder_id: props.folderId ?? null,
+            created_at: new Date().toISOString()
+          })
+
+          uploading.value = false
+          resolve() // 🔥 FIN RÉELLE
+        } catch (err) {
+          uploading.value = false
+          reject(err)
+        }
+      }
+
+      xhr.onerror = () => {
+        uploading.value = false
+        reject(new Error("Erreur réseau upload"))
+      }
+
+      xhr.send(formData)
+
+    } catch (e) {
+      uploading.value = false
+      reject(e)
     }
-
- xhr.onload = async () => {
-  let res
-  try {
-    res = JSON.parse(xhr.responseText)
-  } catch {
-    error.value = "Réponse upload invalide"
-    uploading.value = false
-    return
-  }
-
-  if (!res.success) {
-    error.value = res.error || "Erreur upload PHP"
-    uploading.value = false
-    return
-  }
-const attachPayload = {
-  route: "attachfiletocours",
-  jwt,
-  prof_id: auth.user.prof_id,
-  file_url: res.url,
-  file_name: res.name,
-  file_size: res.size,
-  file_type: file.value.type,
-  folder_id: props.folderId
+  })
 }
 
-if (props.eleveId) attachPayload.eleve_id = props.eleveId
-if (props.coursId) attachPayload.cours_id = props.coursId
 
-const attachRes = await fetch(proxyUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(attachPayload)
-}).then(r => r.json())
+const onDroppedFiles = e => {
+  const { files, folder_id } = e.detail || {}
+  if (!files?.length) return
 
-if (!attachRes.success) {
-  error.value = "Erreur enregistrement Google Sheet"
-  uploading.value = false
-  return
-}
-console.log("🚀 EMIT upload", {
-  folderIdProp: props.folderId,
-  coursId: props.coursId,
-  file: res.name
+  // 🔥 on prend le premier fichier (ou fais une loop plus tard)
+filesQueue.value = Array.from(files)
+error.value = ""
+nextTick(() => {
+  startNextUpload()
 })
 
-  // 🔥 EMIT AVANT TOUT
-  emit("uploaded", {
-    upload_id: attachRes.upload_id,
-    cours_id: props.coursId,
-    eleve_id: props.eleveId,
-    file_name: res.name,
-    file_url: res.url,
-    file_size: res.size,
-    file_type: file.value.type,
-    folder_id: props.folderId ?? null,
-    created_at: new Date().toISOString()
-  })
 
-  // ✅ seulement maintenant
-  successUrl.value = res.url
-  uploading.value = false
+  // sécurité : forcer le bon dossier
+  if (folder_id && folder_id !== props.folderId) {
+    console.warn("📁 folder mismatch, ignoré", folder_id)
+  }
+}
+const startNextUpload = async () => {
+  if (uploading.value) return
+
+  if (!filesQueue.value.length) {
+    currentFile.value = null
+    emit("done") // 🔥 TOUT EST FINI
+    return
+  }
+
+  currentFile.value = filesQueue.value.shift()
+  await uploadSingleFile(currentFile.value)
+
+  startNextUpload()
 }
 
-    xhr.onerror = () => (error.value = "Erreur réseau upload")
-    xhr.send(formData)
 
-  } catch (e) {
-    error.value = e.message
-  } 
-}
+onMounted(() => {
+  window.addEventListener("sbs-drop-files", onDroppedFiles)
+})
+
+onUnmounted(() => {
+  window.removeEventListener("sbs-drop-files", onDroppedFiles)
+})
 
 </script>
 <style scoped>

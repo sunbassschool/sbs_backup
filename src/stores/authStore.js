@@ -15,6 +15,16 @@ import {
 } from "@/utils/api.ts";
 const REFRESH_OWNER_KEY = "sbs_refresh_owner"
 const REFRESH_PING_KEY  = "sbs_refresh_ping"
+const SAFE_USER_CACHE_KEYS = [
+  "prenom",
+  "nom",
+  "email",
+  "telephone",
+  "objectif",
+  "playlist_youtube",
+  "espace_google_drive",
+  "avatar"
+]
 
 let _refreshTimer = null;
 let _refreshPromise = null;
@@ -29,7 +39,7 @@ export const useAuthStore = defineStore("auth", {
   // --------------------------------------------------------------------------
   state: () => ({
     menuOpen: false,
-
+ jwtReady: false,
     jwt: localStorage.getItem("jwt") || null,
     refreshToken: localStorage.getItem("refreshToken") || null,
     sessionId: localStorage.getItem("sessionId") || null,
@@ -42,7 +52,7 @@ export const useAuthStore = defineStore("auth", {
     impersonateStudent: localStorage.getItem("impersonateStudent") === "true",
 
     authReady: false,           // L'app est prête
-    jwtReady: false,            // Le JWT est prêt pour l'UI
+               // Le JWT est prêt pour l'UI
     authLoading: false,         // Flag de chargement (login / fetch user ...)
 
     isRefreshingToken: false,   // Flag pour empêcher un double refresh simultané
@@ -137,7 +147,7 @@ export const useAuthStore = defineStore("auth", {
         const jwt = this.jwt;
         if (!jwt) return;
 
-        const url = `https://script.google.com/macros/s/AKfycbxpZtZQq9TVZZGEt2SilXH9RQ1liviv1TYIgC6gm6O7P6lba0xR8mKyxLSW3VVJNS6m5w/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
+        const url = `https://script.google.com/macros/s/AKfycbyEXzfQ7iiR7TE-R0kaSZ7HBp_2TyOThRhqXm4_B6knM52AN3z3OEy5xIUgYLMAsaMOGw/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
         const proxy = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
         const res = await fetch(proxy);
@@ -152,26 +162,31 @@ export const useAuthStore = defineStore("auth", {
     },
 
     // ♻️ Essaye de restaurer la session depuis IndexedDB (ou fallback localStorage)
-    async restoreSessionFromStorage() {
-      const jwtDB = await readKV("jwt");
-      const rtDB = await readKV("refreshToken");
-      const sidDB = await readKV("sessionId");
+async restoreSessionFromStorage() {
+  // ⚠️ NE PAS TOUCHER sessionId s’il est déjà défini
+  if (this.sessionId) {
+    console.warn("🔒 SessionId déjà présent, restauration ignorée :", this.sessionId);
+    return;
+  }
 
-      const jwt = localStorage.getItem("jwt") || jwtDB || null;
-      const rt = localStorage.getItem("refreshToken") || rtDB || null;
-      const sid = localStorage.getItem("sessionId") || sidDB || null;
+  const jwtDB = await readKV("jwt");
+  const rtDB = await readKV("refreshToken");
+  const sidDB = await readKV("sessionId");
 
-      this.jwt = jwt;
-      this.refreshToken = rt;
-      this.sessionId = sid;
+  const jwt = localStorage.getItem("jwt") ?? jwtDB ?? null;
+  const rt = localStorage.getItem("refreshToken") ?? rtDB ?? null;
+  const sid = localStorage.getItem("sessionId") ?? sidDB ?? null;
 
-      // Si la session est complète, on sauvegarde dans IndexedDB
-      if (jwt && rt && sid) {
-        await saveSessionData({ jwt, refreshToken: rt, sessionId: sid });
-      } else {
-        console.warn("⚠️ Session incomplète → pas d’écriture IndexedDB");
-      }
-    },
+  this.jwt = jwt;
+  this.refreshToken = rt;
+
+  if (sid) {
+    this.sessionId = sid;
+    console.log("♻️ sessionId restauré :", sid);
+  }
+}
+
+,
 
     // 🧪 (Compat legacy) Permet de définir un JWT manuellement depuis l'extérieur (ex: api.ts)
     setUserToken(jwt) {
@@ -194,16 +209,17 @@ export const useAuthStore = defineStore("auth", {
       }
 
       // Détermination de la sessionId finale
-      const finalSessionId =
-        sessionId ||
-        this.sessionId ||
-        localStorage.getItem("sessionId") ||
-        (await getSessionIdFromDB());
+    // 🔥 SOURCE DE VÉRITÉ = BACKEND
+if (!sessionId) {
+  throw new Error("❌ sessionId manquant depuis le backend")
+}
+if (this.sessionId && this.sessionId !== sessionId) {
+  console.warn("⚠️ sessionId différent détecté ! Ancien =", this.sessionId, "| Nouveau =", sessionId)
+}
+this.sessionId = sessionId
+localStorage.setItem("sessionId", sessionId)
 
-      if (finalSessionId) {
-        this.sessionId = finalSessionId;
-        localStorage.setItem("sessionId", finalSessionId);
-      }
+
 
       // Si des données user sont fournies, on fusionne avec l'existant
       if (userData) {
@@ -229,7 +245,7 @@ export const useAuthStore = defineStore("auth", {
     return false;
   }
 
-  const routeID = "AKfycbxpZtZQq9TVZZGEt2SilXH9RQ1liviv1TYIgC6gm6O7P6lba0xR8mKyxLSW3VVJNS6m5w";
+  const routeID = "AKfycbyEXzfQ7iiR7TE-R0kaSZ7HBp_2TyOThRhqXm4_B6knM52AN3z3OEy5xIUgYLMAsaMOGw";
   const rawUrl = `https://script.google.com/macros/s/${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(jwtString)}`;
   const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(rawUrl)}`;
 
@@ -305,7 +321,12 @@ this.user = {
 };
 
 
-
+const cacheUser = {}
+for (const key of SAFE_USER_CACHE_KEYS) {
+  if (builtUser[key] !== undefined) {
+    cacheUser[key] = builtUser[key]
+  }
+}
     // 4️⃣ Cache local
     localStorage.setItem(`userData_${data.email}`, JSON.stringify(builtUser));
 
@@ -322,90 +343,135 @@ this.user = {
 
     // 🔄 Rafraîchit le JWT + éventuellement refreshToken & sessionId
     // retry = true permet un second essai après échec
-    async refreshJwt(retry = false) {
-      if (this.isLoggingOut) return null;
-      if (this.isRefreshingToken) return null;
+ async refreshJwt() {
+  if (!this.isInitDone) {
+  console.warn("⏸️ refresh ignoré → init en cours");
+  return this.jwt;
+}
 
-      this.isRefreshingToken = true;
+  if (this.isLoggingOut) {
+    console.warn("⛔ refreshJwt annulé → logout en cours");
+    return null;
+  }
 
-      try {
-        const result = await refreshToken();
-        // result attendu = { jwt: "...", refreshToken: "...", sessionId: "..." }
+  if (this.isRefreshingToken) {
+    console.warn("⏳ refreshJwt ignoré → déjà en cours");
+    return null;
+  }
 
-        if (!result || (!result.jwt && typeof result !== "string")) {
-          throw new Error("JWT manquant après refresh");
-        }
+  this.isRefreshingToken = true;
+  console.log("🔄 refreshJwt → start");
 
-        const jwtString = typeof result === "string" ? result : result.jwt;
+  try {
+const result = await refreshToken({
+  refreshToken: this.refreshToken,
+  sessionId: this.sessionId,
+  deviceId: this.sessionId // OK temporaire
+});
+    console.log("🧪 refreshJwt result =", result);
 
-        if (!jwtString || typeof jwtString !== "string") {
-          throw new Error("JWT invalide (pas une string)");
-        }
+    // ⛔ STOP NET si refresh invalide
+if (!result || !result.jwt || typeof result.jwt !== "string") {
+  console.warn("❌ refreshJwt: refresh invalide → session conservée")
+  this.refreshFailed = true
 
-        // Mise à jour du JWT
-        this.jwt = jwtString;
-        localStorage.setItem("jwt", jwtString);
-localStorage.setItem(REFRESH_PING_KEY, Date.now().toString())
+  if (!this.jwt || isJwtExpired(this.jwt)) {
+    this.stopAutoRefresh()
+  }
 
-        // Mise à jour du refreshToken si fourni
-        if (result.refreshToken) {
-          this.refreshToken = result.refreshToken;
-          localStorage.setItem("refreshToken", result.refreshToken);
-        }
+  return this.jwt || null
+}
 
-        // Mise à jour du sessionId si fourni
-        if (result.sessionId) {
-          this.sessionId = result.sessionId;
-          localStorage.setItem("sessionId", result.sessionId);
-        }
 
-        // Décodage pour garder user cohérent (role, prof_id)
-        const payload = decodeJwt(jwtString);
+    // ✅ SUCCÈS RÉEL
+    this.jwt = result.jwt;
+    this.refreshToken = result.refreshToken || this.refreshToken;
+    this.sessionId = result.sessionId || this.sessionId;
 
-        if (!this.user) this.user = {};
-        if (payload?.role) this.user.role = payload.role;
-        if (payload?.prof_id) this.user.prof_id = payload.prof_id;
+    localStorage.setItem("jwt", this.jwt);
+    if (this.refreshToken)
+      localStorage.setItem("refreshToken", this.refreshToken);
+    if (this.sessionId)
+      localStorage.setItem("sessionId", this.sessionId);
 
-        // Marquer la session comme OK
-        this.refreshFailed = false;
-        this.authReady = true;
-        this.jwtReady = true;
+    localStorage.setItem(REFRESH_PING_KEY, Date.now().toString());
 
-        // Sauvegarde complète dans IndexedDB
-        await saveSessionData({
-          jwt: this.jwt,
-          refreshToken: this.refreshToken,
-          sessionId: this.sessionId,
-        });
+    const payload = decodeJwt(this.jwt);
+    console.log("🧠 refreshJwt payload =", payload);
 
-        return jwtString;
+   // ❌ NE RIEN TOUCHER DANS user AU REFRESH
+// ❌ NE PAS TOUCHER authReady / jwtReady
 
-      } catch (err) {
-        console.error("❌ refreshJwt error :", err);
-        this.refreshFailed = true;
+this.refreshFailed = false;
 
-        if (!retry) {
-          setTimeout(() => {
-            if (!this.isLoggingOut) this.refreshJwt(true);
-          }, 5000);
-        } else {
-          this.logout();
-        }
 
-        return null;
+    //await saveSessionData({
+     // jwt: this.jwt,
+     // refreshToken: this.refreshToken,
+     // sessionId: this.sessionId,
+   // });
 
-      } finally {
-        this.isRefreshingToken = false;
-      }
-    },
+    console.log("✅ refreshJwt succès → JWT mis à jour");
+    return this.jwt;
+
+  } catch (err) {
+  console.error("⚠️ refreshJwt FAILED (session conservée)", err)
+
+  this.refreshFailed = true
+
+  // ⛔ arrêt auto-refresh SEULEMENT si plus de JWT valide
+  if (!this.jwt || isJwtExpired(this.jwt)) {
+    console.warn("⛔ AutoRefresh stoppé → session réellement invalide")
+    this.stopAutoRefresh()
+  }
+
+  return this.jwt || null
+}
+ finally {
+    this.isRefreshingToken = false;
+    console.log("🔚 refreshJwt → end");
+  }
+}
+,
 
     // ⏰ Planifie l’auto‑refresh du JWT avant expiration (avec timer)
+
+
+
 startAutoRefresh() {
   const REFRESH_OWNER_KEY = "sbs_refresh_owner"
-  const OWNER_TTL = 15000 // 15 sec
+  const OWNER_TTL = 15000 // 15s
+const payload = decodeJwt(this.jwt)
+const expMs = payload?.exp ? payload.exp * 1000 : 0
+const now = Date.now()
+
+const LEEWAY = 60_000
+const MIN_DELAY = 15_000
+const MAX_DELAY = 10 * 60_000
+
+let REFRESH_DELAY = expMs - now - LEEWAY
+REFRESH_DELAY = Math.max(MIN_DELAY, Math.min(REFRESH_DELAY, MAX_DELAY))
 
   // =====================================================
-  // 🧠 TAB ID STABLE
+  // 🧱 GUARDS
+  // =====================================================
+  if (!this.isInitDone) {
+    console.log("⏸️ [AutoRefresh] init non terminée")
+    return
+  }
+
+  if (this.refreshFailed) {
+    console.log("⛔ [AutoRefresh] désactivé → refreshFailed")
+    return
+  }
+
+  if (!this.jwt) {
+    console.log("⛔ [AutoRefresh] annulé → pas de JWT")
+    return
+  }
+
+  // =====================================================
+  // 🧠 TAB ID
   // =====================================================
   let tabId = sessionStorage.getItem("tab_id")
   if (!tabId) {
@@ -414,34 +480,12 @@ startAutoRefresh() {
   }
 
   // =====================================================
-  // 🧹 CLEAN TIMER
+  // 👑 OWNER / FOLLOWER (AVANT toute action)
   // =====================================================
-  if (_refreshTimer) {
-    clearTimeout(_refreshTimer)
-    _refreshTimer = null
-  }
 
-  // =====================================================
-  // 🔐 JWT CHECK
-  // =====================================================
-  if (!this.jwt) {
-    console.log("⛔ [AutoRefresh] annulé → pas de JWT")
-    return
-  }
-
-  const payload = decodeJwt(this.jwt)
-  const exp = payload?.exp ? payload.exp * 1000 : null
-  if (!exp) {
-    console.log("⛔ [AutoRefresh] annulé → exp manquant")
-    return
-  }
-
-  // =====================================================
-  // 👑 OWNER / FOLLOWER AVEC TTL
-  // =====================================================
   let owner = null
-  const rawOwner = localStorage.getItem(REFRESH_OWNER_KEY)
 
+  const rawOwner = localStorage.getItem(REFRESH_OWNER_KEY)
   if (rawOwner) {
     try {
       owner = JSON.parse(rawOwner)
@@ -451,43 +495,40 @@ startAutoRefresh() {
     }
   }
 
- const now = Date.now()
-const ownerExpired = !owner?.ts || (now - owner.ts > OWNER_TTL)
+  const ownerExpired = !owner?.ts || (now - owner.ts > OWNER_TTL)
 
-// 🔥 takeover immédiat si seul onglet actif
-if (document.visibilityState === "visible" && document.hasFocus()) {
-  owner = null
-}
+  // takeover si onglet actif
+  if (document.visibilityState === "visible" && document.hasFocus()) {
+    owner = null
+  }
 
-if (!owner || ownerExpired || owner.tabId === tabId) {
-  localStorage.setItem(
-    REFRESH_OWNER_KEY,
-    JSON.stringify({ tabId, ts: now })
-  )
-  console.log("👑 [AutoRefresh] OWNER")
-} else {
-  console.log("👂 [AutoRefresh] FOLLOWER")
-  return
-}
-
+  if (!owner || ownerExpired || owner.tabId === tabId) {
+    localStorage.setItem(
+      REFRESH_OWNER_KEY,
+      JSON.stringify({ tabId, ts: now })
+    )
+    console.log("👑 [AutoRefresh] OWNER")
+  } else {
+    console.log("👂 [AutoRefresh] FOLLOWER")
+    return
+  }
 
   // =====================================================
-  // ⏳ DELAY (TEST / PROD)
+  // 🧹 CLEAN TIMER (OWNER ONLY)
   // =====================================================
-  // const refreshDelay = Math.max(exp - now - 120000, 5000) // PROD
-const refreshDelay = Math.max(exp - now - 120000, 5000) // 2 min avant exp
-
-
-  console.log(
-    "⏳ [AutoRefresh] programmé dans",
-    Math.round(refreshDelay / 1000),
-    "sec"
-  )
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer)
+    _refreshTimer = null
+  }
 
   // =====================================================
-  // 🔁 TIMER
+  // ⏳ DELAY
   // =====================================================
+  console.log("🧪 [AutoRefresh] ARMÉ (delay = 5s)")
+
   _refreshTimer = setTimeout(async () => {
+    console.log("🔥 [AutoRefresh] TIMER FIRED")
+
     if (this.isLoggingOut) {
       console.log("⛔ [AutoRefresh] abort → logout")
       return
@@ -505,7 +546,6 @@ const refreshDelay = Math.max(exp - now - 120000, 5000) // 2 min avant exp
 
     if (this.isRefreshingToken) {
       console.log("⏳ [AutoRefresh] refresh déjà en cours → skip")
-      this.startAutoRefresh()
       return
     }
 
@@ -517,20 +557,31 @@ const refreshDelay = Math.max(exp - now - 120000, 5000) // 2 min avant exp
 
     console.log("🔄 [AutoRefresh] déclenché")
 
-    try {
-      await this.refreshJwt()
-      console.log("✅ [AutoRefresh] succès")
-    } catch (err) {
-      console.error("❌ [AutoRefresh] erreur", err)
-    } finally {
-      this.startAutoRefresh()
-    }
-  }, refreshDelay)
+    const jwt = await this.refreshJwt()
+
+  if (!jwt) {
+  console.warn("⛔ [AutoRefresh] refresh KO → arrêt")
+  this.stopAutoRefresh()
+  return
+}
+
+
+    console.log("✅ [AutoRefresh] succès → replanification")
+    this.startAutoRefresh()
+
+  }, REFRESH_DELAY)
 }
 
 
 ,
 
+stopAutoRefresh() {
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer)
+    _refreshTimer = null
+  }
+}
+,
     // 🔐 Déconnexion complète (backend + nettoyage local)
     async logout() {
       if (this.isLoggingOut) return;
@@ -564,6 +615,7 @@ const refreshDelay = Math.max(exp - now - 120000, 5000) // 2 min avant exp
       // 1️⃣ Restauration locale (IndexedDB / localStorage)
       await this.restoreSessionFromStorage();
       let jwt = this.jwt;
+
 
       // 2️⃣ Si JWT présent, vérifier sa validité avant tout
       const jwtIsValid = jwt && !isJwtExpired(jwt);
@@ -640,26 +692,32 @@ console.log("🟠 BEFORE CACHE MERGE", {
 })
 
 // 🔥 MERGE SAFE (jamais toucher aux IDs canoniques)
-Object.assign(this.user, {
-  ...cachedUser,
+const safeCache = {}
 
-  // 🔒 identités protégées
+for (const key of SAFE_USER_CACHE_KEYS) {
+  if (cachedUser[key] !== undefined) {
+    safeCache[key] = cachedUser[key]
+  }
+}
+
+this.user = {
+  ...safeCache,
+
+  // 🔒 identité = JWT ONLY
   user_id: this.user.user_id,
   prof_id: this.user.prof_id,
   role: this.user.role,
-})
-;
-if (
-  this.user.user_id &&
-  this.user.prof_id &&
-  this.user.user_id === this.user.prof_id
-) {
-  console.error("💥 ID CORROMPU APRÈS CACHE", {
-    user_id: this.user.user_id,
-    prof_id: this.user.prof_id,
-    cachedUser
-  })
 }
+if (
+  cachedUser.user_id ||
+  cachedUser.prof_id ||
+  cachedUser.role
+) {
+  console.warn("🧹 Cache utilisateur legacy détecté → ignoré", cachedUser)
+}
+
+;
+
 console.log("🔵 AFTER CACHE MERGE", JSON.parse(JSON.stringify(this.user)))
 
 
@@ -678,12 +736,17 @@ console.log("🔵 AFTER CACHE MERGE", JSON.parse(JSON.stringify(this.user)))
       // 8️⃣ Si on a un refreshToken + sessionId, lancer l’auto‑refresh
       const rt = localStorage.getItem("refreshToken");
       const sid = localStorage.getItem("sessionId");
-      if (rt && sid) {
-        this.startAutoRefresh();
-      }
+     this.authLoading = false;
+this.isInitDone = true;
 
-      this.authLoading = false;
-      this.isInitDone = true;
+if (rt && sid && this.user?.email) {
+  console.log("🚀 initAuth → startAutoRefresh (session complète)")
+  this.startAutoRefresh();
+} else {
+  console.warn("⚠️ initAuth : session incomplète → pas d’auto-refresh")
+}
+
+
     },
   }
 });

@@ -59,6 +59,8 @@
 
 <script setup>
 import { Form, Field, ErrorMessage } from 'vee-validate'
+import { getDeviceId } from "@/utils/device.ts"
+
 import * as yup from 'yup'
 import { useToast } from 'vue-toastification'
 import { useAuthStore } from '@/stores/authStore.js'
@@ -74,6 +76,7 @@ import {
 import { saveSessionData } from '@/utils/AuthDBManager'
 import { onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+
 let loginStartTime = 0
 let hashStart = 0;
 let fetchStart = 0;
@@ -83,6 +86,9 @@ const loginProcessing = ref(false)
 
 const toast = useToast()
 const router = useRouter()
+const deviceId = getDeviceId()
+console.log("📱 deviceId envoyé au backend :", deviceId)
+
 
 const loading = ref(false)
 const postLoginLoading = ref(false)
@@ -133,21 +139,31 @@ async function onSubmit(values) {
     // -------------------------
     // 2) APPEL BACKEND
     // -------------------------
-    const deviceInfo = `${navigator.platform} - ${navigator.userAgent}`;
+const deviceInfo = navigator.userAgent;
     const apiURL =
-      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbzzRgV71jm0jCKVr5UUBsD2IT532tzbmNCP2qB7te9cUHh69EaeNRQm6ELyt-LltVAT2A/exec";
+      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbyhthME39gY7tJlDwQ0tNcEzz9_RNylkAlZ3pv6le9eiWFpSIeAP69xiJxG-bFyhtYPOg/exec";
 
     fetchStart = performance.now();
-    const response = await fetch(apiURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "login",
-        email: values.email,
-        password: hashedPassword,
-        deviceInfo
-      })
-    });
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 8000);
+
+const response = await fetch(apiURL, {
+  method: "POST",
+  signal: controller.signal,
+  headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+  route: "login",
+  email: values.email,
+  password: hashedPassword,
+
+  device_id: deviceId,
+  deviceId: deviceId,        // ✅ AJOUT
+  device_info: deviceInfo,
+  deviceInfo: deviceInfo     // ✅ AJOUT
+})
+
+});
+
 
     const data = await response.json();
     console.log(`⏱️ API Apps Script = ${(performance.now() - fetchStart).toFixed(0)} ms`);
@@ -157,14 +173,22 @@ async function onSubmit(values) {
     // -------------------------
     // 3) ANIMATION DE SUCCÈS
     // -------------------------
-    loginProcessing.value = false;
-    loginSuccess.value = true;
-    await nextTick();
+   loginProcessing.value = false;
+loginSuccess.value = true;
+
+// ⏱️ durée fixe → UX stable
+await new Promise(r => setTimeout(r, 400));
+
 
     // -------------------------
     // 4) DÉCODE JWT
     // -------------------------
-    const payload = jwtDecode(data.jwt);
+let payload;
+try {
+  payload = jwtDecode(data.jwt);
+} catch {
+  throw new Error("JWT invalide");
+}
 
     // Dashboard utilise localStorage pour la clé du cache
     localStorage.setItem("email", payload.email || "");
@@ -174,26 +198,33 @@ async function onSubmit(values) {
     // 5) STOCKAGE SESSION
     // (⚠️ userData minimal → fusionné dans store, pas remplacement)
     // -------------------------
-   auth.setSessionData({
+auth.setSessionData({
   jwt: data.jwt,
   refreshToken: data.refreshToken,
   sessionId: data.sessionId,
-userData: {
-    prenom: payload.prenom,
+  userData: {
     email: payload.email,
+    prenom: payload.prenom,
+    nom: payload.nom || "",
     role: payload.role,
-    id: payload.id,              // 🔥 ajouté
-    prof_id: payload.prof_id,    // 🔥 ajouté !!!
+    user_id: payload.user_id,        // ✅ clé correcte
+    prof_id: payload.prof_id || null,
+    abo: payload.abo || null,
     avatar_url: payload.avatar_url || null,
-}
-
+    statut: payload.statut || null,
+  }
 });
+console.log("💥 USER STORE (login):", JSON.parse(JSON.stringify(auth.user)))
 
-await auth.fetchUserData();   // ✅ hydrate le user COMPLET
 
 auth.jwtReady = true;
 auth.authReady = true;
 auth.isInitDone = true;
+
+router.replace("/dashboard");
+
+// 🔄 hydration non bloquante
+auth.fetchUserData().catch(console.warn);
 
 router.replace("/dashboard");
 

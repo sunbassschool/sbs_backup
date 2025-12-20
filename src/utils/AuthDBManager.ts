@@ -165,19 +165,33 @@ export async function saveSessionData({
   console.log("🚀 [saveSessionData] Début sauvegarde...");
 
   try {
+    console.warn("⚠️ saveSessionData appelé avec sessionId =", sessionId);
+console.trace("📍 Trace sessionId source");
     if (!jwt || !refreshToken || !sessionId) {
       console.warn("⚠️ Données manquantes :", { jwt, refreshToken, sessionId });
       throw new Error("Des données obligatoires sont absentes");
     }
 
-    await writeKV('jwt', jwt);
-    await writeKV('refreshToken', refreshToken);
-    await writeKV('sessionId', sessionId);
+    const existingSessionId = await readKV("sessionId");
+    if (existingSessionId && existingSessionId !== sessionId) {
+      console.warn("🚨 Tentative d'écrasement de sessionId détectée :", {
+        existant: existingSessionId,
+        entrant: sessionId,
+      });
+
+      // 🛡️ Ne pas écraser si on a déjà une session active différente
+      // ou tu peux choisir de forcer si backend a la priorité (selon ta logique)
+    } else {
+      await writeKV("sessionId", sessionId);
+    }
+
+    await writeKV("jwt", jwt);
+    await writeKV("refreshToken", refreshToken);
 
     if (userData) {
       console.log("📄 userData à stocker :", userData);
-      await writeKV('prenom', userData.prenom);
-      await writeKV('email', userData.email);
+      await writeKV("prenom", userData.prenom);
+      await writeKV("email", userData.email);
     }
 
     console.log("✅ [saveSessionData] Sauvegarde terminée !");
@@ -188,6 +202,7 @@ export async function saveSessionData({
     isSaving = false;
   }
 }
+
 
 
 export async function getSessionIdFromDB() {

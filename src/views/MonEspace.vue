@@ -266,7 +266,7 @@ routes: {
   POST: "AKfycbzhRnLfhXFHEEoFP-lAPRZ7rWBCDRuMmQy49A5fec5aAyyxJGn9-O-85wLZAMqhTPLDCA/exec"
 },
 fetchURL(route) {
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${this.apiBaseURL}${this.routes[route]}`;
+  return `https://sunbass.sunbassschool.workers.dev?url=${this.apiBaseURL}${this.routes[route]}`;
 }
 
     };
@@ -547,7 +547,7 @@ saveObjectif() {
   const encodedTelephone = encodeURIComponent(this.user.telephone.trim());
 
   const innerURL = `${this.apiBaseURL}${this.routes.POST}?route=updateeleve&jwt=${encodedJWT}&telephone=${encodedTelephone}`;
-  const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(innerURL)}`;
+  const finalURL = `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(innerURL)}`;
 
   console.log("📞 Mise à jour du téléphone via :", finalURL);
 
@@ -597,7 +597,7 @@ async updateTelephone() {
   const encodedTelephone = encodeURIComponent(this.user.telephone.trim());
 
   const innerURL = `${this.apiBaseURL}${this.routes.POST}?route=updateeleve&jwt=${encodedJWT}&telephone=${encodedTelephone}`;
-  const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(innerURL)}`;
+  const finalURL = `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(innerURL)}`;
 
   console.log("📞 Mise à jour du téléphone via :", finalURL);
 
@@ -639,7 +639,7 @@ async updateObjectif() {
   const encodedObjectif = encodeURIComponent(nouvelObjectif);
 
   const innerURL = `${this.apiBaseURL}${this.routes.POST}?route=updateeleve&jwt=${encodedJWT}&objectif=${encodedObjectif}`;
-  const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(innerURL)}`;
+  const finalURL = `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(innerURL)}`;
 
   console.log("🔗 URL GET (via proxy) :", finalURL);
 
@@ -798,7 +798,7 @@ async fetchUserData(forceUpdate = false) {
 
     const base = this.apiBaseURL + this.routes.GET;
     const innerURL = `${base}?route=recupinfosmembres&jwt=${encodeURIComponent(jwt)}&prenom=${encodeURIComponent(prenom)}`;
-    const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(innerURL)}`;
+    const finalURL = `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(innerURL)}`;
 
     console.log("🔗 URL de la requête proxy :", finalURL);
 
@@ -942,7 +942,7 @@ async fetchUserData(forceUpdate = false) {
 
     const base = this.apiBaseURL + this.routes.GET;
     const innerURL = `${base}?route=recupinfosmembres&jwt=${encodeURIComponent(jwt)}&prenom=${encodeURIComponent(prenom)}`;
-    const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(innerURL)}`;
+    const finalURL = `https://sunbass.sunbassschool.workers.dev?url=${encodeURIComponent(innerURL)}`;
 
     console.log("🔗 URL de la requête proxy :", finalURL);
 

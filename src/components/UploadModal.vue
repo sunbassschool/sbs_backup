@@ -12,6 +12,8 @@
   :cours-id="coursId"
   v-bind="folderId ? { folderId } : {}"
   @uploaded="handleUploaded"
+    @done="emit('close')"   
+
 />
 
 
@@ -49,8 +51,9 @@ const emit = defineEmits(["close", "uploaded"])
 
 const handleUploaded = (upload) => {
   emit("uploaded", upload)
-  emit("close")
+  // ❌ ne pas fermer ici
 }
+
 
 
 const auth = useAuthStore()

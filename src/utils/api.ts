@@ -1564,26 +1564,43 @@ export async function refreshToken(): Promise<{
   const MAX_RETRIES = 2;     // 1 appel + 2 retries = 3 tentatives
   const TIMEOUT_MS = 8000;   // timeout client
   const RETRY_DELAY = 1500;  // pause entre tentatives
+const deviceId =
+  localStorage.getItem("deviceId") ||
+  localStorage.getItem("sessionId") ||
+  sessionStorage.getItem("sessionId") ||
+  "";
 
-  const refreshToken =
-    (localStorage.getItem("refreshToken") || "").trim() ||
-    (sessionStorage.getItem("refreshToken") || "").trim();
 
-  const sessionId =
-    (localStorage.getItem("sessionId") || "").trim() ||
-    (sessionStorage.getItem("sessionId") || "").trim();
+const refreshToken =
+  (localStorage.getItem("refreshToken") || "").trim() ||
+  (sessionStorage.getItem("refreshToken") || "").trim();
 
-  if (!refreshToken || !sessionId) {
-    console.warn("❌ refreshToken : infos manquantes");
-    return null;
-  }
+const sessionId =
+  (localStorage.getItem("sessionId") || "").trim() ||
+  (sessionStorage.getItem("sessionId") || "").trim();
+
+const did = deviceId || "";
+
+if (!refreshToken) {
+  console.warn("❌ refreshToken : refreshToken manquant");
+  return null;
+}
+
+// compat : ancien backend
+if (!sessionId && !did) {
+  console.warn("❌ refreshToken : sessionId ou device_id manquant");
+  return null;
+}
+
 
   const base =
-    "https://script.google.com/macros/s/AKfycbzBzqJGz-60bAXK9txOlR81aXXsRjKlceFYQotMXaKvaKasdgzTybn3WBaFeRsM4WE_yA/exec";
+    "https://script.google.com/macros/s/AKfycbyEXzfQ7iiR7TE-R0kaSZ7HBp_2TyOThRhqXm4_B6knM52AN3z3OEy5xIUgYLMAsaMOGw/exec";
 
-  const query =
-    `route=refresh&refreshtoken=${encodeURIComponent(refreshToken)}` +
-    `&sessionId=${encodeURIComponent(sessionId)}`;
+const query =
+  `route=refresh&refreshtoken=${encodeURIComponent(refreshToken)}` +
+  (sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : "") +
+  `&device_id=${encodeURIComponent(did)}`;
+
 
   const fullURL =
     "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
@@ -1618,19 +1635,25 @@ export async function refreshToken(): Promise<{
         return null;
       }
 
-      const data = await res.json();
+let data;
+try {
+  data = await res.json();
+} catch {
+  data = (res as any);
+}
 
       if (!data?.jwt || !data?.refreshToken) {
         console.warn("❌ Refresh API invalide :", data);
         return null;
       }
 
-      return {
-        ...data,
-        jwt: data.jwt,
-        refreshToken: data.refreshToken,
-        sessionId: data.sessionId || sessionId,
-      };
+  return {
+  ...data,
+  jwt: data.jwt,
+  refreshToken: data.refreshToken,
+  sessionId: sessionId, // 🔒 immuable côté front
+};
+
     } catch (err) {
       console.warn(`⚠️ Erreur réseau/timeout refresh (try ${attempt})`, err);
 
@@ -2074,7 +2097,7 @@ let logoutLock = false;
 export async function logoutUser() {
   const store = useAuthStore();
 
-  // 🚫 Si un logout est déjà en cours → on annule
+  // 🚫 Anti double logout
   if (logoutLock || store.isLoggingOut) return;
   logoutLock = true;
   store.isLoggingOut = true;
@@ -2085,22 +2108,22 @@ export async function logoutUser() {
   window.dispatchEvent(new CustomEvent("show-logout-message"));
 
   // ---------------------------------------------------------
-  // 🔒 1) Stopper tout refresh possible (anti-race)
+  // 🔒 1) Verrouillage immédiat auth (anti watchers / flash)
   // ---------------------------------------------------------
+  store.authReady = false;
+(store as any).jwtReady = false;
+  store.isInitDone = false;
 
-  // ❌ PAS DE _refreshTimer ici
-  // ❌ PAS DE _refreshPromise ici
-  // Ils appartiennent au STORE, pas à api.ts
-
-  // ancien système de refresh (compatibilité)
+  // ---------------------------------------------------------
+  // 🔒 1bis) Stop refresh / race conditions
+  // ---------------------------------------------------------
   if (typeof refreshInProgress !== "undefined") {
     refreshInProgress = null;
   }
-
   store.isRefreshingToken = false;
 
   // ---------------------------------------------------------
-  // 🧹 2) Purge immédiate du store (anti-flash)
+  // 🧹 2) Purge immédiate du store
   // ---------------------------------------------------------
   store.user = null;
   store.jwt = null;
@@ -2110,75 +2133,93 @@ export async function logoutUser() {
   window.dispatchEvent(new Event("user-data-updated"));
 
   // ---------------------------------------------------------
-  // 🧽 3) Préparation environnement propre
+  // 🧽 3) Nettoyage localStorage
   // ---------------------------------------------------------
   localStorage.setItem("session_expired", "true");
-  localStorage.removeItem("userLogged");
 
-  // ---------------------------------------------------------
-  // 🗑 4) Suppression cache utilisateur
-  // ---------------------------------------------------------
+  [
+    "userLogged",
+    "jwt",
+    "refreshToken",
+    "refreshTokenExpiration",
+    "prenom",
+    "email",
+    "savedEmail",
+    "savedPrenom",
+    "role",
+    "visit-count",
+    "user",
+    "videos_cache",
+    "videos_cache_timestamp"
+  ].forEach(k => localStorage.removeItem(k));
+
  const PREFIXES = [
-  "userData_", "userInfos_", "userPlanning_", "userNote_", "nonInscrit_", "dashboard_"
+  // auth / user
+  "userData_",
+  "userInfos_",
+  "userPlanning_",
+  "userNote_",
+  "nonInscrit_",
+  "dashboard_",
+
+  // explorer
+  "folders_",
+  "uploads_",
+
+  // refresh / sync
+  "sbs_",
+
+  // UI
+  "menu",
+  "seen",
 ];
 
-
-  Object.keys(localStorage).forEach(k => {
-    if (PREFIXES.some(p => k.startsWith(p))) localStorage.removeItem(k);
-  });
-
-  Object.keys(sessionStorage).forEach(k => {
-    if (PREFIXES.some(p => k.startsWith(p))) sessionStorage.removeItem(k);
-  });
-
-  // Tokens + infos génériques
-  [
-    "jwt", "refreshToken", "refreshTokenExpiration",
-    "prenom", "email", "videos_cache", "videos_cache_timestamp",
-    "savedEmail", "savedPrenom", "role", "visit-count", "user"
-  ].forEach(k => {
+Object.keys(localStorage).forEach(k => {
+  if (PREFIXES.some(p => k.startsWith(p))) {
     localStorage.removeItem(k);
-    sessionStorage.removeItem(k);
-  });
+  }
+});
+[
+  "sessionId",
+  "menuOpen",
+  "seenSwipeHint"
+].forEach(k => localStorage.removeItem(k));
 
+
+  // ---------------------------------------------------------
+  // 🧨 4) sessionStorage = reset total (finder / TMP / cache)
+  // ---------------------------------------------------------
+  sessionStorage.clear();
+
+  // ---------------------------------------------------------
+  // 🍪 5) Cookies
+  // ---------------------------------------------------------
   deleteAllCookies();
 
   // ---------------------------------------------------------
-  // 🗃 5) Nettoyage IndexedDB
+  // 🗃 6) IndexedDB
   // ---------------------------------------------------------
-  
   console.log("🗑️ Nettoyage IndexedDB…");
   await clearIndexedDBData();
   console.log("✅ IndexedDB nettoyée !");
 
-  // nettoyage explorer user 
-sessionStorage.clear()
-
-
   // ---------------------------------------------------------
-  // 🔄 6) Redirection propre
+  // 🔄 7) Redirection propre
   // ---------------------------------------------------------
-setTimeout(async () => {
-  console.log("🔄 Redirection vers login…");
+  setTimeout(async () => {
+    console.log("🔄 Redirection vers login…");
 
-  // Réinitialisation des flags
+    const screen = document.getElementById("loading-screen");
+    if (screen) screen.style.display = "none";
 
-  store.authReady = false;  // <-- IMPORTANT
+    const app = document.getElementById("app");
+    if (app) app.classList.add("app-visible");
 
-  // Retirer le loader HTML
-  const screen = document.getElementById("loading-screen");
-  if (screen) screen.style.display = "none";
+    await router.replace("/login");
 
-  const app = document.getElementById("app");
-  if (app) app.classList.add("app-visible");
-
-  await router.replace("/login");
-
-  store.isInitDone = true;
-  store.isLoggingOut = false;
-  logoutLock = false;
-}, 500);
-
+    store.isLoggingOut = false;
+    logoutLock = false;
+  }, 300);
 
   return true;
 }

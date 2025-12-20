@@ -15,7 +15,7 @@
   <div class="dashboard-grid">
 
     <!-- Élèves -->
-    <div class="dash-card" @click="goTo('prof-eleves')">
+    <div class="dash-card" @click="goToGestionEleves">
       <div class="icon-circle">
         <i class="bi bi-people"></i>
       </div>
@@ -26,7 +26,7 @@
     </div>
 
     <!-- Cours à venir -->
-    <div class="dash-card" @click="goTo('prof-planning')">
+    <div class="dash-card" @click="goToCours">
       <div class="icon-circle">
         <i class="bi bi-calendar-event"></i>
       </div>
@@ -46,8 +46,22 @@
         <p>Demandes à traiter</p>
       </div>
     </div>
-
+<!-- Envoyer un document -->
+<div class="dash-card send-doc" @click="goToSendDoc">
+  <div class="icon-circle">
+    <i class="bi bi-upload"></i>
   </div>
+  <div class="info">
+    <h3>Envoyer</h3>
+    <p>Document à un élève</p>
+  </div>
+</div>
+  </div>
+
+
+
+
+
   <!-- INVITE LINK BOX -->
 <div class="invite-box mt-3 fade-in">
   <h4 class="invite-title mb-2">🔗 Lien d’invitation</h4>
@@ -91,10 +105,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted,watch } from "vue";
 import { useRouter } from "vue-router";
 import Layout from "@/views/Layout.vue";
 import { useAuthStore } from "@/stores/authStore";
+import { useDashboardStore } from "@/stores/dashboardStore"
+
 
 // === STORES ===
 const auth = useAuthStore();
@@ -109,8 +125,13 @@ const inviteLink = ref("");
 const totalEleves = ref(0);
 const upcomingCount = ref(0);
 const pendingReports = ref(0);
+const dashboardStore = useDashboardStore()
+
+const TTL = 15 * 60 * 1000 // 15 min
+const CACHE_PREFIX = "dashboard_cache_"
 
 const regenLoading = ref(false);
+const data = ref(null)
 
 // === ROUTES ===
 const routes = {
@@ -119,6 +140,9 @@ const routes = {
 };
 
 // === HELPERS API ===
+
+
+
 function buildGet(params) {
   const qs = new URLSearchParams(params).toString();
   const base = `https://script.google.com/macros/s/${routes.GET}/exec?${qs}`;
@@ -126,6 +150,20 @@ function buildGet(params) {
 
   console.log("🔵 GET URL:", finalUrl);
   return finalUrl;
+}
+function goToSendDoc() {
+  router.push({
+    name: "EleveUploads",
+    query: {
+      mode: "send"
+    }
+  })
+}
+function goToCours() {
+  router.push({ name: "cours" })
+}
+function goToGestionEleves() {
+  router.push({ name: "GestionEleves" })
 }
 
 function buildPost() {
@@ -135,6 +173,52 @@ function buildPost() {
   console.log("🟠 POST URL:", finalUrl);
   return finalUrl;
 }
+async function refreshDashboard() {
+  await Promise.all([
+    fetchEleves(),
+    fetchPlanning(),
+    fetchReports(),
+    fetchInviteLink()
+  ])
+
+  const payload = {
+    totalEleves: totalEleves.value,
+    upcomingCount: upcomingCount.value,
+    pendingReports: pendingReports.value,
+    inviteLink: inviteLink.value
+  }
+
+  localStorage.setItem(
+    CACHE_PREFIX + profId.value,
+    JSON.stringify({
+      data: payload,
+      ts: Date.now()
+    })
+  )
+}
+
+function loadFromStore() {
+  if (!profId.value) return false
+
+  const key = CACHE_PREFIX + profId.value
+  const raw = localStorage.getItem(key)
+  if (!raw) return false
+
+  try {
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > TTL) return false
+
+    totalEleves.value = data.totalEleves ?? 0
+    upcomingCount.value = data.upcomingCount ?? 0
+    pendingReports.value = data.pendingReports ?? 0
+    inviteLink.value = data.inviteLink ?? ""
+
+    return true
+  } catch {
+    return false
+  }
+}
+
 
 // ======================================================================
 // 📌 API CALLS AVEC LOGS
@@ -241,14 +325,14 @@ async function fetchInviteLink() {
 }
 
 async function regenInviteLink() {
-  console.log("🔄 regenInviteLink CLICKED");
+  regenLoading.value = true
+  await fetchInviteLink()
 
-  regenLoading.value = true;
-  await fetchInviteLink();
-  regenLoading.value = false;
+  localStorage.removeItem(CACHE_PREFIX + profId.value)
 
-  console.log("✅ regenInviteLink DONE, new link:", inviteLink.value);
+  regenLoading.value = false
 }
+
 
 // ======================================================================
 // 🔗 Navigation
@@ -268,25 +352,32 @@ function goToReports() {
 // ======================================================================
 // 🚀 INIT
 // ======================================================================
-onMounted(async () => {
-  console.log("🚀 DashboardProf mounted");
+watch(
+  () => auth.authReady,
+  async (ready) => {
+    if (!ready) return
 
-  profName.value = auth.user?.prenom || "";
-  profId.value = auth.user?.prof_id || "";
+    profId.value = auth.user?.prof_id || ""
+    if (!profId.value) return
 
-  console.log("👤 PROF:", profName.value, " | ID:", profId.value);
+    const hasCache = loadFromStore()
 
-  await Promise.all([
-    fetchEleves(),
-    fetchPlanning(),
-    fetchReports(),
-    fetchInviteLink(),
-  ]);
+    if (hasCache) {
+      loading.value = false
+      return
+    }
 
-  loading.value = false;
+    loading.value = true
+    try {
+      await refreshDashboard()
+    } finally {
+      loading.value = false
+    }
+  },
+  { immediate: true }
+)
 
-  console.log("✅ Dashboard loaded");
-});
+
 </script>
 
 <style scoped>
@@ -485,6 +576,10 @@ onMounted(async () => {
 .regen-btn[disabled] {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.send-doc .icon-circle {
+  color: #ff6a00;
+  box-shadow: 0 0 10px rgba(255,106,0,0.25);
 }
 
 </style>

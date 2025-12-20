@@ -28,7 +28,7 @@ import ResetPassword from "@/views/resetPassword.vue";
 import Metronome from "@/views/Metronome.vue";
 import MesRessources from "@/views/MesRessources.vue";
 import Feedback from "@/views/Feedback.vue";
-import FeedBackProf from "@/views/FeedBackProf.vue";
+import FeedBackProf from "@/views/AdminFeedBack.vue";
 import GestionEleves from "@/views/GestionEleves.vue";
 import AdminFeedback from "@/views/AdminFeedback.vue";
 import moncompte from "@/views/moncompte.vue";
@@ -215,14 +215,17 @@ router.beforeEach(async (to, from) => {
     return { name: "login" };
   }
 
-  // ============================
-  // Route PROF (admin autorisé aussi)
-  // ============================
-  if (to.meta.requiresProf) {
-    if (!["prof", "admin"].includes(store.user?.role)) {
-      return { path: "/" };
-    }
+// ============================
+// Route PROF (admin autorisé aussi)
+// ============================
+if (to.meta.requiresProf) {
+  const role = store.user?.role ?? ""
+
+  if (!["prof", "admin"].includes(role)) {
+    return { path: "/" }
   }
+}
+
 
   // ============================
   // Route ADMIN

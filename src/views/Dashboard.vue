@@ -410,38 +410,48 @@ goToUploads() {
       await this.fetchFromAPI(true);
     },
 
-    async fetchFromAPI(force = false) {
-      if (!force && !shouldUpdateCache(this.cacheKey)) return;
+async fetchFromAPI(force = false) {
+  if (!force && !shouldUpdateCache(this.cacheKey)) return
 
-      const jwt = await getValidToken();
-      if (!jwt) return router.replace("/login");
+  const jwt = await getValidToken()
+  if (!jwt) return router.replace("/login")
 
   const url = this.getProxyURL(this.routes.GET, {
-  route: "planning",
-  jwt,
-  email: this.email,
-  prof_id: this.auth.user?.prof_id
-});
+    route: "planning",
+    jwt,
+    email: this.email,
+    prof_id: this.auth.user?.prof_id
+  })
 
+  try {
+    const raw = await fetch(url).then(r => r.text())
+    const data = JSON.parse(raw)
 
-      try {
-        const raw = await fetch(url).then(r => r.text());
-        const data = JSON.parse(raw);
+ 
+    if (Array.isArray(data.planning)) {
+      data.planning.forEach((c, i) => {
+        const d = new Date(c.date)
+      })
+    }
+    console.groupEnd()
 
-        setCache(this.cacheKey, {
-  ...data,
-  role: this.auth.user?.role,
-  prof_id: this.auth.user?.prof_id
-});
+    // 💾 cache
+    setCache(this.cacheKey, {
+      ...data,
+      role: this.auth.user?.role,
+      prof_id: this.auth.user?.prof_id
+    })
 
-        this.updateData(data);
-      } catch (e) {
-        console.error("❌ fetchFromAPI:", e);
-      } finally {
-        this.isLoading = false;
-      }
-    },
+    // 🧠 update UI
+    this.updateData(data)
 
+  } catch (e) {
+    console.error("❌ fetchFromAPI error:", e)
+  } finally {
+    this.isLoading = false
+  }
+}
+,
     // -------------------------
     //  UPDATE CARDS
     // -------------------------
@@ -474,12 +484,6 @@ updateData(data = {}) {
     "REFUSE",
   ]);
 
-  // 🔍 DEBUG SAFE
-  console.log(
-    "🔍 STATUTS REÇUS:",
-    planning.map(c => c?.status || c?.statut || "")
-  );
-
   // 🎯 PROCHAIN COURS
   const prochain = planning
     .filter(c => {
@@ -487,7 +491,7 @@ updateData(data = {}) {
         .toString()
         .toUpperCase()
         .trim();
-      return s && !bannedStatuses.has(s);
+return !bannedStatuses.has(s)
     })
     .filter(c => {
       const d = new Date(c?.date);
