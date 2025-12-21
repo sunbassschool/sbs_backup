@@ -500,52 +500,55 @@ return !bannedStatuses.has(s)
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0] || null;
 
   // 🧱 CARDS (TOUJOURS VALIDE)
-const hasProf = !!this.auth.user?.prof_id;
+const role = (this.auth.user?.role || "").toLowerCase()
+const isProf = role === "prof"
+const hasProf = !!this.auth.user?.prof_id
 
 this.cards = [
-  {
+  // 🚫 PROCHAIN COURS → PAS PROF
+  ...(!isProf ? [{
     icon: "bi bi-calendar-event",
     title: "Prochain Cours",
     text: prochain
       ? this.renderProchainCours(prochain)
       : this.renderNoCourse(),
-  },
+  }] : []),
 
-  // 👇 CARD UNIQUEMENT SI PROF
-  ...(hasProf
-    ? [{
-        icon: "bi bi-upload",
-        title: "Envoyer un fichier",
-        text: prochain
-          ? `
-            🎼 Partitions, audio, vidéo…<br>
-            <div
-              onclick="window.goToUploadsAndOpenModal('${prochain.ID_Cours}')"
-              class="planning-bouton"
-              style="margin-top:8px"
-            >
-              📎 Envoyer un fichier
-            </div>
-          `
-          : `
-            🎼 Partitions, audio, vidéo…<br>
-             <div
-            onclick="window.goToUploadsAndOpenModal(null)"
-            class="planning-bouton"
-            style="margin-top:8px"
-          >
-            📁 Accéder aux documents
-          </div>
-          `
-      }]
-    : []),
+  // ✅ ENVOYER UN FICHIER → PROF + ÉLÈVE (si lié à un prof)
+  ...((isProf || hasProf) ? [{
+    icon: "bi bi-upload",
+    title: "Envoyer un fichier",
+    text: prochain
+      ? `
+        🎼 Partitions, audio, vidéo…<br>
+        <div
+          onclick="window.goToUploadsAndOpenModal('${prochain?.ID_Cours || ""}')"
+          class="planning-bouton"
+          style="margin-top:8px"
+        >
+          📎 Envoyer un fichier
+        </div>
+      `
+      : `
+        🎼 Partitions, audio, vidéo…<br>
+        <div
+          onclick="window.goToUploadsAndOpenModal(null)"
+          class="planning-bouton"
+          style="margin-top:8px"
+        >
+          📁 Accéder aux documents
+        </div>
+      `
+  }] : []),
 
+  // 🎯 TOUJOURS
   {
     icon: "bi bi-flag",
     title: "Objectif actuel",
     text: this.auth.user?.objectif || "🎯 Aucun objectif défini",
   },
-];
+]
+;
 
 
   // ✅ FIN PROPRE

@@ -239,24 +239,52 @@ const TTL = 15 * 60 * 1000 // 15 min
 };
 const fetchElevesInscrits = async () => {
   try {
-    const jwt = await getValidToken();
-    const baseURL = "https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec";
-    const fullURL = `${baseURL}?route=geteleves&jwt=${encodeURIComponent(jwt)}`;
-    const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullURL)}`;
+    const jwt = await getValidToken()
 
-    const response = await fetch(proxyURL);
-    const data = await response.json();
+    const targetURL =
+      "https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
 
-    if (Array.isArray(data)) {
-      elevesInscrits.value = data.filter(e => e.statut === "inscrit");
-      console.log(elevesInscrits.value);
+    const proxyURL =
+      "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
+      encodeURIComponent(targetURL)
+
+    console.log("🔗 GAS URL :", targetURL)
+    console.log("🔁 PROXY URL :", proxyURL)
+    console.log("📦 POST BODY :", {
+      route: "getelevesbyprof",
+      jwt: jwt ? "JWT_OK" : "JWT_MISSING",
+      prof_id: profId.value
+    })
+
+    const res = await fetch(proxyURL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        route: "getelevesbyprof",
+        jwt,
+        prof_id: profId.value
+      })
+    })
+
+    const text = await res.text()
+    console.log("📥 RAW RESPONSE :", text)
+
+    const json = JSON.parse(text)
+    console.log("📥 PARSED JSON :", json)
+
+    if (json?.success && Array.isArray(json.eleves)) {
+      elevesInscrits.value = json.eleves.filter(
+        e => e && e.statut === "inscrit"
+      )
     } else {
-      console.warn("Format inattendu depuis geteleves :", data);
+      console.warn("⚠️ Format inattendu getElevesByProf :", json)
     }
-  } catch (err) {
-    console.error("Erreur fetchElevesInscrits :", err);
+  } catch (e) {
+    console.error("❌ fetchElevesInscrits:", e)
   }
-};
+}
+
+;
 const CACHE_KEY = "cours_cache"
 
 
@@ -320,7 +348,7 @@ const goToNextWeek = () => {
     };
 
     const API_URL =
-      "https://cors-proxy-37yu.onrender.com/https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec";
+      "https://cors-proxy-37yu.onrender.com/https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec";
 
     // ✅ Vérifie si l'utilisateur est connecté
     const isLoggedIn = computed(() => !!localStorage.getItem("jwt"));
@@ -329,32 +357,48 @@ const goToNextWeek = () => {
     }
 
     // ✅ Récupérer les cours depuis Google Sheets
-   const fetchCours = async (noCache = false) => {
+const fetchCours = async (noCache = false) => {
   try {
-    const jwt = await getValidToken();
-    if (!profId.value) throw new Error("prof_id manquant");
+    const jwt = await getValidToken()
+    if (!profId.value) throw new Error("prof_id manquant")
 
-    const base = "https://script.google.com/macros/s/AKfycbzwpPceOL_F5a9HstA6ajagQuvpeTEeHz_9HwNqANOrr8TfXLaGd0sNiliLj9rWT0vvdg/exec";
+    const base =
+      "https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
 
     const fullUrl =
       `${base}?route=suiviCours` +
       `&prof_id=${encodeURIComponent(profId.value)}` +
       `&jwt=${encodeURIComponent(jwt)}` +
-      (noCache ? `&t=${Date.now()}` : "");
+      (noCache ? `&t=${Date.now()}` : "")
 
-    const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullUrl)}`;
+    const proxyUrl =
+      "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
+      encodeURIComponent(fullUrl)
 
-    const response = await axios.get(proxyUrl);
+    console.log("🔗 GAS URL (cours) :", fullUrl)
+    console.log("🔁 PROXY URL (cours) :", proxyUrl)
+    console.log("📦 PARAMS :", {
+      route: "suiviCours",
+      prof_id: profId.value,
+      noCache
+    })
+
+    const response = await axios.get(proxyUrl)
+
+    console.log("📥 RAW RESPONSE (cours) :", response.data)
 
     coursData.value = Array.isArray(response.data)
-  ? response.data
-  : Object.values(response.data);
-saveToStore()
+      ? response.data
+      : Object.values(response.data || {})
 
+    console.log("📊 coursData length :", coursData.value.length)
+
+    saveToStore()
   } catch (e) {
-    console.error("❌ fetchCours:", e);
-  } 
-};
+    console.error("❌ fetchCours:", e)
+  }
+}
+;
 
 
 
@@ -476,7 +520,7 @@ const selectClosestWeek = () => {
     const jwt = await getValidToken();
 
     // ✅ Construction de l'URL via le proxy
-    const targetURL = `https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec?jwt=${encodeURIComponent(jwt)}`;
+    const targetURL = `https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec?jwt=${encodeURIComponent(jwt)}`;
     const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(targetURL)}`;
 
     const response = await fetch(proxyUrl, {
@@ -553,7 +597,7 @@ const selectClosestWeek = () => {
   try {
     const jwt = await getValidToken();
 
-    const targetURL = `https://script.google.com/macros/s/AKfycbw7aU_Z20EZKV8AytvPPYMhTLxtQNegdpg5ImFeiGqY35jKfRB0gk3pIhXTOFS7NaCTZA/exec?jwt=${encodeURIComponent(jwt)}`;
+    const targetURL = `https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec?jwt=${encodeURIComponent(jwt)}`;
     const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(targetURL)}`;
 
     const response = await fetch(proxyUrl, {
@@ -608,7 +652,6 @@ const selectClosestWeek = () => {
     };
 
 onMounted(async () => {
-  // 1️⃣ sécurité auth
   try {
     await getValidToken()
   } catch {
@@ -616,22 +659,19 @@ onMounted(async () => {
     return
   }
 
-  // 2️⃣ tentative cache
+  // 1️⃣ affichage immédiat si cache
   const hasCache = loadFromStore()
-  console.log("🧠 COURS CACHE ?", hasCache, coursStore.ts)
+  console.log("🧠 cache affiché ?", hasCache, coursData.value.length)
 
-  if (hasCache) {
+  loading.value = !hasCache
+  selectClosestWeek()
+
+  // 2️⃣ fetch TOUJOURS en arrière-plan
+  fetchElevesInscrits()
+  fetchCours(true).finally(() => {
     loading.value = false
     selectClosestWeek()
-    return // ⛔ STOP ICI
-  }
-
-  // 3️⃣ pas de cache → fetch
-  loading.value = true
-  await fetchElevesInscrits()
-  await fetchCours()
-  selectClosestWeek()
-  loading.value = false
+  })
 })
 
 ;

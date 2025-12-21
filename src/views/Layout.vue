@@ -60,17 +60,11 @@
           <span>Mon compte</span>
         </router-link>
 
-        <router-link v-if="isLoggedIn && isEleve" to="/videos" class="sidebar-link">
-          <i class="bi bi-film"></i>
-          <span>Vidéos</span>
-        </router-link>
-
-        <router-link v-if="isLoggedIn && isEleve" to="/planning" class="sidebar-link">
+    <router-link v-if="isLoggedIn && isEleve" to="/planning" class="sidebar-link">
           <i class="bi bi-calendar-check"></i>
           <span>Plannings</span>
         </router-link>
-
-        <router-link v-if="isLoggedIn && isEleve" to="/replay" class="sidebar-link">
+  <router-link v-if="isLoggedIn && isEleve" to="/replay" class="sidebar-link">
           <i class="bi bi-play-btn"></i>
           <span>Replay</span>
         </router-link>
@@ -79,11 +73,10 @@
           <i class="bi bi-chat-left-text"></i>
           <span>Feedback</span>
         </router-link>
-
         <router-link v-if="isLoggedIn && isEleve" to="/videos" class="sidebar-link">
-  <i class="bi bi-film"></i>
-  <span>Vidéos</span>
-</router-link>
+          <i class="bi bi-film"></i>
+          <span>Vidéos</span>
+        </router-link>
 
 <router-link v-if="isLoggedIn && isEleve" to="/partitions" class="sidebar-link">
   <i class="bi bi-music-note-beamed"></i>
@@ -115,7 +108,7 @@
         </router-link>
 
         <!-- 🔥 AJOUT POUR PROF -->
-<router-link v-if="isProf" to="/CreatePlanning" class="sidebar-link">
+<router-link v-if="isProf" to="/prof/planning/create" class="sidebar-link">
   <i class="bi bi-calendar-event"></i>
   <span>Créer un planning</span>
 </router-link>
@@ -133,7 +126,7 @@
           <span>Feedbacks Admin</span>
         </router-link>
 
-        <router-link v-if="isAdmin" to="/CreatePlanning" class="sidebar-link">
+        <router-link v-if="isAdmin" to="/prof/planning/create" class="sidebar-link">
           <i class="bi bi-calendar-event"></i>
           <span>Créer un planning</span>
         </router-link>
@@ -333,7 +326,7 @@
 <router-link v-if="isProf" to="/cours" class="nav-link">
   <i class="bi bi-tools"></i><span>Planning</span>
 </router-link>
-      <router-link v-if="isProf" to="/CreatePlanning" class="nav-link">
+      <router-link v-if="isProf" to="/prof/planning/create" class="nav-link">
   <i class="bi bi-calendar-event"></i><span>Créer planning</span>
 </router-link>
 
@@ -2090,10 +2083,10 @@ body.loading-active {
 }
 .mobile-account-actions {
   position: absolute;
-  top: 15px;
-  right: 10px;
+  top: 5px;
+  right: -8px;
   display: flex;
-  gap: 12px;
+  gap: 0px;
   align-items: center;
   z-index: 1100;
 }

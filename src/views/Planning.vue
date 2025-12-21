@@ -231,7 +231,7 @@ export default {
     const profId = computed(() => auth.user?.prof_id || "");
 
 const routes = {
-  POST: "AKfycbzEy7SsX05sM0XYPaZtEafSn7BuDFMjRFFDyOhUw4R-q2qo53V0DohCf4bXYh2lZd_gMw/exec"
+  POST: "AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
 };
 
 // === Helper POST via proxy ===
@@ -357,7 +357,7 @@ const cacheKey = `planning_${email.value}_${profId.value}`;
   profId: profId.value
 });
 
-    const baseURL = "https://script.google.com/macros/s/AKfycbxY657E4WaUA-WB-hDABee5I5LY3oWfHkiWoZfIqSNAyh_cBSVje_a20UtEd0z9Qnl2NA/exec";
+    const baseURL = "https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec";
 const internalURL = `${baseURL}?route=planning&email=${encodeURIComponent(email.value)}&prof_id=${encodeURIComponent(profId.value)}`;
     const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(internalURL)}`;
     const response = await axios.get(finalURL);

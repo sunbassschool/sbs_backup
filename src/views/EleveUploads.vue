@@ -9,7 +9,30 @@
         <div>
           <h3>📎 Mes documents</h3>
           <p class="subtitle">Fichiers liés à tes cours</p>
+          <input
+  v-model="searchQuery"
+  class="search-input"
+  placeholder="🔍 Rechercher un fichier ou dossier…"
+  @keydown.esc="searchQuery = ''"
+/>
+
         </div>
+<div
+  v-if="uploadSession"
+  class="upload-badge"
+  :class="{ done: uploadFinished }"
+  @click="!uploadFinished && (currentFolderId = uploadSession.folderId)"
+>
+  <template v-if="uploadFinished">
+    ✔️ Uploads terminés
+  </template>
+  <template v-else>
+    ⬆️ {{ uploadsInProgress }}
+    upload{{ uploadsInProgress > 1 ? 's' : '' }} en cours
+  </template>
+</div>
+
+
 
         <button
           ref="addBtn"
@@ -50,14 +73,15 @@
       <!-- ===================================================== -->
       <!-- ⬆️ MODALE UPLOAD -->
       <!-- ===================================================== -->
-      <UploadModal
-        v-if="showUpload"
-        :cours-id="effectiveCoursId"
-        :folder-id="effectiveFolderId || undefined"
-        :eleve-id="effectiveEleveId || undefined"
-        @uploaded="onUploadSuccess"
-        @close="showUpload = false"
-      />
+  <UploadModal
+  v-if="showUpload"
+  :cours-id="effectiveCoursId"
+  :folder-id="effectiveFolderId || undefined"
+  :eleve-id="effectiveEleveId || undefined"
+  @uploaded="onUploadSuccess"
+  @done="showUpload = false"
+/>
+
 
       <!-- ===================================================== -->
       <!-- 🧱 BREADCRUMB -->
@@ -66,16 +90,17 @@
     
 
 
-        <span
-          v-for="(f, i) in breadcrumb"
-          :key="f.folder_id"
-          class="crumb"
-          @click="i < breadcrumb.length - 1 && (currentFolderId = f.folder_id)"
-          @dragover.prevent
-@drop.prevent="handleDropOnFolder($event, f.folder_id)"
-        >
-          {{ getDisplayFolderName(f) }}
-        </span>
+  <span
+  v-for="(f, i) in searchBreadcrumb"
+  :key="f.folder_id"
+  class="crumb"
+  @click="onBreadcrumbClick(f, i)"
+  @dragover.prevent
+  @drop.prevent="handleDropOnFolder($event, f.folder_id)"
+>
+  {{ getDisplayFolderName(f) }}
+</span>
+
       </div>
 
       <!-- ===================================================== -->
@@ -124,6 +149,16 @@
           class="explorer-content"
           :key="explorerKey"
         >
+<div
+  v-if="searchQuery && !hasSearchResults"
+  class="search-empty"
+>
+  <p>🔍 Aucun résultat pour « {{ searchQuery }} »</p>
+
+  <button @click="searchQuery = ''">
+    Effacer la recherche
+  </button>
+</div>
 
           <!-- ================================================= -->
           <!-- 📁 DOSSIERS -->
@@ -132,7 +167,7 @@
 
           <transition-group name="fade-slide" tag="div">
             <div
-              v-for="folder in visibleFolders"
+v-for="folder in searchedFolders"
               :key="folder.folder_id"
               class="upload-item folder"
            :class="{
@@ -142,11 +177,9 @@
 }"
               @dragover.prevent
 @drop.prevent="handleDropOnFolder($event, folder.folder_id)"
-             @click.stop="selectFolder(folder, $event)"
-  @dblclick.stop="openFolder(folder)"
-  @contextmenu.prevent.stop="openFolderMenu($event, folder)"
- @touchstart.passive="startFolderLongPress(folder, $event)"
-  @touchend.passive="cancelLongPress"
+             @click.stop="onFolderTap(folder, $event)"
+@contextmenu.prevent.stop="openFolderMenu($event, folder)"
+
             >
               <div
                 class="folder-main"
@@ -179,8 +212,7 @@
           <!-- ================================================= -->
           <transition-group name="fade-slide" tag="div">
             <div
-              v-for="file in visibleFiles"
-              :key="file.upload_id"
+v-for="file in searchedFiles"             :key="file.upload_id"
               class="upload-item"
               :class="{
                 optimistic: file._optimistic,
@@ -190,12 +222,9 @@
               draggable="true"
               @dragstart="onDragStart($event, file)"
               @dragend="onDragEnd"
-        @click.stop="onFileSingleClick(file, $event)"
-@dblclick.stop="onFileDoubleClick(file)"
+   @click.stop="onFileTap(file, $event)"
+@contextmenu.prevent="openFileMenu($event, file)"
 
-              @contextmenu.prevent="openFileMenu($event, file)"
- @touchstart.passive="startFileLongPress(file, $event)"
-@touchend.passive="cancelLongPress"
 
             >
               <div class="file-main">
@@ -204,9 +233,9 @@
                 <div class="file-info">
                   <strong v-if="editingId !== file.upload_id">
                     {{ file.file_name }}
-                    <span v-if="file._optimistic" class="sync-badge">⏳</span>
+  <span v-if="file._optimistic" class="upload-spinner"></span>
                   </strong>
-
+ 
                   <input
                     v-else
                     :ref="el => setFileRenameRef(el, file.upload_id)"
@@ -216,11 +245,19 @@
                     @keyup.esc="cancelRename"
                     @blur="confirmRename(file)"
                   />
-
-                  <small class="file-date">
-                    {{ formatDate(file.created_at) }}
-                  </small>
+<div
+    v-if="searchQuery"
+    class="file-path"
+  >
+    {{ getFilePathLabel(file) }}
+  </div>
+             
+               
+               
                 </div>
+              
+               
+              
               </div>
             </div>
           </transition-group>
@@ -228,24 +265,23 @@
           <!-- ================================================= -->
           <!-- 🫥 EMPTY -->
           <!-- ================================================= -->
-          <div
-            v-if="
-              foldersLoaded &&
-              visibleFolders.length === 0 &&
-              visibleFiles.length === 0
-            "
-            class="empty-state"
-          >
-            <p>Dossier vide</p>
+  <div
+  v-show="
+    foldersLoaded &&
+    visibleFolders.length === 0 &&
+    visibleFiles.length === 0
+  "
+  class="empty-state"
+>
+  <UploadFileCore
+    :eleve-id="effectiveEleveId"
+    :cours-id="effectiveCoursId"
+    :folder-id="currentFolderId"
+    @uploaded="onUploadSuccess"
+      @done="onUploadDone"
+  />
+</div>
 
-         <UploadFileCore
-  :eleve-id="effectiveEleveId"
-  :cours-id="effectiveCoursId"
-  :folder-id="currentFolderId"
-  @uploaded="onUploadSuccess"
-/>
-
-          </div>
 
         </div>
       </div>
@@ -349,9 +385,22 @@ import UploadFileCore from "@/components/UploadFileCore.vue"
 // ============================================================================
 const auth = useAuthStore()
 const route = useRoute()
-const uiReady = ref(false)
-const loading = computed(() => false)
-const isSendMode = computed(() => route.query.mode === "send")
+
+const uploadSession = ref(null)
+const uploadFinished = ref(false)
+const vibrate = (pattern = 10) => {
+  if ("vibrate" in navigator) {
+    navigator.vibrate(pattern)
+  }
+}
+const allFolders = computed(() =>
+  folders.value.filter(f => !f.deleted_at)
+)
+const allFiles = computed(() =>
+  Object.values(uploadsByFolder.value).flat()
+)
+const isSearching = computed(() => !!searchQuery.value)
+
 const uploadsByFolder = ref({})
 // ⚠️ COMPAT TEMPORAIRE — legacy code
 const uploads = computed(() => {
@@ -362,6 +411,7 @@ const isTyping = computed(() =>
   document.activeElement &&
   ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)
 )
+const searchQuery = ref("")
 
 const userId = computed(() =>
   auth.user?.user_id || auth.user?.id || null
@@ -372,25 +422,35 @@ const role = computed(() => (auth.user?.role || "").toLowerCase())
 const isProfLike = computed(() =>
   role.value === "prof" || role.value === "admin"
 )
-const showEmpty = computed(() =>
-  firstDataResolved.value &&
-  uploads.value.length === 0 &&
-  folders.value.length === 0
-)
-let uploadsGlobalFetched = false
+
+
 const eleveBlocked = ref(false)
-const ensureUploadsBucket = (folderId) => {
-  const fid = folderId ?? null
-  if (!uploadsByFolder.value[fid]) {
-    uploadsByFolder.value[fid] = []
+const onFolderTap = (folder, e) => {
+  // 🔍 si recherche active → on sort du mode recherche
+  if (searchQuery.value) {
+    searchQuery.value = ""
   }
+
+  if (isTouch()) {
+    selectedFiles.value = []
+    selectedFolders.value = []
+    openFolder(folder)
+    return
+  }
+
+
+  if (e.detail === 2) openFolder(folder)
+  else selectFolder(folder, e)
 }
+
+
 const onFolderClick = (folder, e) => {
   // 📱 vrai tactile → ouvrir
   if (e?.pointerType === "touch") {
     openFolder(folder)
     return
   }
+
 
   // 🖥️ desktop → sélection
   selectFolder(folder, e)
@@ -444,16 +504,7 @@ const onFileSingleClick = (file, e) => {
   }, 180)
 }
 
-const onFileDoubleClick = (file) => {
-  // 📱 mobile → jamais appelé
-  if (isTouch()) return
 
-  clearTimeout(clickTimer)
-  clickTimer = null
-
-  if (selectedFiles.value.length > 1) return
-  openFile(file)
-}
 let longPressTimer = null
 
 const startLongPress = (file, e) => {
@@ -462,6 +513,19 @@ const startLongPress = (file, e) => {
     openFileMenu(e, file)
   }, 500)
 }
+const onFileTap = (file, e) => {
+  if (isTouch()) {
+    selectedFiles.value = [] // 🔥 RESET
+    openFile(file)
+    return
+  }
+
+  if (e.detail === 2) {
+    openFile(file)
+  } else {
+    toggleSelect(file, e)
+  }
+}
 
 const cancelLongPress = () => {
   clearTimeout(longPressTimer)
@@ -469,19 +533,16 @@ const cancelLongPress = () => {
 }
 
 
-  // delay pour laisser une chance au double-clic
-  clearTimeout(clickTimer)
-  clickTimer = setTimeout(() => {
-    toggleSelect(file, e)
-  }, 180)
+
 
 
 
 const isMovingFolder = ref(false)
 const hydratedFromCache = ref(false)
 const hasProfWorkspace = computed(() =>
-  folders.value.some(f => f.parent_id === null)
+  !!profRootFolder.value
 )
+
 const cacheStart = ref(performance.now())
 
 // ============================================================================
@@ -489,9 +550,47 @@ const cacheStart = ref(performance.now())
 // ⚠️ Doit être IDENTIQUE à tes autres vues (Planning.vue etc.)
 // ============================================================================
 const routes = {
-  POST: "AKfycby4UajTQdcM7GJpsCsD4zVbvWd-9iUOtVK0e2bc7T8pSNMxJbJlQSlfzD7WCJb5QITYYw/exec"
+  POST: "AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
 }
 const loaderStep = ref("init")
+const filteredFolders = computed(() => {
+  if (!searchQuery.value) return visibleFolders.value
+  const q = searchQuery.value.toLowerCase()
+
+  return visibleFolders.value.filter(f =>
+    (f.name || "").toLowerCase().includes(q)
+  )
+})
+
+const filteredFiles = computed(() => {
+  if (!searchQuery.value) return visibleFiles.value
+  const q = searchQuery.value.toLowerCase()
+
+  return visibleFiles.value.filter(f =>
+    (f.file_name || "").toLowerCase().includes(q)
+  )
+})
+const searchedFolders = computed(() => {
+  if (!isSearching.value) return visibleFolders.value
+  const q = searchQuery.value.toLowerCase()
+
+  return allFolders.value.filter(f =>
+    (f.name || "").toLowerCase().includes(q)
+  )
+})
+const hasSearchResults = computed(() => {
+  if (!searchQuery.value) return true
+  return searchedFolders.value.length || searchedFiles.value.length
+})
+
+const searchedFiles = computed(() => {
+  if (!isSearching.value) return visibleFiles.value
+  const q = searchQuery.value.toLowerCase()
+
+  return allFiles.value.filter(f =>
+    (f.file_name || "").toLowerCase().includes(q)
+  )
+})
 
 const loaderText = computed(() => {
   switch (loaderStep.value) {
@@ -526,6 +625,49 @@ const loaderSub = computed(() => {
 // ============================================================================
 // 🌍 Helper : Apps Script via proxy Vercel (POST)
 // ============================================================================
+const isAdmin = computed(() => role.value === "admin")
+
+const profRootFolder = computed(() => {
+  // 👑 admin → racine globale
+  if (role.value === "admin") {
+    return folders.value.find(f => f.parent_id === null)
+  }
+
+  // 👨‍🏫 prof normal → SON dossier (ex: prof5)
+  return folders.value.find(f =>
+    f.owner_type === "prof" &&
+    f.owner_id === profId.value &&
+    f.is_system === false
+  )
+})
+
+
+
+const getHomeFolder = () => {
+  if (!isProfLike.value) {
+    return folders.value.find(f =>
+      f.owner_type === "eleve" &&
+      f.owner_id === userId.value &&
+      f.name === "Racine élève"
+    )
+  }
+
+  return profRootFolder.value || null
+}
+
+
+
+
+const getFilePathLabel = (file) => {
+  if (!file?.folder_id) return ""
+
+  const path = buildFolderPath(file.folder_id)
+  if (!path.length) return ""
+
+  return path.map(f => getDisplayFolderName(f)).join(" / ")
+}
+
+
 const eleveRootId = computed(() =>
   folders.value.find(f =>
     f.owner_type === "eleve" &&
@@ -533,6 +675,20 @@ const eleveRootId = computed(() =>
     f.name === "Racine élève"
   )?.folder_id || null
 )
+const buildFolderPath = (folderId) => {
+  const path = []
+  let cur = folderId
+  let guard = 0
+
+  while (cur && guard++ < 20) {
+    const f = foldersById.value[cur]
+    if (!f) break
+    path.unshift(f)
+    cur = f.parent_id
+  }
+
+  return path
+}
 
 // 🔥 HYDRATATION SYNCHRONE AU SETUP
 const hasEleveWorkspace = () =>
@@ -762,6 +918,13 @@ const addFile = () => {
   // 👨‍🎓 élève → toujours OK
   if (!isProfLike.value) {
     uploadFolderId.value = currentFolderId.value
+    uploadSession.value = {
+  id: crypto.randomUUID(),
+  folderId: currentFolderId.value,
+  total: 1,
+  done: 0
+}
+
     showUpload.value = true
     closeAddMenu()
     return
@@ -835,10 +998,68 @@ const foldersById = computed(() => {
 const foldersCacheKey = computed(() =>
   `folders_${profId.value}_${effectiveOwnerType.value}_${effectiveOwnerId.value}`
 )
+const onBreadcrumbClick = (folder) => {
+  if (folder.folder_id === "__search__") return
+
+  if (folder.name === "🏠 Home") {
+    currentFolderId.value = profRootFolder.value?.folder_id || null
+    return
+  }
+
+  currentFolderId.value = folder.folder_id
+}
+
+
+
 
 // ============================================================================
 // 🧮 COMPUTED
 // ============================================================================
+
+const searchResultCount = computed(() => {
+  if (!searchQuery.value) return 0
+  return searchedFolders.value.length + searchedFiles.value.length
+})
+
+
+const searchBreadcrumb = computed(() => {
+  const home = getHomeFolder()
+  const homeCrumb = home
+    ? [{ ...home, name: "🏠 Home" }]
+    : []
+
+  // hors recherche → Home + breadcrumb normal (sans dupliquer)
+  if (!searchQuery.value) {
+    const rest = breadcrumb.value.filter(
+      b => b.folder_id !== home?.folder_id
+    )
+    return [...homeCrumb, ...rest]
+  }
+
+  // 🔍 recherche + 1 résultat
+  if (searchResultCount.value === 1) {
+    let path = []
+
+    if (searchedFolders.value.length === 1) {
+      path = buildFolderPath(searchedFolders.value[0].folder_id)
+    } else if (searchedFiles.value.length === 1) {
+      path = buildFolderPath(searchedFiles.value[0].folder_id)
+    }
+
+    const rest = path.filter(b => b.folder_id !== home?.folder_id)
+    return [...homeCrumb, ...rest]
+  }
+
+  // 🔍 recherche multiple → Home + label recherche
+  return [
+    ...homeCrumb,
+    {
+      folder_id: "__search__",
+      name: `Recherche : "${searchQuery.value}"`
+    }
+  ]
+})
+
 const isCurrentFolderEmpty = computed(() =>
   visibleFolders.value.length === 0 &&
   visibleFiles.value.length === 0
@@ -904,24 +1125,28 @@ const breadcrumb = computed(() => {
   let cur = currentFolderId.value
   let guard = 0
 
+  // ⛔ point d’arrêt selon rôle
+  const stopAt =
+    role.value === "admin"
+      ? null
+      : isProfLike.value
+        ? profRootFolder.value?.folder_id
+        : eleveRootId.value
+
   while (cur && guard++ < 20) {
     const f = foldersById.value[cur]
     if (!f) break
 
-    // ⛔ stop visuel à la racine élève
-    if (!isProfLike.value && f.folder_id === eleveRootId.value) {
-      chain.unshift(f)
-      break
-    }
-
     chain.unshift(f)
+
+    // 🔥 STOP STRICT
+    if (stopAt && f.folder_id === stopAt) break
+
     cur = f.parent_id
   }
 
   return chain
 })
-
-
 
 
 
@@ -1066,6 +1291,29 @@ const startFileLongPress = (file, e) => {
     openFileMenu(e, file)
   }, 500)
 }
+const addOptimisticUploads = (wrappedFiles, folderId, sessionId) => {
+  const fid = folderId ?? null
+  if (!uploadsByFolder.value[fid]) uploadsByFolder.value[fid] = []
+
+  wrappedFiles.forEach(({ file, optimistic_id }) => {
+    uploadsByFolder.value[fid].push({
+      upload_id: `TMP_${optimistic_id}`,   // 👈 utile pour debug
+      optimistic_id,
+      session_id: sessionId,
+      file_name: file.name,                // 🔥 FIX
+      file_size: file.size,
+      file_type: file.type,
+      folder_id: fid,
+      created_at: new Date().toISOString(),
+      _optimistic: true
+    })
+  })
+
+  // 🔥 force Vue
+  uploadsByFolder.value = { ...uploadsByFolder.value }
+}
+
+
 
 const openExplorerContextMenu = (e) => {
   e.preventDefault()
@@ -1173,27 +1421,102 @@ const openFolder = (folder) => {
 
 
 const onUploadSuccess = (upload) => {
-  const fid = upload.folder_id ?? currentFolderId.value ?? null
-  const current = uploadsByFolder.value[fid] || []
+const fid =
+  upload.folder_id ??
+  uploadSession.value?.folderId ??
+  currentFolderId.value ??
+  null
+if (!fid) {
+  console.warn("⛔ onUploadSuccess sans folder_id", upload)
+  return
+}
 
-  if (current.some(u => u.upload_id === upload.upload_id)) return
+if (uploadSession.value) {
+  uploadSession.value.done++
 
-  uploadsByFolder.value = {
-    ...uploadsByFolder.value,
-    [fid]: [upload, ...current]
+  if (uploadSession.value.done >= uploadSession.value.total) {
+    uploadFinished.value = true
+  vibrate(15) // 📳 micro vibration
+
+    setTimeout(() => {
+      uploadSession.value = null
+      uploadFinished.value = false
+    }, 1200)
+  }
+}
+
+
+  if (!fid) return
+
+if (!uploadsByFolder.value[fid]) {
+  uploadsByFolder.value[fid] = []
+}
+const list = uploadsByFolder.value[fid]
+
+  // 🔥 trouver LE fantôme correspondant
+  const idx = list.findIndex(
+    f =>
+      f._optimistic &&
+      f.optimistic_id === upload.optimistic_id
+  )
+
+  if (idx !== -1) {
+    // 🔁 REMPLACE le fantôme
+    list.splice(idx, 1, {
+      ...upload,
+      _optimistic: false
+    })
+  } else {
+    // fallback sécurité
+    list.push({
+      ...upload,
+      _optimistic: false
+    })
   }
 
-  selectedFiles.value = [upload.upload_id]
+  // 🔥 force rerender
+  uploadsByFolder.value = { ...uploadsByFolder.value }
 
-  explorerKey.value++ // 🔥 FORCE RERENDER VISUEL
+
+
+
+
+  console.log(
+    "📂 fichiers dossier =",
+    uploadsByFolder.value[fid].map(f => f.file_name)
+  )
+
+  // sélection douce (ne pas écraser multi sélection)
+  if (!selectedFiles.value.includes(upload.upload_id)) {
+    selectedFiles.value.push(upload.upload_id)
+  }
 
   writeUploadsCache(
     effectiveOwnerType.value,
     effectiveOwnerId.value,
     Object.values(uploadsByFolder.value).flat()
   )
+
+  console.groupEnd()
 }
 
+
+const uploadsInProgress = computed(() =>
+  uploadSession.value
+    ? uploadSession.value.total - uploadSession.value.done
+    : 0
+)
+
+
+const onUploadDone = () => {
+  if (!uploadSession.value) return
+
+  uploadSession.value.done = uploadSession.value.total
+
+  setTimeout(() => {
+    uploadSession.value = null
+  }, 800)
+}
 
 
 
@@ -1511,9 +1834,10 @@ const ensureProfRoot = async () => {
 
   profRootId.value = data.prof_root_id
 
-  if (!currentFolderId.value) {
-    currentFolderId.value = data.prof_root_id
-  }
+// 🔥 FORCER le dossier prof, jamais PROFS
+currentFolderId.value = data.prof_root_id
+
+
 
   profElevesFolderId.value = data.eleves_folder_id || null
 
@@ -1584,10 +1908,12 @@ const fetchAllUploadsOnce = async () => {
     }
 
     // 🔄 reconcile (ne pas écraser l’optimistic en cours)
-    uploadsByFolder.value = {
-      ...uploadsByFolder.value,
-      ...nextMap
-    }
+   for (const fid in nextMap) {
+  if (!uploadsByFolder.value[fid]) {
+    uploadsByFolder.value[fid] = nextMap[fid]
+  }
+}
+
 
     writeUploadsCache(
       effectiveOwnerType.value,
@@ -1668,7 +1994,9 @@ async function fetchFolders() {
     const payload = {
       route: "getfoldersbyprof",
       jwt: auth.jwt,
-      prof_id: auth.user.prof_id
+      prof_id: auth.user.prof_id,
+        role: auth.user.role   // 🔥 OBLIGATOIRE
+
     }
 
     console.log("▶️ step 1 — payload", payload)
@@ -2368,7 +2696,7 @@ const onFolderDrop = async (targetParentId) => {
 
   folder.parent_id = targetParentId ?? null
   currentFolderId.value = targetParentId ?? null
-  explorerKey.value++
+
 
   try {
     await axios.post(getProxyPostURL(routes.POST), {
@@ -2397,35 +2725,79 @@ const onFolderDrop = async (targetParentId) => {
 
 
 const handleDropOnFolder = (event, folderId) => {
+  // 🔒 verrou global
   if (event.__sbsHandled) return
-  event.__sbsHandled = true  
+  event.__sbsHandled = true
+
   event.preventDefault()
   event.stopPropagation()
-  console.group("📥 DROP")
+
+  console.group("📥 DROP UNIQUE")
   console.log("targetFolderId =", folderId)
-  console.log("draggedFiles =", draggedFiles.value.map(f => f.upload_id))
-  console.log("draggedFolder =", draggedFolder.value?.folder_id)
-  console.log("isDragging =", isDragging.value)
 
-// 🧲 DROP FICHIERS NATIFS (OS)
-if (event?.dataTransfer?.files?.length) {
-  console.log("📥 DROP FICHIERS NATIFS", event.dataTransfer.files)
+  // ===============================
+  // 🧲 DROP FICHIERS NATIFS (OS)
+  // ===============================
+if (event.dataTransfer?.files?.length) {
+  console.log("📂 fichiers natifs =", event.dataTransfer.files.length)
+const files = Array.from(event.dataTransfer.files)
 
-  uploadFolderId.value = folderId ?? currentFolderId.value
+  uploadFolderId.value = folderId ?? currentFolderId.value ?? null
 
-  // passe les fichiers au composant upload
-  nextTick(() => {
-    window.dispatchEvent(
-      new CustomEvent("sbs-drop-files", {
-        detail: {
-          files: event.dataTransfer.files,
-          folder_id: uploadFolderId.value
-        }
-      })
-    )
-  })
+  // 🔒 SESSION D’UPLOAD (DOSSIER FIGÉ)
+  const sessionId = crypto.randomUUID()
+  uploadSession.value = {
+    id: sessionId,
+    folderId: uploadFolderId.value,
+     total: files.length,   // 🔥
+  done: 0                // 🔥
+  }
+
+
+// 🔥 wrapper avec optimistic_id (1 par fichier)
+const wrapped = files.map(f => ({
+  file: f,
+  optimistic_id: crypto.randomUUID()
+}))
+
+// ⚡ optimistic immédiat (doit stocker optimistic_id)
+addOptimisticUploads(wrapped, uploadFolderId.value, uploadSession.value.id)
+
+nextTick(() => {
+  window.dispatchEvent(
+    new CustomEvent("sbs-drop-files", {
+      detail: {
+        files: wrapped,
+        folder_id: uploadFolderId.value,
+        session_id: uploadSession.value.id
+      }
+    })
+  )
+})
+
+
+  console.groupEnd()
   return
 }
+
+
+  // ===============================
+  // 📄 DROP FICHIERS INTERNES SBS
+  // ===============================
+  if (draggedFiles.value.length) {
+    onDrop(folderId)
+    console.groupEnd()
+    return
+  }
+
+  // ===============================
+  // 📁 DROP DOSSIER
+  // ===============================
+  if (draggedFolder.value) {
+    onFolderDrop(folderId)
+    console.groupEnd()
+    return
+  }
 
   console.groupEnd()
 }
@@ -2740,7 +3112,8 @@ const goHome = () => {
   }
 
   // prof → racine prof
-  const root = folders.value.find(f => f.parent_id === null)
+const root = profRootFolder.value
+currentFolderId.value = root?.folder_id || null
   currentFolderId.value = root?.folder_id || null
 }
 
@@ -2760,8 +3133,31 @@ const closePreview = () => {
 // ============================================================================
 // 👀 WATCHERS — MINIMAUX, SANS FETCH, SANS EFFET DE BORD
 // ============================================================================
+watch(currentFolderId, (id) => {
+  if (role.value === "admin") return
+  if (!id || !profRootFolder.value) return
+
+  let cur = id
+  let ok = false
+  let guard = 0
+
+  while (cur && guard++ < 20) {
+    if (cur === profRootFolder.value.folder_id) {
+      ok = true
+      break
+    }
+    cur = foldersById.value[cur]?.parent_id
+  }
+
+  if (!ok) {
+    console.warn("⛔ PROF hors scope → reset racine")
+    currentFolderId.value = profRootFolder.value.folder_id
+  }
+})
 
 watch(currentFolderId, (id) => {
+    if (searchQuery.value) return        // 🔥 AJOUT
+
   if (isProfLike.value) return
   if (!id || !eleveRootId.value) return
 
@@ -2854,6 +3250,8 @@ watch(
  * 6️⃣ DEBUG — LECTURE SEULE (À SUPPRIMER PLUS TARD)
  * ============================================================================ */
 watchEffect(() => {
+    if (searchQuery.value) return        // 🔥 AJOUT
+
   console.log("🧭 view", {
     isElevesView: isElevesView.value,
     currentFolderId: currentFolderId.value,
@@ -2980,10 +3378,10 @@ if (!currentFolderId.value) {
 
 
     // --- sécurité root
-    if (!currentFolderId.value) {
-      const root = folders.value.find(f => f.parent_id === null)
-      currentFolderId.value = root?.folder_id || null
-    }
+   if (!currentFolderId.value) {
+  currentFolderId.value = profRootFolder.value?.folder_id || null
+}
+
 
     // --- fetch uploads GLOBAL (UNE FOIS)
     loaderStep.value = "uploads"
@@ -3015,16 +3413,15 @@ if (!currentFolderId.value) {
 
   console.log("⚡ cache prof ?", hasCache)
 
-  if (hasCache) {
-    folders.value = cachedFolders.map(f => ({ ...f }))
-    foldersLoaded.value = true
-    hydratedFromCache.value = true
+if (hasCache) {
+  folders.value = cachedFolders.map(f => ({ ...f }))
+  foldersLoaded.value = true
+  hydratedFromCache.value = true
 
-    const root = folders.value.find(f => f.parent_id === null)
-    currentFolderId.value = root?.folder_id || null
+  currentFolderId.value =
+    profRootFolder.value?.folder_id || null
+}
 
-    console.log("📁 root(cache) =", currentFolderId.value)
-  }
 
   // -------------------------------------------------
   // 3️⃣ ensureProfRoot (TOUJOURS)
@@ -3040,11 +3437,12 @@ if (!currentFolderId.value) {
     console.log("📁 profRootId =", id)
   }
 
-  // -------------------------------------------------
-  // 4️⃣ fetchFolders (SOURCE UNIQUE)
-  // -------------------------------------------------
-  loaderStep.value = "folders"
-  console.log("📦 fetchFolders (prof)")
+// -------------------------------------------------
+// 4️⃣ fetchFolders (SOURCE UNIQUE)
+// -------------------------------------------------
+loaderStep.value = "folders"
+console.log("📦 fetchFolders (prof)")
+
 if (!hydratedFromCache.value) {
   await fetchFolders(true)
   foldersLoaded.value = true
@@ -3053,12 +3451,21 @@ if (!hydratedFromCache.value) {
   fetchFolders(true)
 }
 
+// 🔥 FIX CRITIQUE — forcer le dossier prof (non admin)
+if (role.value !== "admin") {
+  const root = profRootFolder.value
+  if (root) {
+    currentFolderId.value = root.folder_id
+  }
+}
+
 
   // --- sécurité root
-  if (!currentFolderId.value) {
-    const root = folders.value.find(f => f.parent_id === null)
-    currentFolderId.value = root?.folder_id || null
-  }
+if (!currentFolderId.value) {
+  currentFolderId.value =
+    profRootFolder.value?.folder_id || null
+}
+
 
   // -------------------------------------------------
   // 5️⃣ fetch uploads GLOBAL (🔥 CLÉ)
@@ -3167,10 +3574,7 @@ onUnmounted(() => {
   opacity: 0.85;
 }
 
-.explorer-zone.dragging {
-  outline: 2px dashed #ff8c00;
-  background: rgba(255, 140, 0, 0.05);
-}
+
 
 /* ==========================================================================
    📄 ITEM COMMUN (FICHIER / DOSSIER)
@@ -3602,6 +4006,10 @@ onUnmounted(() => {
   pointer-events: none;
   position: relative;
 }
+.crumb.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
 .folder.pending::after {
   content: "⏳";
@@ -3620,6 +4028,97 @@ onUnmounted(() => {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+.upload-item {
+  -webkit-user-drag: none;
+}
+.upload-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: upload-spin 0.8s linear infinite;
+  vertical-align: middle;
+  opacity: 0.7;
+}
+
+@keyframes upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.upload-badge {
+  background: rgba(255, 140, 0, 0.15);
+  border: 1px solid #ff8c00;
+  color: #ffb347;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.upload-badge:hover {
+  background: rgba(255, 140, 0, 0.25);
+}
+.uploads-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-badge {
+  margin-left: auto; /* 🔥 pousse à droite */
+}
+.upload-badge.done {
+  background: rgba(76, 175, 80, 0.15);
+  border-color: #4caf50;
+  color: #7dff9c;
+  animation: pop 0.25s ease;
+  cursor: default;
+}
+
+@keyframes pop {
+  0%   { transform: scale(0.95); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.search-empty {
+  padding: 32px;
+  text-align: center;
+  color: #aaa;
+}
+
+.search-empty button {
+  margin-top: 12px;
+  background: none;
+  border: 1px solid #ff8c00;
+  color: #ff8c00;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.crumb {
+  cursor: pointer;
+}
+
+.crumb[data-search] {
+  cursor: default;
+  opacity: 0.6;
+}
+.file-path {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 2px;
+  padding-left: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crumb.home {
+  font-weight: 600;
 }
 
 </style>

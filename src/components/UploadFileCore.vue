@@ -30,6 +30,10 @@
 
     <!-- PROGRESS -->
     <div v-if="progress > 0" class="progress-bar-wrapper">
+      <p v-if="currentFile">
+  {{ totalFiles }} fichier(s) en cours…
+</p>
+
       <div class="progress-bar" :style="{ width: progress + '%' }"></div>
     </div>
 
@@ -37,7 +41,7 @@
     <button
       class="upload-btn"
       :disabled="!currentFile || uploading"
-      @click="startUpload"
+@click="startNextUpload"
     >
       <span v-if="!uploading">📤 Envoyer</span>
       <span v-else class="loader"></span>
@@ -52,14 +56,20 @@
 
 
 <script setup>
+
+
+
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getValidToken } from "@/utils/api.ts"
 
 const auth = useAuthStore()
 const emit = defineEmits(["uploaded", "done"])
+const uploadSessionId = ref(null)
 
 const GAS_POST_ROUTE = "AKfycbywruw_pMa_mKp01OFXrlzpj2bXGdpppFW59S5jKa-666sxavdw5vLF-PQLlR77dkkB_A"
+const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent)
+const MAX_MOBILE_SIZE = 50 * 1024 * 1024 // 50 Mo
 
 const getProxyPostURL = () => {
   const baseURL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`
@@ -70,21 +80,28 @@ const getProxyPostURL = () => {
 const props = defineProps({
   eleveId: { type: String, default: null },
   coursId: { type: String, default: null },
-  folderId: { type: String, required: true } // 🔥
+folderId: { type: String, default: null }
 })
 
 
+const lockedFolderId = ref(null)
 
 
 const filesQueue = ref([])
 const currentFile = ref(null)
 
 const file = ref(null)
+const lastDropSig = ref(null)
+const dropLock = ref(false)
 
 const uploading = ref(false)
 const progress = ref(0)
 const successUrl = ref("")
 const error = ref("")
+const totalFiles = computed(() =>
+  filesQueue.value.length + (currentFile.value ? 1 : 0)
+)
+
 const isEleveContext = computed(() => {
   const folder = props.folderId
     ? props.folders?.find(f => f.folder_id === props.folderId)
@@ -97,46 +114,64 @@ const onFileSelect = e => {
   // ⛔ si un upload est déjà en cours via drop
   if (filesQueue.value.length || uploading.value) return
 
-  filesQueue.value = Array.from(e.target.files)
-  error.value = ""
-  startNextUpload()
+const files = Array.from(e.target.files)
+
+if (isMobile) {
+  const tooBig = files.find(f => f.size > MAX_MOBILE_SIZE)
+  if (tooBig) {
+    error.value = "⚠️ Fichier trop volumineux. Upload recommandé sur ordinateur."
+    return
+  }
+}
+
+filesQueue.value = files.map(file => ({
+  file,
+  optimistic_id: crypto.randomUUID()
+}))
+
+error.value = ""
+lockedFolderId.value = props.folderId
+uploadSessionId.value = crypto.randomUUID()
+
+console.log("📁 lockedFolderId (button) =", lockedFolderId.value)
+
+startNextUpload()
+
 }
 
 
-const uploadSingleFile = (file) => {
+const uploadSingleFile = (fileWrapper) => {
+  const file = fileWrapper.file       // 🔥 LE VRAI FILE
+  const optimisticId = fileWrapper.optimistic_id
+
+  console.group("📤 uploadSingleFile")
+  console.log("file =", file.name)
+  console.log("optimistic_id =", optimisticId)
+
   return new Promise(async (resolve, reject) => {
-    if (!file) return resolve()
-
-    uploading.value = true
-    progress.value = 0
-    error.value = ""
-    successUrl.value = ""
-
     try {
       const jwt = await getValidToken()
-      if (!jwt) throw new Error("JWT manquant")
-
       const proxyUrl = getProxyPostURL()
 
-      const tokenPayload = {
-        route: "getuploadtoken",
-        jwt,
-        prof_id: auth.user.prof_id
-      }
-      if (props.eleveId) tokenPayload.eleve_id = props.eleveId
-      if (props.coursId) tokenPayload.cours_id = props.coursId
-
+      // 1️⃣ TOKEN
       const tokenRes = await fetch(proxyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tokenPayload)
+        body: JSON.stringify({
+          route: "getuploadtoken",
+          jwt,
+          prof_id: auth.user.prof_id,
+          ...(props.eleveId ? { eleve_id: props.eleveId } : {}),
+          ...(props.coursId ? { cours_id: props.coursId } : {})
+        })
       }).then(r => r.json())
 
-      if (!tokenRes.success) throw new Error(tokenRes.error)
+      if (!tokenRes.success) throw tokenRes.error
 
+      // 2️⃣ UPLOAD PHP
       const formData = new FormData()
       formData.append("token", tokenRes.token)
-      formData.append("file", file)
+      formData.append("file", file) // ✅ vrai File
 
       const xhr = new XMLHttpRequest()
       xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
@@ -150,95 +185,165 @@ const uploadSingleFile = (file) => {
       xhr.onload = async () => {
         try {
           const res = JSON.parse(xhr.responseText)
-          if (!res.success) throw new Error(res.error)
+          if (!res.success) throw res.error
 
-          const attachPayload = {
-            route: "attachfiletocours",
-            jwt,
-            prof_id: auth.user.prof_id,
-            file_url: res.url,
-            file_name: res.name,
-            file_size: res.size,
-            file_type: file.type,
-            folder_id: props.folderId
-          }
-          if (props.eleveId) attachPayload.eleve_id = props.eleveId
-          if (props.coursId) attachPayload.cours_id = props.coursId
-
+          // 3️⃣ ATTACH SHEET
           const attachRes = await fetch(proxyUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(attachPayload)
+            body: JSON.stringify({
+              route: "attachfiletocours",
+              jwt,
+              prof_id: auth.user.prof_id,
+              file_url: res.url,
+              file_name: res.name,
+              file_size: res.size,
+              file_type: file.type,
+folder_id: lockedFolderId.value || props.folderId,
+              ...(props.eleveId ? { eleve_id: props.eleveId } : {}),
+              ...(props.coursId ? { cours_id: props.coursId } : {})
+            })
           }).then(r => r.json())
 
-          if (!attachRes.success) throw new Error("Erreur Google Sheet")
+          if (!attachRes.success) throw "attach failed"
 
+          // 🔥 EMIT AVEC optimistic_id
           emit("uploaded", {
             upload_id: attachRes.upload_id,
-            cours_id: props.coursId,
-            eleve_id: props.eleveId,
+            optimistic_id: optimisticId,
             file_name: res.name,
             file_url: res.url,
             file_size: res.size,
             file_type: file.type,
-            folder_id: props.folderId ?? null,
-            created_at: new Date().toISOString()
+folder_id: lockedFolderId.value,            created_at: new Date().toISOString(),
+            session_id: uploadSessionId.value
           })
 
-          uploading.value = false
-          resolve() // 🔥 FIN RÉELLE
+          resolve()
         } catch (err) {
-          uploading.value = false
           reject(err)
         }
       }
 
-      xhr.onerror = () => {
-        uploading.value = false
-        reject(new Error("Erreur réseau upload"))
-      }
-
+      xhr.onerror = err => reject(err)
       xhr.send(formData)
 
     } catch (e) {
-      uploading.value = false
       reject(e)
     }
   })
 }
 
 
-const onDroppedFiles = e => {
-  const { files, folder_id } = e.detail || {}
-  if (!files?.length) return
-
-  // 🔥 on prend le premier fichier (ou fais une loop plus tard)
-filesQueue.value = Array.from(files)
-error.value = ""
-nextTick(() => {
-  startNextUpload()
-})
 
 
-  // sécurité : forcer le bon dossier
-  if (folder_id && folder_id !== props.folderId) {
-    console.warn("📁 folder mismatch, ignoré", folder_id)
-  }
-}
-const startNextUpload = async () => {
-  if (uploading.value) return
 
-  if (!filesQueue.value.length) {
-    currentFile.value = null
-    emit("done") // 🔥 TOUT EST FINI
+const onDroppedFiles = (e) => {
+  console.group("📥 onDroppedFiles")
+
+  const detail = e.detail
+  console.log("detail =", detail)
+
+  // 🛑 garde-fous
+  if (!detail || !Array.isArray(detail.files) || !detail.files.length) {
+    console.warn("⛔ aucun fichier")
+    console.groupEnd()
     return
   }
 
-  currentFile.value = filesQueue.value.shift()
-  await uploadSingleFile(currentFile.value)
+  if (uploading.value) {
+    console.warn("⛔ upload déjà en cours")
+    console.groupEnd()
+    return
+  }
 
+  // 🔒 SESSION + DOSSIER FIGÉS POUR TOUT LE BATCH
+  uploadSessionId.value = detail.session_id || null
+  lockedFolderId.value = detail.folder_id || null
+
+  console.log("📌 session =", uploadSessionId.value)
+  console.log("📁 lockedFolderId =", lockedFolderId.value)
+
+  // 📦 queue = wrappers { file, optimistic_id }
+if (isMobile) {
+  const tooBig = detail.files.find(w => w.file.size > MAX_MOBILE_SIZE)
+  if (tooBig) {
+    error.value = "⚠️ Vidéo volumineuse détectée. Garde l’écran allumé ou utilise un ordinateur."
+    return
+  }
+}
+
+filesQueue.value = detail.files
+
+  console.log(
+    "📦 queue init =",
+    filesQueue.value.map(w => w.file.name)
+  )
+
+  dropLock.value = true
+  error.value = ""
+
+  console.groupEnd()
+
+  // 🚀 lancement batch
   startNextUpload()
 }
+
+
+
+const startNextUpload = async () => {
+  if (!lockedFolderId.value) {
+  lockedFolderId.value = props.folderId
+}
+
+  console.group("🚀 startNextUpload")
+
+  if (uploading.value) {
+    console.warn("⛔ déjà en upload")
+    console.groupEnd()
+    return
+  }
+
+  uploading.value = true
+  console.log("🔒 uploading = true")
+
+  while (filesQueue.value.length) {
+const wrapper = filesQueue.value.shift()
+
+console.log("file =", wrapper.file.name)
+
+currentFile.value = wrapper.file
+
+progress.value = 0
+
+try {
+await uploadSingleFile(wrapper)
+console.log("✅ upload terminé :", wrapper.file.name)
+
+  // 🔥 force flush parent
+  await nextTick()
+} catch (e) {
+
+      console.error("❌ upload failed :", file.name, e)
+    }
+
+    console.groupEnd()
+  }
+
+  console.log("🏁 FIN BATCH")
+
+  uploading.value = false
+  dropLock.value = false
+  currentFile.value = null
+  progress.value = 0
+uploadSessionId.value = null
+
+  emit("done")
+
+  console.groupEnd()
+}
+
+
 
 
 onMounted(() => {
@@ -250,6 +355,8 @@ onUnmounted(() => {
 })
 
 </script>
+
+
 <style scoped>
 .upload-form {
   display: flex;

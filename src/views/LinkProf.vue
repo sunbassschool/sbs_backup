@@ -46,7 +46,7 @@ export default {
       error: null,
 
       routes: {
-        POST: "AKfycbywZhwHpJhNALl-hTb8UsUY8UwQj1PVLdqgiQrxz5EXEU0cwvsUPt9ZCT3eSYD51TQMLQ/exec"
+        POST: "AKfycbw79WU9dbKFOuwfvxZ4JStUUbxFLoflCajeWY-NR3fB2qighdXWXrcnQrg0yzObaYGDbw/exec"
       }
     };
   },

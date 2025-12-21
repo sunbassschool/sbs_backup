@@ -11,8 +11,8 @@
   :eleve-id="eleveId"
   :cours-id="coursId"
   v-bind="folderId ? { folderId } : {}"
-  @uploaded="handleUploaded"
-    @done="emit('close')"   
+  @uploaded="$emit('uploaded', $event)"
+ @done="$emit('done')"
 
 />
 
@@ -47,8 +47,7 @@ defineProps({
 
 
 
-const emit = defineEmits(["close", "uploaded"])
-
+const emit = defineEmits(["close", "uploaded", "done"])
 const handleUploaded = (upload) => {
   emit("uploaded", upload)
   // ❌ ne pas fermer ici

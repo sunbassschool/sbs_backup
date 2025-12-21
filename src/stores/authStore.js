@@ -719,6 +719,18 @@ if (
 ;
 
 console.log("🔵 AFTER CACHE MERGE", JSON.parse(JSON.stringify(this.user)))
+// ✅ force le prof_id au niveau racine du store (nécessaire pour les composants)
+this.prof_id =
+  this.prof_id ||
+  this.user?.prof_id ||
+  this.userData?.prof_id ||
+  this.user_info?.prof_id ||
+  this.me?.prof_id ||
+  null
+
+console.log("✅ [initAuth] store.prof_id =", this.prof_id)
+
+
 
 
         // En parallèle, récupérer des données fraîches

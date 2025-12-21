@@ -16,13 +16,11 @@ import Planning from "@/views/Planning.vue";
 import Replay from "@/views/Replay.vue";
 import Videos from "@/views/Videos.vue";
 import Cours from "@/views/Cours.vue";
-import Register from "@/views/Register.vue";
 import Login from "@/views/Login.vue";
 import MonEspace from "@/views/MonEspace.vue";
 import RegisterForm from "@/views/RegisterForm.vue";
 import Prendreuncours from "@/views/Prendreuncours.vue";
 import RegisterCursus from "@/views/RegisterCursus.vue";
-import CreatePlanning from "@/views/CreatePlanning.vue";
 import ForgotPassword from "@/views/ForgotPassword.vue";
 import ResetPassword from "@/views/resetPassword.vue";
 import Metronome from "@/views/Metronome.vue";
@@ -38,6 +36,7 @@ import DashboardProf from "@/views/dashboard-prof.vue";
 import Abonnements from "@/views/Abonnements.vue";
 import NotFound from "@/views/NotFound.vue";
 import UploadFile from '@/views/UploadFile.vue'
+import createplanning from "@/views/createplanning.vue"
 
 
 // =============================================================
@@ -121,12 +120,18 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresProf: true },
     },
 
-        {
-      path: "/CreatePlanning",
-      name: "CreatePlanning",
-      component: CreatePlanning,
-      meta: { requiresAuth: true, requiresProf: true },
+
+
+
+{
+    path: "/prof/planning/create",
+    name: "createplanning",
+    component: createplanning,
+    meta: { requiresAuth: true, requiresProf: true },
     },
+
+
+
     // =========================================================
     // 👤 USER (tout utilisateur connecté)
     // =========================================================
@@ -157,6 +162,14 @@ const router = createRouter({
     // =========================================================
     // 🌐 PUBLIC
     // =========================================================
+    {
+  path: "/register",
+  component: () => import("@/views/RegisterChoice.vue")
+},
+{
+  path: "/register/prof",
+  component: () => import("@/views/RegisterProf.vue")
+},
     { path: "/intro", name: "intro", component: IntroView },
     { path: "/Feedback", name: "Feedback", component: Feedback },
     { path: "/FeedBackProf", name: "FeedBackProf", component: FeedBackProf },
@@ -166,7 +179,7 @@ const router = createRouter({
     { path: "/Metronome", name: "Metronome", component: Metronome },
     { path: "/BassTuner", name: "BassTuner", component: BassTuner },
     { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
-    { path: "/register", name: "register", component: Register },
+
     { path: "/registerform", name: "registerform", component: RegisterForm },
         { path: "/Abonnements", name: "Abonnements", component: Abonnements },
 

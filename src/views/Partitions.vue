@@ -72,7 +72,9 @@
   <script>
 import Layout from "../views/Layout.vue";
 import axios from "axios";
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { useAuthStore } from "@/stores/authStore.js"
+
 
 export default {
   name: "Partitions",
@@ -83,55 +85,96 @@ export default {
     const search = ref("");
     const selectedStyle = ref("");
     const selectedLevel = ref("");
+const userData = JSON.parse(localStorage.getItem("userData_") || "{}")
 
+const auth = useAuthStore()
+const currentProfId = computed(() => auth.prof_id)
     const SHEET_ID = "1PuxK7najS8M8v6h3XQMwOaH5skTNWDJXI3zYiLO1rRM";
     const API_KEY = "AIzaSyBo0kz-JkCiuWumprwn5kpiVPqYmKr5NZI";
-    const RANGE = "'partitions'!A2:J";
+    const RANGE = "'partitions'!A2:N";
 
     // ⏳ Définition de la durée du cache (5 minutes)
     const cacheDuration = 24 * 60 * 60 * 1000; // 24 heures
  
-    console.log("📌 Avant chargement partitions, userData_ =", localStorage.getItem("userData_"));
 
-    const fetchPartitions = async () => {
-      const cacheKey = "partitions_cache";
-      const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
-      const cachedData = localStorage.getItem(cacheKey);
+const fetchPartitions = async () => {
+  console.log("👤 auth.prof_id =", auth.prof_id)
 
-      // ✅ Vérification du cache avant d'appeler l'API
-      if (cachedData && cacheTimestamp && Date.now() - cacheTimestamp < cacheDuration) {
-        console.log("⚡ Chargement des partitions depuis le cache");
-        partitions.value = JSON.parse(cachedData);
-        loading.value = false;
-        return;
+  if (!auth.prof_id) {
+    console.warn("⛔ abort fetch → prof_id absent")
+    loading.value = false
+    return
+  }
+
+  const cacheKey = `partitions_cache_${auth.prof_id}`
+  const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`)
+  const cachedData = localStorage.getItem(cacheKey)
+
+  console.log("🧠 cacheKey =", cacheKey)
+  console.log("🧠 cacheTimestamp =", cacheTimestamp)
+  console.log("🧠 cachedData exists =", !!cachedData)
+
+  if (cachedData && cacheTimestamp && Date.now() - cacheTimestamp < cacheDuration) {
+    console.log("⚡ cache HIT")
+    partitions.value = JSON.parse(cachedData)
+    console.log("📦 partitions (cache) =", partitions.value)
+    loading.value = false
+    return
+  }
+
+  try {
+    console.log("🌐 API fetch start")
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`
+    const response = await axios.get(url)
+    const rows = response.data.values || []
+
+    console.log("📊 rows.length =", rows.length)
+    console.log("📊 first row =", rows[0])
+
+    const mapped = rows.map((row, i) => {
+      const obj = {
+        nom: row[0],
+        auteur: row[1],
+        style: row[2] || "",
+        niveau: row[3] || "",
+        id: row[8],
+    prof_id: (row[13] || "").toString().trim()
       }
 
-      try {
-        console.log("🌐 Récupération des partitions depuis l'API...");
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
-        const response = await axios.get(url);
-        const rows = response.data.values || [];
+      console.log(`🧩 row ${i} prof_id =`, obj.prof_id)
+      console.log("🧪 auth.prof_id =", auth.prof_id)
+console.log("🧪 sheet prof_id unique =", [...new Set(rows.map(r => r[13]))])
 
-        if (rows.length > 0) {
-          partitions.value = rows.map(row => ({
-            nom: row[0],
-            auteur: row[1],
-            style: row[2] || "",  // Ajout du style
-            niveau: row[3] || "", // Ajout du niveau
-            id: row[8]
-          }));
-        }
+      return obj
+    })
 
-        // ✅ Stocker les données en cache
-        localStorage.setItem(cacheKey, JSON.stringify(partitions.value));
-        localStorage.setItem(`${cacheKey}_timestamp`, Date.now());
+    console.log("🔍 current prof_id =", auth.prof_id)
 
-      } catch (error) {
-        console.error("❌ Erreur lors du chargement des partitions :", error);
-      } finally {
-        loading.value = false;
+    const filtered = mapped.filter(p => {
+      const ok = !p.prof_id || p.prof_id === auth.prof_id
+      if (!ok) {
+        console.warn("❌ FILTER OUT", p.nom, p.prof_id)
       }
-    };
+      return ok
+    })
+
+    console.log("✅ filtered count =", filtered.length)
+
+    partitions.value = filtered
+
+    localStorage.setItem(cacheKey, JSON.stringify(filtered))
+    localStorage.setItem(`${cacheKey}_timestamp`, Date.now())
+
+  } catch (e) {
+    console.error("💥 API ERROR", e)
+  } finally {
+    loading.value = false
+    console.log("🏁 fetchPartitions END")
+  }
+}
+
+;
 
     // ✅ Filtrage des partitions
     const filteredPartitions = computed(() => {
@@ -161,21 +204,19 @@ export default {
       window.open(`https://drive.google.com/file/d/${fileId}/view`, "_blank");
     };
 
-    onMounted(() => {
-  // 📌 Sauvegarde l'état actuel de `userData_`
-  const oldUserData = localStorage.getItem("userData_");
-
-  fetchPartitions().then(() => {
-    // 🔍 Vérifie si `userData_` a changé après l'appel API
-    const newUserData = localStorage.getItem("userData_");
-
-    if (oldUserData && newUserData && oldUserData !== newUserData) {
-      console.warn("🚨 userData_ a été écrasé, on le restaure !");
-      localStorage.setItem("userData_", oldUserData);
+watch(
+  () => auth.authReady,
+  ready => {
+    console.log("👀 watch authReady =", ready, "prof_id =", auth.prof_id)
+    if (!ready) return
+    if (!auth.prof_id) {
+      console.warn("⏳ authReady mais prof_id absent → retry next tick")
+      return
     }
-  });
-});
-
+    fetchPartitions()
+  },
+  { immediate: true }
+)
 
     return { partitions, loading, search, selectedStyle, selectedLevel, styles, levels, filteredPartitions, openPartition };
   },

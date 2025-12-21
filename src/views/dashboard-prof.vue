@@ -362,12 +362,14 @@ watch(
 
     const hasCache = loadFromStore()
 
+    // 👇 on affiche direct le cache
     if (hasCache) {
       loading.value = false
-      return
+    } else {
+      loading.value = true
     }
 
-    loading.value = true
+    // 👇 TOUJOURS revalider en background
     try {
       await refreshDashboard()
     } finally {
@@ -376,7 +378,6 @@ watch(
   },
   { immediate: true }
 )
-
 
 </script>
 

@@ -455,6 +455,8 @@
 import Layout from "@/views/Layout.vue";
 import { getValidToken } from "@/utils/api.ts";
 import { QuillEditor } from '@vueup/vue-quill';
+import { useAuthStore } from "@/stores/authStore";
+
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 export default {
   name: "AdminFeedback",
@@ -463,7 +465,8 @@ export default {
   
   data() {
     return {
-      
+          auth: useAuthStore(),
+
       eleves: [],
           elevesHorsInscrits: [], // ⬅️ Ajout ici
 
@@ -500,7 +503,7 @@ isLoadingEleves: false,
       nouveauFeedback: "",
       feedbackSentMessage: "",
       feedbacks: [],
-      apiURL: "https://script.google.com/macros/s/AKfycbwipEXouCRxHRYp1R-hHvAp1vJbaQeqZag1f4vl3KBnfhtu5vU6XXM9v-LlhafPPy6q/exec"
+      apiURL: "https://script.google.com/macros/s/AKfycbwMPo7nyfBzSCrT81VRlJ4fh1__GgKeqvLukFO3JnM0nSGczpYJ7Xt2K6TGFtDZdHdO3Q/exec"
     };
     
   },
@@ -513,12 +516,9 @@ isLoadingEleves: false,
   },
   computed: {
 isFormReady() {
-  // Si élève non inscrit, ne bloque pas sur la dateCours
-  if (this.selectedEleve?.statut !== 'inscrit') {
-    return !!this.selectedEleve;
-  }
-  return !!this.selectedEleve && !!this.dateCours;
+  return !!this.selectedEleve
 }
+
 
 
 ,
@@ -531,8 +531,9 @@ limitedFeedbacks() {
 
 ,
 canSendFeedback() {
-  return this.selectedEleve?.statut !== 'inscrit' || (!!this.selectedEleve && !!this.dateCours);
+  return !!this.selectedEleve
 }
+
 ,
  filteredFeedbacksByMonth() {
   const feedbacks = this.selectedMonth === 'ALL'
@@ -848,43 +849,70 @@ async exportPDF() {
 ,
 
 async fetchEleves() {
-    this.isLoadingEleves = true; // 🟡 début chargement
-
-  const url = this.getProxyURL({ route: "geteleves" });
-  console.log("📡 URL utilisée pour geteleves :", url);
+  this.isLoadingEleves = true
 
   try {
-    const res = await fetch(url);
-    const data = await res.json();
-    console.log("📥 Réponse reçue :", data);
+    const jwt = await getValidToken()
+    const proxyUrl = this.getProxyPostURL()
 
-    if (Array.isArray(data)) {
-      // 🧹 Filtrer les non-admins
-const nonAdmins = data.filter(e => !e.role || e.role.toLowerCase() !== "admin");
-const ins = nonAdmins.filter(e => e.statut === "inscrit");
-const hors = nonAdmins.filter(e => e.statut !== "inscrit");
-
-console.log("Élèves inscrits :", ins.length, ins);
-console.log("Élèves non inscrits :", hors.length, hors);
-this.eleves = nonAdmins
-  .filter(e => e.statut === "inscrit")
-  .sort((a, b) => a.prenom.localeCompare(b.prenom, 'fr', { sensitivity: 'base' }));
-
-this.elevesHorsInscrits = nonAdmins
-  .filter(e => e.statut !== "inscrit")
-  .sort((a, b) => a.prenom.localeCompare(b.prenom, 'fr', { sensitivity: 'base' }));
-
-
-      console.log("✅ Éleves triés (hors admins) :", this.eleves.map(e => e.prenom));
-    } else {
-      console.warn("❌ Format inattendu reçu :", data);
+    const payload = {
+      route: "getelevesbyprof",
+      jwt,
+      prof_id: this.auth?.user?.prof_id
     }
+
+    console.log("📡 fetchEleves POST → payload =", payload)
+    console.log("🌐 proxyUrl =", proxyUrl)
+
+    const res = await fetch(proxyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+
+    console.log("📶 HTTP status =", res.status)
+
+    const data = await res.json()
+    console.log("📥 getelevesbyprof RESPONSE =", data)
+
+    if (!data.success || !Array.isArray(data.eleves)) {
+      console.warn("⚠️ format inattendu getelevesbyprof")
+      return
+    }
+
+    // 🧹 filtre admins
+    const nonAdmins = data.eleves.filter(
+      e => !e.role || e.role.toLowerCase() !== "admin"
+    )
+
+    const ins = nonAdmins.filter(e => e.statut === "inscrit")
+    const hors = nonAdmins.filter(e => e.statut !== "inscrit")
+
+    console.log("👥 inscrits =", ins.length, ins)
+    console.log("👥 hors inscrits =", hors.length, hors)
+
+    this.eleves = ins.sort((a, b) =>
+      a.prenom.localeCompare(b.prenom, "fr", { sensitivity: "base" })
+    )
+
+    this.elevesHorsInscrits = hors.sort((a, b) =>
+      a.prenom.localeCompare(b.prenom, "fr", { sensitivity: "base" })
+    )
+
+    console.log(
+      "✅ eleves finaux =",
+      this.eleves.map(e => e.prenom)
+    )
+
   } catch (err) {
-    console.error("❌ Erreur lors du fetch geteleves :", err);
-  }finally {
-    this.isLoadingEleves = false; // ✅ fin chargement
+    console.error("❌ fetchEleves ERROR =", err)
+  } finally {
+    this.isLoadingEleves = false
   }
 }
+
+
+
 
 ,
     resetEleveSelection() {
@@ -1015,6 +1043,10 @@ this.filterFeedbacksForEleve(eleve);
 async sendFeedback() {
   const jwt = await getValidToken();
   const contenu = this.nouveauFeedback.trim();
+const effectiveDate =
+  this.dateCours && this.dateCours !== ""
+    ? this.dateCours
+    : new Date().toISOString()
 
 const payload = {
   route: "addfeedback",
@@ -1025,7 +1057,7 @@ const payload = {
   contenu,
   type: "Prof",
   nom_cours: this.nomCours || "(non précisé)",
-  date_cours: this.dateCours || new Date().toISOString()
+date_cours: effectiveDate
 };
 
 
