@@ -231,8 +231,13 @@ const sortedPlanningData = computed(() => {
 
 
 const replayCourses = computed(() =>
-  sortedPlanningData.value.filter(r => r.lienReplay && r.lienReplay !== "Pas de replay disponible")
+  sortedPlanningData.value.filter(r =>
+    typeof r.lienReplay === "string" &&
+    r.lienReplay.trim() !== "" &&
+    !r.lienReplay.toLowerCase().includes("pas de replay")
+  )
 )
+
 
 function generateThumbnail(url) {
   const id = extractDriveId(url);
@@ -301,17 +306,46 @@ function parseFrenchFormattedDate(dateStr) {
 }
 
     const route = "planning"
-    const targetBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec"
-    const fullTargetUrl = `${targetBase}?route=${route}&email=${encodeURIComponent(email)}&prenom=${encodeURIComponent(prenom)}&jwt=${encodeURIComponent(jwt)}`
+    const targetBase = "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
+   const profId =
+  auth.user?.prof_id ||
+  JSON.parse(atob(jwt.split(".")[1]))?.prof_id ||
+  localStorage.getItem("prof_id") ||
+  ""
+
+const fullTargetUrl =
+  `${targetBase}?route=${route}` +
+  `&email=${encodeURIComponent(email)}` +
+  `&prenom=${encodeURIComponent(prenom)}` +
+  `&prof_id=${encodeURIComponent(profId)}` +
+  `&jwt=${encodeURIComponent(jwt)}`
+
     const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullTargetUrl)}`
-    const res = await fetch(proxyUrl)
-    const json = await res.json()
-    if (json.success && json.planning) {
-      planningData.value = json.planning
-       // 👇 Debug ici
-  console.log("Exemples de dates :")
-  console.table(planningData.value.map(p => p.formattedDate))
-    }
+console.log("📡 FETCH PLANNING →", {
+  email,
+  prenom,
+  jwt: jwt ? "OK" : "MISSING",
+  proxyUrl
+})
+
+const res = await fetch(proxyUrl)
+console.log("📥 STATUS", res.status)
+
+const json = await res.json()
+console.log("📦 RAW JSON", json)
+
+if (json.success && json.planning) {
+  planningData.value = json.planning
+
+  console.log("🧩 PLANNING LENGTH", json.planning.length)
+  console.table(
+    json.planning.map(p => ({
+      date: p.formattedDate,
+      lienReplay: p.lienReplay
+    }))
+  )
+}
+
   } catch (e) {
     console.error("Erreur lors du chargement du planning:", e)
   } finally {

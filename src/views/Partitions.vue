@@ -26,7 +26,22 @@
         <div v-if="loading" class="d-flex justify-content-center mt-4">
           <div class="spinner-border text-primary" role="status"></div>
         </div>
-  
+  <!-- EMPTY STATE -->
+<div
+  v-if="emptyMessage"
+  class="alert alert-info text-center mt-4"
+>
+  <p class="mb-2">{{ emptyMessage }}</p>
+
+  <button
+    v-if="showUploadCTA"
+    class="btn btn-primary"
+    @click="$router.push('/mes-uploads')"
+  >
+    ➕ Ajouter mes partitions
+  </button>
+</div>
+
         <!-- Liste des partitions -->
         <div v-else>
           <!-- Mode Bureau (Tableau) -->
@@ -96,6 +111,22 @@ const currentProfId = computed(() => auth.prof_id)
     // ⏳ Définition de la durée du cache (5 minutes)
     const cacheDuration = 24 * 60 * 60 * 1000; // 24 heures
  
+const isProf = computed(() => auth.user?.role === "prof")
+const noProfId = computed(() => !auth.user?.prof_id)
+const noResults = computed(() =>
+  !loading.value && filteredPartitions.value.length === 0
+)
+const emptyMessage = computed(() => {
+  if (!noResults.value) return ""
+
+  return isProf.value
+    ? "Aucune partition n’est encore associée à ton compte."
+    : "Ton professeur n’a pas encore partagé de partitions."
+})
+
+const showUploadCTA = computed(() =>
+  isProf.value && !loading.value && filteredPartitions.value.length === 0
+)
 
 const fetchPartitions = async () => {
   console.log("👤 auth.prof_id =", auth.prof_id)
@@ -205,20 +236,18 @@ console.log("🧪 sheet prof_id unique =", [...new Set(rows.map(r => r[13]))])
     };
 
 watch(
-  () => auth.authReady,
-  ready => {
-    console.log("👀 watch authReady =", ready, "prof_id =", auth.prof_id)
-    if (!ready) return
-    if (!auth.prof_id) {
-      console.warn("⏳ authReady mais prof_id absent → retry next tick")
-      return
-    }
+  [() => auth.authReady, () => auth.user?.prof_id],
+  ([ready, profId]) => {
+    if (!ready || !profId) return
     fetchPartitions()
   },
   { immediate: true }
 )
 
-    return { partitions, loading, search, selectedStyle, selectedLevel, styles, levels, filteredPartitions, openPartition };
+
+    return { partitions, loading, search, selectedStyle, selectedLevel, styles, levels,  emptyMessage,
+  noResults,
+  showUploadCTA, filteredPartitions, openPartition };
   },
 };
 </script>

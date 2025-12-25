@@ -98,7 +98,7 @@
 import { ref } from "vue"
 import { useRouter } from "vue-router"
 import Layout from "@/views/Layout.vue"
-import { getProxyPostURL } from "@/config/gas";
+import { getProxyPostURL } from "@/config/gas.ts";
 
 const router = useRouter()
 
@@ -143,19 +143,32 @@ const submitForm = async () => {
   isLoading.value = true
 
   try {
+    const payload = {
+      route: "registerprof",
+      email: email.value,
+      prenom: prenom.value,
+      codeAcces: codeAcces.value
+    }
+
+    console.log("🟡 registerprof → payload", payload)
+
     const response = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "registerprof",
-        email: email.value,
-        prenom: prenom.value,
-        codeAcces: codeAcces.value
-      })
+      body: JSON.stringify(payload)
     })
 
-    const result = await response.json()
-    console.log("📦 registerProf =", result)
+    console.log("🟡 registerprof → HTTP", response.status)
+
+    const raw = await response.text()
+    console.log("🟡 registerprof → raw", raw)
+
+    if (!raw.startsWith("{")) {
+      throw new Error("Non-JSON response (GAS crash / HTML)")
+    }
+
+    const result = JSON.parse(raw)
+    console.log("🟢 registerprof → parsed", result)
 
     if (!result.success) {
       errorMessage.value = result.message || "Erreur serveur"
@@ -169,12 +182,13 @@ const submitForm = async () => {
     }, 1000)
 
   } catch (e) {
-    console.error(e)
+    console.error("❌ registerprof ERROR", e)
     errorMessage.value = "Impossible de contacter le serveur"
   } finally {
     isLoading.value = false
   }
 }
+
 </script>
 
 <style scoped>

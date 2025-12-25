@@ -47,25 +47,28 @@ const auth = useAuthStore();
 const authStore = auth;
 
 // Récupération des states réactifs du store
-const { authReady, jwtReady } = storeToRefs(authStore);
 
 /* ============================================================================
    WATCHERS
    ============================================================================ */
 
 /* 🟦 1. Quand jwtReady passe à true → on retire le splash */
-watch(jwtReady, (ready) => {
-  if (ready) {
-    const app = document.getElementById("app");
-    if (app) app.classList.add("app-visible");
+watch(
+  () => auth.jwtReady,
+  (ready) => {
+    if (!ready) return
 
-    const splash = document.getElementById("loading-screen");
+    const app = document.getElementById("app")
+    if (app) app.classList.add("app-visible")
+
+    const splash = document.getElementById("loading-screen")
     if (splash) {
-      splash.classList.add("fade-out");
-      setTimeout(() => splash.remove(), 600);
+      splash.classList.add("fade-out")
+      setTimeout(() => splash.remove(), 600)
     }
   }
-});
+)
+;
 
 
 

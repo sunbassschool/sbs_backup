@@ -1594,7 +1594,7 @@ if (!sessionId && !did) {
 
 
   const base =
-    "https://script.google.com/macros/s/AKfycbyEXzfQ7iiR7TE-R0kaSZ7HBp_2TyOThRhqXm4_B6knM52AN3z3OEy5xIUgYLMAsaMOGw/exec";
+    "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec";
 
 const query =
   `route=refresh&refreshtoken=${encodeURIComponent(refreshToken)}` +

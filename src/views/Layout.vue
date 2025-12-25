@@ -40,15 +40,15 @@
 </template>
 
         <!-- Élève : bouton "Prendre un cours" externe -->
-        <a
-          v-if="isLoggedIn && isEleve"
-          class="sidebar-link btn-cours"
-          href="https://www.sunbassschool.com/step/inscription-aux-cours-en-visio/"
-          target="_blank"
-        >
-          <i class="bi bi-play-circle"></i>
-          <span>Prendre un cours</span>
-        </a>
+<router-link
+  v-if="isLoggedIn && isEleve"
+  to="/eleve/offres"
+  class="sidebar-link btn-cours"
+>
+  <i class="bi bi-play-circle"></i>
+  <span>Prendre un cours</span>
+</router-link>
+
 
         <router-link v-if="isLoggedIn && isEleve" to="/dashboard" class="sidebar-link">
           <i class="bi bi-house-door"></i>
@@ -97,6 +97,11 @@
           <span>Dashboard Prof</span>
         </router-link>
 
+<router-link v-if="isProf" to="/dashboard-prof/offres" class="sidebar-link">
+<i class="bi bi-bag"></i>
+  <span>Ma boutique</span>
+</router-link>
+
         <router-link v-if="isProf" to="/FeedBackProf" class="sidebar-link">
           <i class="bi bi-chat-left-dots"></i>
           <span>Feedbacks Élèves</span>
@@ -117,6 +122,8 @@
   <i class="bi bi-wrench-adjustable"></i>
   <span>Gestion des cours</span>
 </router-link>
+
+
 
         <!-- ======================== -->
         <!-- MENU : ADMIN ONLY -->
@@ -201,7 +208,7 @@
         <!-- Auth desktop -->
         <div v-if="!isLoggedIn && !isMobile" class="desktop-auth-buttons">
           <router-link to="/login" class="btn-auth login-btn">Se connecter</router-link>
-          <router-link to="/registerform" class="btn-auth trial-btn">Essai Gratuit</router-link>
+          <router-link to="/register" class="btn-auth trial-btn">Essai Gratuit</router-link>
         </div>
 
         <!-- Abonnement + compte desktop -->
@@ -217,7 +224,7 @@
             </template>
             <template v-else>
    <router-link
-  :to="{ name: 'Abonnements' }"
+  :to="{ name: 'eleve-offres' }"
   class="subscription-badge-link"
 >
   ❌ Non abonné
@@ -261,7 +268,7 @@
     <i class="bi bi-box-arrow-in-right"></i><span>Se connecter</span>
   </router-link>
 
-  <router-link to="/registerform" class="nav-link">
+  <router-link to="/register" class="nav-link">
     <i class="bi bi-person-plus"></i><span>S'inscrire</span>
   </router-link>
 
@@ -328,6 +335,9 @@
 </router-link>
       <router-link v-if="isProf" to="/prof/planning/create" class="nav-link">
   <i class="bi bi-calendar-event"></i><span>Créer planning</span>
+</router-link>
+   <router-link v-if="isProf" to="/dashboard-prof/offres" class="nav-link">
+<i class="bi bi-bag"></i><span>Ma boutique</span>
 </router-link>
 
   
@@ -803,28 +813,37 @@ html, body {
 .toggle-menu-btn {
   position: absolute;
   top: 50%;
-  left: 252px;
+  left: 217px;
   transform: translateY(-50%);
-  width: 18px;
-  height: 120px;
-  background: #414141; /* Orange vif */
-  border: none;
-  border-radius: 12px; /* Coins légèrement arrondis pour un effet moderne */
+  width: 28px;
+  height: 56px;
+
+  background: #0b0c0f;
+  border: 1px solid #1f2933;
+  border-radius: 999px;
+
   display: flex;
-  justify-content: center;
   align-items: center;
-  color: rgb(255, 255, 255);
-  font-size: 15px;
-  font-weight: bold;
-  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.5);
+  justify-content: center;
+
+  color: #fb923c; /* accent SBS */
   cursor: pointer;
   z-index: 1200;
+
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  transition: background 0.15s ease, transform 0.15s ease;
 }
+
+.toggle-menu-btn:hover {
+  background: #111318;
+  transform: translateY(-50%) scale(1.05);
+}
+
 .sidebar.isCollapsed {
   transform: translateX(-100%); /* ✅ Cache la sidebar en la déplaçant hors de l'écran */
 }
 .toggle-menu-btn i {
-  font-size: 20px;
+  font-size: 14px;
 }
 
 /* ✅ Hover */
@@ -835,7 +854,7 @@ html, body {
 /* ✅ Quand la sidebar est réduite, le bouton reste visible */
 
 .sidebar.isCollapsed + .toggle-menu-btn {
-  left: 20px; /* Ramène le bouton vers la gauche */
+  left: 1px; /* Ramène le bouton vers la gauche */
 }
 
 
@@ -901,8 +920,8 @@ html, body {
 @media screen and (max-width: 1024px) {
   .menu-btn {
     position: absolute; /* ✅ S'assurer qu'il reste bien positionné */
-    left: 10px; /* ✅ Distance du bord gauche */
-    top: 15px; /* ✅ Distance du haut */
+    left: 0px; /* ✅ Distance du bord gauche */
+    top: 0px; /* ✅ Distance du haut */
     font-size: 32px !important; /* ✅ Taille uniforme */
     color: rgb(255, 255, 255) !important; /* ✅ Couleur */
     background-color: transparent;

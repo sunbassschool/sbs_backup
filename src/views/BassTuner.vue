@@ -57,11 +57,10 @@
   </template>
   
   <script>
- import Layout from "@/views/Layout.vue";
   import { PitchDetector } from "pitchy";
   
   export default {
-    components: { Layout },
+   
   
     data() {
       return {

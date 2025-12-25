@@ -165,8 +165,8 @@ noteReady: false,      // le vrai indicateur d’API terminée
 noteLoadedFromCache: false,
 
     routes: {
-      GET: "AKfycbzeh9vGiTKbzVXhE5NmI03Zg8zhEjbL-7UUJU-bbpYMBP4GNsBKqVRtb782ED2yIe8ODw/exec",
-      POST: "AKfycbzeh9vGiTKbzVXhE5NmI03Zg8zhEjbL-7UUJU-bbpYMBP4GNsBKqVRtb782ED2yIe8ODw/exec"
+      GET: "AKfycbwjjImCb86b4tqTapotLr-qq9BHuHtaS-V3JHoPT95SMigo51iinjQXUZ5PDoZqE4gYjA/exec",
+      POST: "AKfycbwjjImCb86b4tqTapotLr-qq9BHuHtaS-V3JHoPT95SMigo51iinjQXUZ5PDoZqE4gYjA/exec"
     }
   };
 },
@@ -562,7 +562,7 @@ this.cards = [
     renderNoCourse() {
       return `
         🎸 Aucun cours prévu.<br>
-        <div onclick="window.vueRouterPush('/Abonnements')" class="planning-bouton">
+        <div onclick="window.vueRouterPush('/eleve/offres')" class="planning-bouton">
           📅 Réserver
         </div>
       `;

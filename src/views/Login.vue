@@ -44,7 +44,7 @@
               <div class="login-links mt-3">
                 <router-link to="/forgot-password" class="login-link">Mot de passe oublié ?</router-link>
                 <span class="separator">|</span>
-                <router-link to="/registerform" class="login-link">S’inscrire</router-link>
+                <router-link to="/register" class="login-link">S’inscrire</router-link>
               </div>
             </Form>
 
@@ -141,7 +141,7 @@ async function onSubmit(values) {
     // -------------------------
 const deviceInfo = navigator.userAgent;
     const apiURL =
-      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbyhthME39gY7tJlDwQ0tNcEzz9_RNylkAlZ3pv6le9eiWFpSIeAP69xiJxG-bFyhtYPOg/exec";
+      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbyOJfbN7sIfj75Tjnxv-avZOLsP8ZIkpSgICGjLM1v57iOnSISQOtRdX9-SMWI8c0Hcmg/exec";
 
     fetchStart = performance.now();
 const controller = new AbortController();
@@ -221,12 +221,18 @@ auth.jwtReady = true;
 auth.authReady = true;
 auth.isInitDone = true;
 
-router.replace("/dashboard");
+
 
 // 🔄 hydration non bloquante
 auth.fetchUserData().catch(console.warn);
 
-router.replace("/dashboard");
+// 🔀 REDIRECTION SELON RÔLE
+if (payload.role === "prof") {
+  router.replace("/dashboard-prof");
+} else {
+  router.replace("/dashboard");
+}
+
 
 
   } catch (err) {

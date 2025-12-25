@@ -64,6 +64,18 @@
  <a href="#" @click.prevent="handleResiliation" class="text-muted small d-block mt-2" style="font-size: 0.85rem;">
   Résilier mon abonnement
 </a>
+<router-link
+  to="/mes-achats"
+  class="account-action d-flex align-items-center justify-content-between text-decoration-none mt-2"
+>
+  <span class="text-muted small" style="font-size: 0.85rem;">
+    Consulter mes achats
+  </span>
+  <span class="ms-2 text-warning small">→</span>
+</router-link>
+
+
+
 
 
       </div>
@@ -87,7 +99,15 @@
 >
   🔓 Débloquer avec un abonnement
 </RouterLink>
-
+<router-link
+  to="/mes-achats"
+  class="account-action d-flex align-items-center justify-content-between text-decoration-none mt-2"
+>
+  <span class="text-muted small" style="font-size: 0.85rem;">
+    Consulter mes achats
+  </span>
+  <span class="ms-2 text-warning small">→</span>
+</router-link>
     </template>
   </div>
 
@@ -298,6 +318,7 @@ import { ref, onMounted, watch, computed, nextTick } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
 import VueCropper from "vue-cropperjs";
 import "@/assets/styles/cropper.css";
+import { getProxyPostURL } from "@/config/gas"
 
 
 import Layout from "@/views/Layout.vue";
@@ -673,11 +694,8 @@ async function handleAvatarUpload(event) {
            || "";
 
 
-    const apiBaseURL =
-      "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
+const proxyURL = getProxyPostURL();
 
-    const proxyURL =
-      `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
 
     const payload = {
       route: "upload_avatar",
@@ -867,7 +885,7 @@ async function updateTelephone() {
   const encodedTel = encodeURIComponent(cleanInput);
 
   const apiBaseURL =
-    "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
+    "https://script.google.com/macros/s/AKfycbz1h1hzM7OUKR4Vh5UCk_eYa2m2A9x6SizhyQhJ-pP0081lBItntGE1K9s7XyQDxhLUHg/exec";
 
   const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
     `${apiBaseURL}?route=updateeleve&jwt=${encodedJWT}&telephone=${encodedTel}`
@@ -906,7 +924,7 @@ const email =
     return;
   }
 
-  const apiBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
+  const apiBase = "https://script.google.com/macros/s/AKfycbz1h1hzM7OUKR4Vh5UCk_eYa2m2A9x6SizhyQhJ-pP0081lBItntGE1K9s7XyQDxhLUHg/exec";
   const url = `${apiBase}?route=get_sessions&email=${encodeURIComponent(email)}`;
   const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
@@ -1239,6 +1257,7 @@ window.addEventListener('userDataUpdated', (event) => {
 
 
 </script>
+
 <style scoped>
 
 /** Avatar style  */
@@ -1649,6 +1668,38 @@ a:hover {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+.account-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  margin-top: 12px;
+  background: #0b0c0f;
+  border-radius: 14px;
+  text-decoration: none;
+  color: #e5e7eb;
+}
+
+.account-link:hover {
+  background: #111318;
+}
+
+.account-link .label {
+  font-size: 0.95rem;
+}
+
+.account-link .arrow {
+  color: #fb923c; /* orange SBS */
+  font-size: 1rem;
+}
+.account-action {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.account-action:hover {
+  opacity: 0.85;
+  transform: translateX(2px);
 }
 
 

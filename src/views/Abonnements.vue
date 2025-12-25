@@ -55,52 +55,18 @@ const encoded = encodeURIComponent(email);
 const formules = [
   {
     id: 'app',
-    nom: "🎧 Abo App",
+    nom: "🎧 Abo Prof Sbs",
     prix: "4,99€ / mois",
-    desc: "Accès à l'app uniquement",
+    desc: "Accès à toutes les fonctionnalités",
     advantages: [
-      "Vidéos pédagogiques",
-      "Morceaux à bosser",
-      "Sans coaching direct"
+      "Elèves illimités",
+      "Créations de cours illimité",
+      "Drive connecté prof-élève in APP",
+      "Possibilité de vendre des formations"
     ],
     link: `https://buy.stripe.com/aFa9AUcXM1KA2RL6pk2Fa0A?prefilled_email=${encoded}&email=${encoded}&client_reference_id=${encoded}`
   },
-  {
-    id: 'mensuel',
-    nom: "🚀 Abo Mensuel",
-    prix: "90€ / mois",
-    desc: "3H + app + suivi",
-    advantages: [
-      "3H de cours en visio",
-      "Accès complet à l'app",
-      "Ressources personnalisées"
-    ],
-    link: `https://buy.stripe.com/fZu28saPE2OE4ZT2942Fa0D?prefilled_email=${encoded}&email=${encoded}&client_reference_id=${encoded}`
-  },
-  {
-    id: 'trimestriel',
-    nom: "💼 Abo Trimestriel",
-    prix: "270€ / 3 mois",
-    desc: "Formule engagée",
-    advantages: [
-      "9H de coaching en visio",
-      "Accès complet app + bonus",
-      "Espace Google Drive privé"
-    ],
-    link: `https://buy.stripe.com/8x29AU3nc3SI63X3d82Fa0E?prefilled_email=${encoded}&email=${encoded}&client_reference_id=${encoded}`
-  },
-  {
-    id: 'carte',
-    nom: "🎯 1H Carte",
-    prix: "30€ / 10 jours",
-    desc: "1h de cours sans abo",
-    advantages: [
-      "Cours unique",
-      "Sans engagement",
-      "Accès limité à l'app"
-    ],
-    link: `https://buy.stripe.com/14A5kEaPEcpe3VP2942Fa0B?prefilled_email=${encoded}&email=${encoded}&client_reference_id=${encoded}`
-  }
+
 ];
 
 </script>

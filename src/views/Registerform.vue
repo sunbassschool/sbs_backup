@@ -345,7 +345,7 @@ const stripeLinks = {
 
 
   try {
-    const baseURL = "https://script.google.com/macros/s/AKfycbwdF0wAU5gA1kec4W6BCvQg7zW_AmXhVNdnXckYmTPRT-x8AAmIX67acNHJBfvAFiSHyA/exec";
+    const baseURL = "https://script.google.com/macros/s/AKfycbwNKLd3qhS7JFaXgBJOisqkEeV8vIFoMMxJDwKizNFdlT1rjMtXiPasnOBen5KS0PuSJA/exec";
 const query = `route=register&email=${encodeURIComponent(this.email)}&prenom=${encodeURIComponent(this.prenom)}&codeAcces=${encodeURIComponent(this.codeAcces)}&formule=${encodeURIComponent(this.formule)}`;
 
     const fullURL = `${baseURL}?${query}`;

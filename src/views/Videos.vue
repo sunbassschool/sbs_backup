@@ -28,7 +28,7 @@
   Mais tu peux <strong>débloquer l'accès complet</strong> à toutes les vidéos en prenant un abonnement ! 🚀  
   <br />
   <RouterLink
-  to="/abonnements"
+  to="/eleve/offres"
   class="btn btn-sm mt-2 fw-bold"
   style="background-color: #333; color: white;"
 >

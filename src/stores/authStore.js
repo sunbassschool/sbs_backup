@@ -38,6 +38,8 @@ export const useAuthStore = defineStore("auth", {
   // STATE
   // --------------------------------------------------------------------------
   state: () => ({
+      stripe_ready: null,
+
     menuOpen: false,
  jwtReady: false,
     jwt: localStorage.getItem("jwt") || null,
@@ -147,7 +149,7 @@ export const useAuthStore = defineStore("auth", {
         const jwt = this.jwt;
         if (!jwt) return;
 
-        const url = `https://script.google.com/macros/s/AKfycbyEXzfQ7iiR7TE-R0kaSZ7HBp_2TyOThRhqXm4_B6knM52AN3z3OEy5xIUgYLMAsaMOGw/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
+        const url = `https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec?route=getReports&jwt=${encodeURIComponent(jwt)}`;
         const proxy = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
 
         const res = await fetch(proxy);
@@ -245,7 +247,7 @@ localStorage.setItem("sessionId", sessionId)
     return false;
   }
 
-  const routeID = "AKfycbyEXzfQ7iiR7TE-R0kaSZ7HBp_2TyOThRhqXm4_B6knM52AN3z3OEy5xIUgYLMAsaMOGw";
+  const routeID = "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w";
   const rawUrl = `https://script.google.com/macros/s/${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(jwtString)}`;
   const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(rawUrl)}`;
 

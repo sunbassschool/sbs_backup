@@ -5,8 +5,11 @@
 
         <!-- Loader -->
         <div v-if="loading" class="loader-container">
-          <div class="spinner-border custom-spinner"></div>
-          <p>Chargement du tableau de bord...</p>
+      <div class="dashboard-loader">
+  <div class="spinner"></div>
+<p class="loader-text">Chargement du tableau de bord…</p>
+</div>
+
         </div>
 
         <!-- DASHBOARD PROF -->
@@ -92,6 +95,7 @@
   <span v-if="regenLoading">Génération...</span>
   <span v-else>🔄 Générer un nouveau lien</span>
 </button>
+<StripeConnectCard />
 
 </div>
 
@@ -109,8 +113,8 @@ import { ref, onMounted,watch } from "vue";
 import { useRouter } from "vue-router";
 import Layout from "@/views/Layout.vue";
 import { useAuthStore } from "@/stores/authStore";
-import { useDashboardStore } from "@/stores/dashboardStore"
-
+import { useDashboardStore } from "@/stores/dashboardStore";
+import StripeConnectCard from "@/components/stripe/StripeConnectCard.vue"
 
 // === STORES ===
 const auth = useAuthStore();
@@ -135,8 +139,8 @@ const data = ref(null)
 
 // === ROUTES ===
 const routes = {
-  GET: "AKfycbyWlj_R4pyEvXVWC8oOiq8Y8QuJfdG5ravSujWuplES9e5ztvhF4n0a2TSGyyZ-aDRHbg/exec",
-  POST: "AKfycbyWlj_R4pyEvXVWC8oOiq8Y8QuJfdG5ravSujWuplES9e5ztvhF4n0a2TSGyyZ-aDRHbg/exec",
+  GET: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec",
+  POST: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec",
 };
 
 // === HELPERS API ===
@@ -582,5 +586,47 @@ watch(
   color: #ff6a00;
   box-shadow: 0 0 10px rgba(255,106,0,0.25);
 }
+.dashboard-loader {
+  min-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #cfd3dc;
+  font-weight: 500;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,.15);
+  border-top-color: #e63946;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+p {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.loader-text {
+  font-size: 13px;
+  color: #cfd3dc;
+  opacity: 0.85;
+  letter-spacing: .3px;
+  animation: fadePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes fadePulse {
+  0%, 100% { opacity: .4 }
+  50% { opacity: .9 }
+}
+
 
 </style>

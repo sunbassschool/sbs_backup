@@ -17,7 +17,7 @@
         <div v-if="!loading && upcomingCourses.length === 0" class="alert alert-warning text-center mt-3">
           <p class="mb-2">🎸 Aucun cours à venir pour le moment.</p>
           <RouterLink
-            to="/abonnements"
+            to="/eleve/offres"
             class="btn btn-sm mt-2 fw-bold"
             style="background-color: #333; color: white;"
           >
@@ -231,7 +231,7 @@ export default {
     const profId = computed(() => auth.user?.prof_id || "");
 
 const routes = {
-  POST: "AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
+  POST: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
 };
 
 // === Helper POST via proxy ===
@@ -357,7 +357,7 @@ const cacheKey = `planning_${email.value}_${profId.value}`;
   profId: profId.value
 });
 
-    const baseURL = "https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec";
+    const baseURL = "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec";
 const internalURL = `${baseURL}?route=planning&email=${encodeURIComponent(email.value)}&prof_id=${encodeURIComponent(profId.value)}`;
     const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(internalURL)}`;
     const response = await axios.get(finalURL);

@@ -51,14 +51,31 @@ const router = createRouter({
     // =========================================================
     // 🏠 ROOT → redirige selon login
     // =========================================================
-    {
-      path: "/",
-      name: "root-redirect",
-      redirect: () => {
-        const store = useAuthStore() as AnyStore;
-        return store.isLoggedIn ? { name: "dashboard" } : { name: "login" };
-      },
-    },
+{
+  path: "/",
+  name: "root",
+  redirect: () => {
+    const store = useAuthStore()
+
+    // 🔒 pas loggé
+    if (!store.jwt) {
+      return { path: "/login" }
+    }
+
+    const role = store.user?.role ?? ""
+
+    // 👨‍🏫 prof / admin
+    if (role === "prof" || role === "admin") {
+      return { path: "/dashboard-prof" }
+    }
+
+    // 👤 élève
+    return { path: "/dashboard" }
+  }
+},
+
+
+
 
     // =========================================================
     // 🛂 AUTH
@@ -130,7 +147,50 @@ const router = createRouter({
     meta: { requiresAuth: true, requiresProf: true },
     },
 
+{
+  path: "/stripe-success",
+  name: "stripe-success",
+  component: () => import("@/components/stripe/StripeSucess.vue"),
+  meta: {
+    requiresAuth: true,
+    requiresProf: true
+  }
+},
+{
+  path: "/stripe-success-eleve",
+  name: "stripe-success-eleve",
+  component: () => import("@/components/stripe/StripeSucessEleve.vue"),
+  meta: { requiresAuth: true }
+}
+,
+{
+  path: "/mes-achats",
+  name: "mes-achats",
+  component: () => import("@/views/eleve/MesAchats.vue"),
+  meta: { requiresAuth: true }
+}
+,
 
+
+{
+  path: "/dashboard-prof/offres",
+  name: "dashboard-prof-offres",
+  component: () => import("@/views/dashboard-prof/Offres.vue"),
+  meta: {
+    requiresAuth: true,
+    requiresProf: true
+  }
+},
+{
+  path: "/eleve/offres",
+  name: "eleve-offres",
+  component: () => import("@/views/eleve/OffresEleve.vue"),
+  meta: {
+    requiresAuth: true,
+    requiresEleve: true
+  }
+}
+,
 
     // =========================================================
     // 👤 USER (tout utilisateur connecté)
@@ -177,7 +237,17 @@ const router = createRouter({
     { path: "/partitions", name: "partitions", component: Partitions },
     { path: "/videos", name: "videos", component: Videos },
     { path: "/Metronome", name: "Metronome", component: Metronome },
-    { path: "/BassTuner", name: "BassTuner", component: BassTuner },
+{
+  path: "/BassTuner",
+  component: () => import("@/views/Layout.vue"),
+  children: [
+    {
+      path: "",
+      name: "BassTuner",
+      component: () => import("@/views/BassTuner.vue")
+    }
+  ]
+},
     { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
 
     { path: "/registerform", name: "registerform", component: RegisterForm },
@@ -193,61 +263,70 @@ const router = createRouter({
 
 
 // =============================================================
-// 🔐 GLOBAL GUARD MULTI-PROF / ADMIN
+// 🔐 GLOBAL GUARD MULTI-PROF / ADMIN + STRIPE
 // =============================================================
-router.beforeEach(async (to, from) => {
-  const store = useAuthStore();
+router.beforeEach(async (to) => {
+  const store = useAuthStore()
+  const isLoggedIn = !!store.jwt
+  const requiresAuth = to.meta.requiresAuth === true
 
-  const hasJwt = !!store.jwt;
-  const hasUser = !!store.user;
-  const isLoggedIn = hasJwt && hasUser;
-  const requiresAuth = to.meta.requiresAuth === true;
+  // ⛔ login interdit si déjà connecté
+  if (to.name === "login" && isLoggedIn) {
+    return {
+      path: store.user?.role === "prof" ? "/dashboard-prof" : "/dashboard"
+    }
+  }
 
-  // ============================
-  // LOGIN toujours accessible
-  // ============================
-  if (to.name === "login") return true;
+  // ✅ routes publiques
+  if (!requiresAuth) return true
 
-  // ============================
-  // Attente authReady
-  // ============================
+  // ⏳ attendre authReady uniquement pour routes protégées
   if (!store.authReady) {
-    await new Promise((resolve) =>
-      watch(
-        () => store.authReady,
-        (v) => v === true && resolve(true),
-        { immediate: false }
-      )
-    );
+    await new Promise(resolve =>
+      watch(() => store.authReady, v => v && resolve(true))
+    )
   }
 
-  // ============================
-  // Route PROTÉGÉE → login si pas connecté
-  // ============================
-  if (requiresAuth && !isLoggedIn) {
-    return { name: "login" };
+  // 🔐 non connecté
+  if (!isLoggedIn) {
+    return { name: "login" }
   }
 
-// ============================
-// Route PROF (admin autorisé aussi)
-// ============================
-if (to.meta.requiresProf) {
-  const role = store.user?.role ?? ""
-
-  if (!["prof", "admin"].includes(role)) {
+  // 👨‍🏫 prof
+  if (
+    to.meta.requiresProf &&
+    !["prof", "admin"].includes(store.user?.role ?? "")
+  ) {
     return { path: "/" }
   }
-}
 
-
-  // ============================
-  // Route ADMIN
-  // ============================
+  // 👑 admin
   if (to.meta.role === "admin" && store.user?.role !== "admin") {
-    return { path: "/" };
+    return { path: "/" }
   }
 
-  return true;
-});
+  // =============================================================
+  // 💳 STRIPE GUARD (OFFRES UNIQUEMENT)
+  // =============================================================
+  if (
+    to.path === "/dashboard-prof/offres" &&
+    store.user?.role === "prof"
+  ) {
+    // stripe_ready doit être explicitement true
+ if (
+  to.path === "/dashboard-prof/offres" &&
+  store.user?.role === "prof" &&
+  store.user?.stripe_ready === false // ⚠️ seulement false
+) {
+  console.warn("⛔ Accès Offres bloqué : Stripe non prêt")
+  return { path: "/dashboard-prof" }
+}
+
+  }
+
+  return true
+})
+
+
 
 export default router;
