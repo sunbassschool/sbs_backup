@@ -168,7 +168,17 @@ onMounted(async () => {
       })
     }).then(r => r.json())
 
-    eleves.value = res.eleves || []
+const normalize = (str = "") =>
+  str
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+
+eleves.value = (res.eleves || []).filter(e =>
+  normalize(e.statut).startsWith("inscrit")
+)
   } catch {
     toast.error("Impossible de charger les élèves")
   }

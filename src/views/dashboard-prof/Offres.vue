@@ -4,74 +4,71 @@
 
       <!-- HEADER -->
       <header class="page-header">
-        <h2>Mes cours</h2>
+        <h2>Mes offres de cours</h2>
         <button class="btn primary" @click="openCreateProduct">
-          ➕ Nouveau produit
+          ➕ ajouter
         </button>
       </header>
 
       <!-- LOADING -->
-      <p v-if="loading" class="muted">Chargement des cours</p>
+      <p v-if="loading" class="muted">Chargement des cours…</p>
 
       <!-- EMPTY -->
       <div v-else-if="!products.length" class="empty">
-        <p>Aucun cours créée pour le moment.</p>
-        <button class="btn primary" @click="openCreateProduct">
-          Créer mon premier cours
+        <p>Aucun cours créé.</p>
+        <button class="btn primary small" @click="openCreateProduct">
+          Créer un cours
         </button>
       </div>
 
       <!-- PRODUCTS -->
       <div v-else class="products">
-        <section
-          v-for="product in products"
+
+        <!-- ================= ACTIFS ================= -->
+        <div
+          v-for="product in activeProducts"
           :key="product.product_id"
-          class="product-card"
-          :class="{ archived: !product.active }"
+          class="product-row"
+            :class="{ archived: !product.active, updating: product._updating }"
+
         >
 
-          <!-- PRODUCT HEADER -->
-          <div class="product-header">
-            <div class="product-info">
-              <h3>{{ product.name }}</h3>
-              <p v-if="product.description" class="desc">
+          <!-- HEADER -->
+          <div class="row-main">
+            <div class="row-info">
+              <strong class="row-title">{{ product.name }}</strong>
+              <span v-if="product.description" class="row-desc">
                 {{ product.description }}
-              </p>
+              </span>
             </div>
 
-            <div class="product-actions">
-              <!-- ARCHIVE -->
+            <div class="row-actions">
               <button
                 class="icon-btn"
-                :title="product.active ? 'Archiver' : 'Réactiver'"
+                  :disabled="product._updating"
+
+                title="Archiver"
                 @click="toggleProductActive(product)"
               >
-                <i
-                  :class="product.active
-                    ? 'bi bi-archive'
-                    : 'bi bi-arrow-counterclockwise'"
-                ></i>
+                <i class="bi bi-archive"></i>
               </button>
 
-              <!-- TOGGLE PRICES -->
               <button
-                class="btn ghost"
+                class="btn ghost small"
                 @click="togglePrices(product.product_id)"
               >
-                {{ openedProduct === product.product_id
-                  ? 'Masquer les prices'
-                  : 'Voir les prix' }}
+                {{ openedProduct === product.product_id ? "Masquer" : "Prix" }}
               </button>
             </div>
           </div>
 
-          <!-- prix -->
+          <!-- PRICES -->
           <div
             v-if="openedProduct === product.product_id"
             class="prices"
           >
-            <p v-if="loadingPrices" class="muted">
-              Chargement des prix…
+            <p v-if="loadingPrices" class="muted small">
+              Chargement…
             </p>
 
             <div
@@ -80,11 +77,9 @@
               class="price-row"
             >
               <span class="price-label">
-                <strong>{{ price.mode }}</strong>
-                — {{ price.amount / 100 }} {{ price.currency }}
-                <span v-if="price.interval">
-                  / {{ price.interval }}
-                </span>
+                {{ price.amount / 100 }} {{ price.currency }}
+                <span v-if="price.interval">/ {{ price.interval }}</span>
+                <small class="mode">({{ price.mode }})</small>
               </span>
 
               <label class="price-toggle">
@@ -93,42 +88,135 @@
                   :checked="price.active"
                   @change="togglePrice(price, product.product_id)"
                 />
-                actif
               </label>
             </div>
 
             <button
-              class="btn small ghost"
+              class="btn ghost tiny"
               @click="openCreatePrice(product)"
             >
-              ➕ Fixer un prix
+              ➕ Ajouter un prix
             </button>
           </div>
+        </div>
 
-        </section>
+        <!-- ================= ARCHIVÉS ================= -->
+      <!-- TOGGLE ARCHIVÉS -->
+<div
+  v-if="archivedProducts.length"
+  class="archived-toggle"
+>
+  <button
+    class="btn ghost small"
+    @click="showArchived = !showArchived"
+  >
+    {{ showArchived ? "Masquer" : "Afficher" }}
+    les archivés ({{ archivedProducts.length }})
+  </button>
+</div>
+
+<div
+  v-if="showArchived && archivedProducts.length"
+  class="archived-section"
+>
+
+          <div class="archived-title">
+            Archivés
+          </div>
+
+          <div
+            v-for="product in archivedProducts"
+            :key="product.product_id"
+            class="product-row archived"
+          >
+
+            <div class="row-main">
+              <div class="row-info">
+                <strong class="row-title">{{ product.name }}</strong>
+                <span v-if="product.description" class="row-desc">
+                  {{ product.description }}
+                </span>
+              </div>
+
+              <div class="row-actions">
+                <button
+                  class="icon-btn"
+                  title="Réactiver"
+                  @click="toggleProductActive(product)"
+                >
+                  <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+
+                <button
+                  class="btn ghost small"
+                  @click="togglePrices(product.product_id)"
+                >
+                  {{ openedProduct === product.product_id ? "Masquer" : "Prix" }}
+                </button>
+              </div>
+            </div>
+
+            <!-- PRICES -->
+            <div
+              v-if="openedProduct === product.product_id"
+              class="prices"
+            >
+              <p v-if="loadingPrices" class="muted small">
+                Chargement…
+              </p>
+
+              <div
+                v-for="price in pricesByProduct[product.product_id]"
+                :key="price.price_id"
+                class="price-row"
+              >
+                <span class="price-label">
+                  {{ price.amount / 100 }} {{ price.currency }}
+                  <span v-if="price.interval">/ {{ price.interval }}</span>
+                  <small class="mode">({{ price.mode }})</small>
+                </span>
+
+                <label class="price-toggle">
+                  <input
+                    type="checkbox"
+                    :checked="price.active"
+                    @change="togglePrice(price, product.product_id)"
+                  />
+                </label>
+              </div>
+
+              <button
+                class="btn ghost tiny"
+                @click="openCreatePrice(product)"
+              >
+                ➕ Ajouter un prix
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- MODALS -->
       <CreateProductModal
         v-if="showCreateProduct"
         @close="showCreateProduct = false"
-@created="() => { clearProductsCache(auth.user.prof_id); fetchProducts() }"
+        @created="() => { clearProductsCache(auth.user.prof_id); fetchProducts() }"
       />
 
-    <CreatePriceModal
-  v-if="showCreatePrice"
-  :product-id="selectedProductId"
-  @close="showCreatePrice = false"
-  @created="onPriceCreated"
-/>
-
+      <CreatePriceModal
+        v-if="showCreatePrice"
+        :product-id="selectedProductId"
+        @close="showCreatePrice = false"
+        @created="onPriceCreated"
+      />
 
     </div>
   </Layout>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
+import { ref, onMounted, computed } from "vue"
 import Layout from "@/views/Layout.vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getValidToken } from "@/utils/api"
@@ -146,10 +234,19 @@ const loadingPrices = ref(false)
 const products = ref([])
 const pricesByProduct = ref({})
 const openedProduct = ref(null)
+const showArchived = ref(false)
 
 
 const showCreatePrice = ref(false)
 const selectedProductId = ref(null)
+
+const activeProducts = computed(() =>
+  (products.value || []).filter(p => p.active)
+)
+
+const archivedProducts = computed(() =>
+  (products.value || []).filter(p => !p.active)
+)
 
 
 // =====================================================
@@ -202,6 +299,8 @@ const fetchProductsNetwork = async () => {
     products.value = res.products || []
 
     saveProductsToCache(auth.user.prof_id, products.value)
+    preloadPrices() // 🔥 background
+
 
   } catch (e) {
     console.error("❌ fetchProductsNetwork error", e)
@@ -231,66 +330,78 @@ const onPriceCreated = () => {
   const productId = selectedProductId.value
 
   // invalide prices locales
-  pricesByProduct.value[productId] = null
+pricesByProduct.value[productId] = null
+fetchPrices(productId)
+openedProduct.value = productId
 
-  // force refetch prices
-  togglePrices(productId)
 }
 
 // =====================================================
 // FETCH archiver
 // =====================================================
-const toggleProductActive = async (product) => {
+const toggleProductActive = (product) => {
   const action = product.active ? "Archiver" : "Réactiver"
-
   if (!confirm(`${action} ce produit ?`)) return
 
-  try {
-    const jwt = await getValidToken()
-
-    const res = await fetch(proxyUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "toggleproductactive",
-        jwt,
-        prof_id: auth.user.prof_id,
-        product_id: product.product_id,
-        active: !product.active
-      })
-    }).then(r => r.json())
-
-    if (res.success) {
-      product.active = !product.active
-      clearProductsCache(auth.user.prof_id)
-
-    } else {
-      alert("Erreur lors de l’opération")
-    }
-  } catch (e) {
-    console.error("❌ toggleProductActive error", e)
-  }
-}
-
-// =====================================================
-// FETCH PRICES
-// =====================================================
-const togglePrices = async (productId) => {
-  if (openedProduct.value === productId) {
-    openedProduct.value = null
+  const jwt = auth.jwt || auth.session?.jwt
+  if (!jwt) {
+    alert("Session invalide, recharge la page")
     return
   }
 
-  openedProduct.value = productId
+  // 🔥 OPTIMISTIC UI
+  const previousState = product.active
+  product.active = !previousState
+  product._updating = true
 
-  // déjà chargé → on affiche
+  // 👉 force le rerender / reclassement
+  products.value = [...products.value]
+
+  // 🔄 API async
+  setTimeout(async () => {
+    try {
+      const res = await fetch(proxyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          route: "toggleproductactive",
+          jwt,
+          prof_id: auth.user.prof_id,
+          product_id: product.product_id,
+          active: product.active
+        })
+      }).then(r => r.json())
+
+      if (!res.success) {
+        // rollback visuel
+        product.active = previousState
+        products.value = [...products.value]
+        alert(res.message || "Erreur lors de l’opération")
+      } else {
+        clearProductsCache(auth.user.prof_id)
+      }
+
+    } catch (e) {
+      console.error("❌ toggleProductActive error", e)
+      product.active = previousState
+      products.value = [...products.value]
+    } finally {
+      product._updating = false
+    }
+  }, 0)
+}
+
+
+
+const fetchPrices = async (productId, { silent = false } = {}) => {
+  // déjà chargé → skip
   if (pricesByProduct.value[productId]) return
 
   console.group("💰 fetchPrices", productId)
-  loadingPrices.value = true
+  if (!silent) loadingPrices.value = true
 
   try {
-    const jwt = await getValidToken()
+    const jwt = auth.jwt || auth.session?.jwt
 
     const res = await fetch(proxyUrl, {
       method: "POST",
@@ -309,10 +420,24 @@ const togglePrices = async (productId) => {
   } catch (e) {
     console.error("❌ fetchPrices error", e)
   } finally {
-    loadingPrices.value = false
+    if (!silent) loadingPrices.value = false
     console.groupEnd()
   }
 }
+const preloadPrices = () => {
+  for (const product of products.value) {
+    fetchPrices(product.product_id, { silent: true })
+  }
+}
+
+// =====================================================
+// FETCH PRICES
+// =====================================================
+const togglePrices = (productId) => {
+  openedProduct.value =
+    openedProduct.value === productId ? null : productId
+}
+
 
 // =====================================================
 // TOGGLE PRICE ACTIVE
@@ -367,198 +492,206 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* =========================
-   PAGE
-   ========================= */
 .offres-page {
-  max-width: 1000px;
+  max-width: 920px;
   margin: 0 auto;
-  padding: 28px;
+  padding: 20px;
   color: #e6e6e6;
 }
 
-@media (min-width: 768px) {
-  .offres-page {
-    padding: 36px;
-  }
-}
+/* ================= HEADER ================= */
 
-/* =========================
-   HEADER
-   ========================= */
 .page-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 28px;
+  align-items: center;
+  margin-bottom: 18px;
 }
 
 .page-header h2 {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 500;
-  letter-spacing: 0.3px;
   margin: 0;
 }
 
-/* =========================
-   PRODUCTS LIST
-   ========================= */
+/* ================= LIST ================= */
+
 .products {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
-/* =========================
-   PRODUCT CARD
-   ========================= */
-.product-card {
-  background: #0b0c0f;
-  border-radius: 18px;
-  padding: 20px;
-  transition: opacity 0.2s ease;
+/* ================= ROW ================= */
+
+.product-row {
+  background: #0c0d11;
+  border: 1px solid #1a1a1a;
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
-/* produit archivé */
-.product-card.archived {
+.product-row.archived {
   opacity: 0.45;
 }
 
-/* =========================
-   PRODUCT HEADER
-   ========================= */
-.product-header {
+/* ================= MAIN ================= */
+
+.row-main {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  align-items: center;
+  gap: 12px;
 }
 
-.product-info h3 {
-  margin: 0;
-  font-size: 1rem;
+.row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-title {
+  font-size: 0.9rem;
   font-weight: 500;
   color: #f5f5f5;
 }
 
-.desc {
-  margin-top: 6px;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: #b3b3b3;
+.row-desc {
+  font-size: 0.75rem;
+  color: #9a9a9a;
 }
 
-/* =========================
-   ACTIONS
-   ========================= */
-.product-actions {
+/* ================= ACTIONS ================= */
+
+.row-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-/* icône archive */
 .icon-btn {
   background: transparent;
   border: none;
   color: #9a9a9a;
-  font-size: 1.1rem;
+  font-size: 1rem;
   cursor: pointer;
-  padding: 6px;
+  padding: 4px;
 }
 
 .icon-btn:hover {
-  color: #fb923c; /* accent SBS */
+  color: #fb923c;
 }
 
-/* =========================
-   PRICES
-   ========================= */
+/* ================= PRICES ================= */
+
 .prices {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid #1a1a1a;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #222;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
-/* ligne price */
 .price-row {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  font-size: 0.9rem;
+  align-items: center;
+  font-size: 0.75rem;
 }
 
-/* label price */
 .price-label {
   color: #d4d4d4;
 }
 
-/* toggle price */
-.price-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: #9a9a9a;
+.price-label .mode {
+  color: #777;
+  margin-left: 4px;
 }
 
 .price-toggle input {
   accent-color: #fb923c;
 }
 
-/* =========================
-   BUTTONS
-   ========================= */
+/* ================= BUTTONS ================= */
+
 .btn {
   background: #fb923c;
   color: #0b0c0f;
   border: none;
   border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 0.8rem;
+  padding: 6px 14px;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
 }
 
-.btn:hover {
-  opacity: 0.9;
-}
-
-.btn.small {
-  padding: 6px 14px;
-  font-size: 0.75rem;
-}
-
-/* bouton principal */
 .btn.primary {
   background: #fb923c;
 }
 
-/* ghost */
 .btn.ghost {
   background: transparent;
   color: #fb923c;
-  padding: 6px 12px;
+  padding: 4px 8px;
 }
 
 .btn.ghost:hover {
   text-decoration: underline;
 }
 
-/* =========================
-   TEXT UTILS
-   ========================= */
+.btn.small {
+  font-size: 0.7rem;
+  padding: 4px 10px;
+}
+
+.btn.tiny {
+  font-size: 0.65rem;
+  padding: 3px 8px;
+}
+
+/* ================= UTILS ================= */
+
 .muted {
   color: #8a8a8a;
 }
 
+.muted.small {
+  font-size: 0.7rem;
+}
+
 .empty {
-  margin-top: 48px;
-  color: #8a8a8a;
+  margin-top: 40px;
   text-align: center;
+  color: #8a8a8a;
+}
+.archived-toggle {
+  margin-top: 16px;
+  margin-bottom: 6px;
+  text-align: right;
+}
+
+.archived-toggle .btn {
+  font-size: 0.7rem;
+  padding: 4px 10px;
+}
+
+.archived-section {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed #2a2a2a;
+}
+
+.archived-title {
+  font-size: 0.7rem;
+  color: #777;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.product-row.updating {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 </style>

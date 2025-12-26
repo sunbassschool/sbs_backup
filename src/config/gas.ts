@@ -1,5 +1,5 @@
 export const GAS_POST_ROUTE =
-  "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w";
+  "AKfycbxPAfd9GBnWT39i64aMZzl2ZzVDsqBiK8LcWF1z7aNl6JobuDuymq1t9Id6vnhbJee2bA";
 
 export const getProxyPostURL = () => {
   const baseURL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`;

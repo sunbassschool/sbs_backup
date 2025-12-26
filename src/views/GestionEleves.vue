@@ -4,10 +4,11 @@
         
   
         <!-- 🔄 Loading -->
-        <div v-if="loading" class="text-center text-light">
-          <div class="spinner-border custom-spinner"></div>
-          <p>Chargement des élèves...</p>
-        </div>
+       <div v-if="loading" class="sbs-loading">
+  <div class="sbs-spinner"></div>
+  <span class="sbs-loading-text">Chargement des élèves…</span>
+</div>
+
   
         <!-- ❌ Erreur -->
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
@@ -143,7 +144,7 @@ champs: [
         eleves: [],
         loading: false,
         error: null,
-        apiURL: "https://script.google.com/macros/s/AKfycbwWyqUjn5e_ZGHwTU14Xp-QD_Ljll4-XHjr-04lMjcuffqlzLXwn40rHMMYd9Zr-iyOTA/exec"
+        apiURL: "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
       };
     },
     async mounted() {
@@ -156,51 +157,100 @@ champs: [
 }
 ,
     methods: {
-    async fetchEleves() {
+async fetchEleves() {
   this.error = null;
 
-  const jwt = await getValidToken();
-  if (!jwt) {
-    this.error = "JWT non valide.";
+  console.group("👥 FETCH ÉLÈVES");
+
+  try {
+    // ===================================================
+    // 🔐 JWT
+    // ===================================================
+    const jwt = await getValidToken();
+    console.log("🔐 jwt présent =", !!jwt);
+
+    if (!jwt) {
+      throw new Error("JWT non valide");
+    }
+
+    // ===================================================
+    // 👤 PROF ID
+    // ===================================================
+    const profId = this.auth?.user?.prof_id;
+    console.log("👤 prof_id =", profId);
+
+    if (!profId) {
+      throw new Error("prof_id manquant");
+    }
+
+    // ===================================================
+    // 🌐 URL PROXY (POST)
+    // ===================================================
+    const url =
+      `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(this.apiURL)}`;
+
+    console.log("🌐 POST URL =", url);
+
+    // ===================================================
+    // 📦 PAYLOAD
+    // ===================================================
+    const payload = {
+      route: "getelevesbyprof",
+      jwt,
+      prof_id: profId
+    };
+
+    console.log("📤 PAYLOAD =", payload);
+
+    // ===================================================
+    // 🚀 FETCH
+    // ===================================================
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    console.log("📶 HTTP status =", res.status);
+
+    const raw = await res.text();
+    console.log("📥 RAW RESPONSE =", raw);
+
+    let result;
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      throw new Error("JSON invalide renvoyé par le serveur");
+    }
+
+    console.log("📦 PARSED =", result);
+
+    // ===================================================
+    // ✅ TRAITEMENT
+    // ===================================================
+    if (result?.success && Array.isArray(result.eleves)) {
+      console.log("✅ élèves reçus =", result.eleves.length);
+
+      this.eleves = result.eleves.sort((a, b) => {
+        if (a.statut === b.statut) return 0;
+        return a.statut === "inscrit" ? -1 : 1;
+      });
+
+      this.saveToStore();
+    } else {
+      throw new Error(result?.message || "Format inattendu");
+    }
+
+  } catch (err) {
+    console.error("❌ FETCH ÉLÈVES ERROR =", err);
+    this.error = err.message || "Erreur de connexion au serveur";
+  } finally {
     this.loading = false;
-    return;
+    console.groupEnd();
   }
-
-  const profId = this.auth.user?.prof_id;
-  if (!profId) {
-    this.error = "prof_id manquant.";
-    this.loading = false;
-    return;
-  }
-
-  const base = this.apiURL + `?route=getelevesbyprof&jwt=${jwt}&prof_id=${profId}`;
-
-  const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
-
- try {
-  const res = await fetch(url)
-  const result = await res.json()
-  console.log("📦 Résultat brut getelevesbyprof :", result)
-
-  if (result?.success && Array.isArray(result.eleves)) {
-    this.eleves = result.eleves.sort((a, b) => {
-      if (a.statut === b.statut) return 0
-      return a.statut === "inscrit" ? -1 : 1
-    })
-
-    this.saveToStore()
-  } else {
-    this.error = result.message || "Format inattendu reçu depuis le serveur."
-  }
-
-} catch (err) {
-  console.error("❌ Erreur fetchEleves :", err)
-  this.error = "Erreur de connexion au serveur."
 }
-finally {
-    this.loading = false;
-  }
-}
+
+
 ,
 
 loadFromStore() {
@@ -300,177 +350,229 @@ else {
   </script>
   
   <style scoped>
-  .card {
-    transition: transform 0.2s ease;
-  }
-  .card:hover {
-    transform: scale(1.01);
-  }
+ /* ===================================================
+   🎛️ GLOBAL TUNING (compact SBS)
+   =================================================== */
 
-.editable-field {
-  padding: 4px 6px;
-  background: #1e1e1e;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #ccc;
+.card {
+  transition: transform 0.15s ease;
 }
-.editable-field:hover {
-  background: #2a2a2a;
+
+.card:hover {
+  transform: scale(1.005);
 }
+
+/* ===================================================
+   🧱 CARD ÉLÈVE (COMPACT)
+   =================================================== */
 
 .modern-card {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 18px;
-  padding: 20px;
-  margin-bottom: 0px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  color: #eaeaea;
-  backdrop-filter: blur(6px);
-  transition: transform 0.2s ease;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  box-shadow: none;
+  color: #e6e6e6;
+  backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background-color 0.15s ease;
 }
 
 .modern-card:hover {
-  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.045);
+  transform: none;
 }
+
+/* ===================================================
+   🧠 HEADER
+   =================================================== */
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
 .name {
-  font-size: 1.2rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: #ffffff;
   margin: 0;
+  line-height: 1.2;
 }
 
-.toggle-btn {
-  background: none;
-  border: 1px solid #666;
-  color: #ccc;
-  font-size: 1rem;
-  border-radius: 6px;
-  width: 26px;
-  height: 26px;
-  line-height: 1;
-    padding: 0;
+/* ===================================================
+   🔘 TOGGLE
+   =================================================== */
 
-  transition: all 0.2s ease;
+.toggle-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #bbb;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
 }
 
 .toggle-btn:hover {
-  background-color: rgba(255, 255, 255, 0.945);
-   color: #ff0000;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
   cursor: pointer;
 }
+
+/* ===================================================
+   📦 CONTENU DÉPLIÉ
+   =================================================== */
 
 .card-details {
-  margin-top: 1rem;
+  margin-top: 6px;
 }
+
+/* ===================================================
+   🏷️ FIELDS
+   =================================================== */
 
 .field {
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 }
+
 
 .field label {
+  font-size: 0.6rem;
+  color: #8f8f8f;
+  margin-bottom: 1px;
+  letter-spacing: 0.03em;
+}
+
+
+.field-display,
+.editable-field {
+  padding: 2px 4px;      /* ⬅️ ULTRA COMPACT */
   font-size: 0.75rem;
-  color: #aaa;
-  display: block;
-  margin-bottom: 3px;
+  border-radius: 3px;
+  line-height: 1.2;
 }
 
-.field-display {
-  background-color: #1e1e1e;
-  border-radius: 6px;
-  padding: 6px 8px;
-  color: #ccc;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
 
-.field-display:hover {
+.field-display:hover,
+.editable-field:hover {
   background-color: #2a2a2a;
 }
 
-input {
-  background-color: #ffffff;
-  border: 1px solid #444;
-  border-radius: 6px;
-  padding: 6px 8px;
-  color: #eee;
-  width: 100%;
-  outline: none;
-  transition: border 0.2s ease;
-}
+/* ===================================================
+   ✏️ INPUTS (compact & SBS)
+   =================================================== */
 
-input:focus {
-  border-color: #64b5f6;
-}
-
-/* Transition for expand/collapse */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.3s ease;
-}
-.fade-slide-enter-from,
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-/* Minimalist style when card is collapsed */
-.modern-card.minimal {
-  padding: 5px 5px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: none;
-  background-color: rgba(255, 255, 255, 0.015);
-  transition: all 0.3s ease;
-}
-
-
-.modern-card.minimal:hover {
-  background-color: rgba(255, 255, 255, 0.035);
-  transform: none;
-}
-
-.modern-card .name {
-  font-size: 1.05rem;
-  font-weight: 500;
-  margin: 0;
-}
-.eleve-abandon {
-  opacity: 0.6;
-  background: rgba(255, 0, 0, 0.05);
-  border: 1px solid #ff4d4d;
-}
-
-.eleve-abandon:hover {
-  background: rgba(255, 0, 0, 0.1);
-  transform: none;
-}
-.eleve-inscrit {
-  background: rgba(0, 255, 0, 0.04);
-  border: 1px solid #00aa00;
-}
-
-.eleve-inscrit:hover {
-  background: rgba(0, 255, 0, 0.06);
-}
 input,
 select {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-  border: 1px solid #444;
-  border-radius: 6px;
-  padding: 6px 8px;
-  width: 100%;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  border-radius: 3px;
 }
+
 
 input:focus,
 select:focus {
-  border-color: #64b5f6;
+  border-color: #ff9800; /* accent SBS */
   outline: none;
+}
+
+/* ===================================================
+   🧩 ÉTATS ÉLÈVES
+   =================================================== */
+
+.eleve-abandon {
+  opacity: 0.65;
+  background: rgba(255, 0, 0, 0.04);
+  border: 1px solid rgba(255, 77, 77, 0.4);
+}
+
+.eleve-inscrit {
+  background: rgba(0, 255, 0, 0.035);
+  border: 1px solid rgba(0, 170, 0, 0.5);
+}
+
+/* ===================================================
+   🔽 MODE MINIMAL (liste dense)
+   =================================================== */
+
+.modern-card.minimal {
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.modern-card.minimal:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ===================================================
+   🎞️ TRANSITIONS
+   =================================================== */
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.card-details {
+  margin-top: 4px;
+}
+.modern-card {
+  padding: 8px 10px;
+}
+.modern-card.minimal {
+  padding: 4px 6px;
+}
+
+/* ===============================
+   🔄 SBS LOADING
+   =============================== */
+
+.sbs-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 0;
+  color: #b5b5b5;
+  font-size: 0.8rem;
+}
+
+/* Spinner circulaire */
+.sbs-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #fb923c; /* 🔥 accent SBS */
+  animation: sbs-spin 0.7s linear infinite;
+}
+
+/* Animation */
+@keyframes sbs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Texte */
+.sbs-loading-text {
+  line-height: 1;
+  color:#fb923c
 }
 
   </style>

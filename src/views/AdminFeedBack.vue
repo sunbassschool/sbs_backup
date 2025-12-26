@@ -477,7 +477,6 @@ defaultFeedbackDisplayLimit: 2,
 isEditingFeedback: false,
 editingFeedbackId: null,
 editingFeedbackContent: "",
-
       showGlobalFeedbacks: true,
     readyToShowFeedbacks: false,
 selectedMonth: 'ALL',
@@ -503,7 +502,7 @@ isLoadingEleves: false,
       nouveauFeedback: "",
       feedbackSentMessage: "",
       feedbacks: [],
-      apiURL: "https://script.google.com/macros/s/AKfycbwMPo7nyfBzSCrT81VRlJ4fh1__GgKeqvLukFO3JnM0nSGczpYJ7Xt2K6TGFtDZdHdO3Q/exec"
+      apiURL: "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
     };
     
   },
@@ -550,21 +549,68 @@ canSendFeedback() {
 
 
   },
-  async mounted() {
-    console.log("🔁 Chargement de la liste des élèves...");
-    await this.fetchEleves();
+async mounted() {
+  const hasCache = this.loadFromCache()
 
-  setTimeout(() => {
-    this.readyToShowFeedbacks = true;
-  }, 300);
+  // affichage immédiat
+  this.readyToShowFeedbacks = true
 
-  },
+  // refresh silencieux
+  this.fetchEleves({ silent: hasCache })
+  this.fetchAllFeedbacks({ silent: hasCache })
+}
+,
   methods: {
     getUnreadFeedbacks() {
   return this.feedbacksAll.filter(fb =>
     fb.Statut?.toLowerCase() === "non lu" &&
     !String(fb.ID_Cours).startsWith("ID") // ⚠️ on ignore les réponses
   );
+}
+
+,
+loadFromCache() {
+  const raw = sessionStorage.getItem("adminFeedbackCache")
+  if (!raw) return false
+
+  let cache
+  try {
+    cache = JSON.parse(raw)
+  } catch {
+    sessionStorage.removeItem("adminFeedbackCache")
+    return false
+  }
+
+  const TTL = 2 * 60 * 1000
+  if (!cache.ts || Date.now() - cache.ts > TTL) return false
+
+  if (cache.eleves) {
+    this.eleves = cache.eleves.ins || []
+    this.elevesHorsInscrits = cache.eleves.hors || []
+  }
+
+  if (cache.feedbacksAll) {
+    this.organizeFeedbacks(cache.feedbacksAll)
+  }
+
+  return true
+}
+,
+
+saveCache() {
+  const payload = {
+    eleves: {
+      ins: this.eleves,
+      hors: this.elevesHorsInscrits
+    },
+    feedbacksAll: this.feedbacksAll,
+    ts: Date.now()
+  }
+
+  sessionStorage.setItem(
+    "adminFeedbackCache",
+    JSON.stringify(payload)
+  )
 }
 
 ,
@@ -578,7 +624,7 @@ async toggleHistorique() {
   this.showGlobalFeedbacks = !this.showGlobalFeedbacks;
 
   if (this.showGlobalFeedbacks && this.feedbacksAll.length === 0) {
-    await this.fetchAllFeedbacks();
+await this.fetchAllFeedbacks({ silent: true });
 
     this.readyToShowFeedbacks = true;
     if (this.selectedEleve) {
@@ -730,11 +776,17 @@ formatMonthLabel(monthKey) {
 }
 ,
 async handleEleveSelect() {
+
+  // 🔥 RESET FORMULAIRE
+  this.dateCours = "";
+  this.nomCours = "";
+
   if (this.selectedEleveEmail === "ALL") {
     this.selectedEleve = null;
-    this.isLoadingFeedbacks = true;
-    await this.fetchAllFeedbacks();
-    this.isLoadingFeedbacks = false;
+
+   await this.fetchAllFeedbacks({ silent: true });
+this.feedbacks = this.feedbacksAll.reverse();
+
     this.readyToShowFeedbacks = true;
     this.feedbacks = this.feedbacksAll.reverse();
   } else {
@@ -777,7 +829,14 @@ async handleEleveSelect() {
 ,
 async fetchPlanningForEleve(emailVal, prenomVal) {
   const jwt = await getValidToken();
-  const baseUrl = `${this.apiURL}?route=planning&email=${encodeURIComponent(emailVal)}&prenom=${encodeURIComponent(prenomVal)}&jwt=${encodeURIComponent(jwt)}`;
+const profId = this.auth?.user?.prof_id;
+
+const baseUrl =
+  `${this.apiURL}?route=planning` +
+  `&email=${encodeURIComponent(emailVal)}` +
+  `&prenom=${encodeURIComponent(prenomVal)}` +
+  `&prof_id=${encodeURIComponent(profId)}` +
+  `&jwt=${encodeURIComponent(jwt)}`;
   const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseUrl)}`;
 
   try {
@@ -798,10 +857,7 @@ async fetchPlanningForEleve(emailVal, prenomVal) {
   }
 }
 ,
-limitedFeedbacks() {
-  return this.filteredFeedbacksByMonth.slice(0, this.feedbackDisplayLimit);
-}
-,
+
 toggleFeedbackDetails(fbID) {
   if (this.openedFeedbacks.includes(fbID)) {
     this.openedFeedbacks = this.openedFeedbacks.filter(id => id !== fbID);
@@ -848,8 +904,8 @@ async exportPDF() {
 
 ,
 
-async fetchEleves() {
-  this.isLoadingEleves = true
+async fetchEleves({ silent = false } = {}) {
+  if (!silent) this.isLoadingEleves = true
 
   try {
     const jwt = await getValidToken()
@@ -897,7 +953,9 @@ async fetchEleves() {
 
     this.elevesHorsInscrits = hors.sort((a, b) =>
       a.prenom.localeCompare(b.prenom, "fr", { sensitivity: "base" })
+      
     )
+this.saveCache()
 
     console.log(
       "✅ eleves finaux =",
@@ -907,7 +965,7 @@ async fetchEleves() {
   } catch (err) {
     console.error("❌ fetchEleves ERROR =", err)
   } finally {
-    this.isLoadingEleves = false
+    if (!silent) this.isLoadingEleves = false
   }
 }
 
@@ -920,7 +978,6 @@ async fetchEleves() {
   this.searchTerm = "";
   this.filteredEleves = [];
   this.organizeFeedbacks(this.feedbacksAll);
-  console.log("🧪 contenuformate debug :", all.map(f => f.contenuformate));
 
 
 }
@@ -969,29 +1026,23 @@ feedback_id: String(fb.ID).replace("ID", "")
 }
 
 ,
-async fetchAllFeedbacks() {
-  const jwt = await getValidToken();
-  const url = this.getProxyURL({ route: "getfeedbacks", jwt });
-  console.log("📡 URL pour historique global :", url);
+async fetchAllFeedbacks({ silent = false } = {}) {
+  if (!silent) this.isLoadingFeedbacks = true
 
   try {
-    const res = await fetch(url);
-    const data = await res.json();
-    console.log("🧩 Feedbacks API (brut):", data);
-    this.organizeFeedbacks(data.feedbacks || []);
+    const jwt = await getValidToken()
+    const url = this.getProxyURL({ route: "getfeedbacks", jwt })
 
-    // ✅ Nouveau : filtrer immédiatement si un élève est sélectionné
-    if (this.selectedEleve) {
-      this.filterFeedbacksForEleve(this.selectedEleve);
-    }
-
-    console.log("📊 feedbacksAll complet :", this.feedbacksAll);
-    console.log("🧪 Feedbacks non lus trouvés :", this.getUnreadFeedbacks());
-    console.log("📥 Feedbacks initiaux :", this.feedbacks.length);
-  } catch (err) {
-    console.error("❌ Erreur fetchAllFeedbacks :", err);
+    const res = await fetch(url)
+    const data = await res.json()
+    this.organizeFeedbacks(data.feedbacks || [])
+    this.saveCache()
+  } finally {
+    if (!silent) this.isLoadingFeedbacks = false
   }
 }
+
+
 
 ,
     filterEleves() {
@@ -1010,7 +1061,7 @@ async selectEleve(eleve) {
   this.nouveauFeedback = cached || "";
 
   // 🔁 Charger les feedbacks globaux s’ils ne sont pas encore en mémoire
-await this.fetchAllFeedbacks();
+await this.fetchAllFeedbacks({ silent: true });
 this.filterFeedbacksForEleve(eleve);
 
 

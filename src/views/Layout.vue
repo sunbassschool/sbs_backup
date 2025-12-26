@@ -122,31 +122,7 @@
   <i class="bi bi-wrench-adjustable"></i>
   <span>Gestion des cours</span>
 </router-link>
-
-
-
-        <!-- ======================== -->
-        <!-- MENU : ADMIN ONLY -->
-        <!-- ======================== -->
-        <router-link v-if="isAdmin" to="/AdminFeedBack" class="sidebar-link">
-          <i class="bi bi-shield-lock"></i>
-          <span>Feedbacks Admin</span>
-        </router-link>
-
-        <router-link v-if="isAdmin" to="/prof/planning/create" class="sidebar-link">
-          <i class="bi bi-calendar-event"></i>
-          <span>Créer un planning</span>
-        </router-link>
-
-        <router-link v-if="isAdmin" to="/register-cursus" class="sidebar-link">
-          <i class="bi bi-person-plus"></i>
-          <span>Ajouter un élève</span>
-        </router-link>
-
-        <router-link v-if="isAdmin" to="/cours" class="sidebar-link">
-          <i class="bi bi-wrench-adjustable"></i>
-          <span>Cours <span v-if="pendingCount > 0">({{ pendingCount }})</span></span>
-        </router-link>
+   
 
       </nav>
     </aside>
