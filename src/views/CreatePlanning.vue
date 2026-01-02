@@ -44,10 +44,67 @@
       <p class="subtitle">Quand et à quel rythme ?</p>
 
       <div class="grid">
-        <div>
-          <label>Date & heure du 1er cours</label>
-          <input v-model="dateCours" placeholder="02/02/2025 10:00:00" />
-        </div>
+    <div>
+  <label>Date du 1er cours</label>
+
+  <!-- 📆 Sélecteur mois -->
+  <div class="months">
+    <button
+      v-for="m in 12"
+      :key="m"
+      type="button"
+      :class="{ active: currentMonth === m-1 }"
+      @click="setMonth(m-1)"
+    >
+      {{ monthNames[m-1] }}
+    </button>
+  </div>
+
+  <!-- 📅 Jours -->
+  <div class="days">
+    <button
+      v-for="day in daysInMonth"
+      :key="day"
+      type="button"
+      :class="{ active: selectedDay === day }"
+      @click="selectDay(day)"
+    >
+      {{ day }}
+    </button>
+  </div>
+
+  <!-- ⏰ Heure -->
+  <div class="time-picker">
+    <select v-model="selectedHour">
+      <option
+        v-for="h in 24"
+        :key="h"
+        :value="String(h).padStart(2,'0')"
+      >
+        {{ String(h).padStart(2,'0') }}
+      </option>
+    </select>
+    :
+    <select v-model="selectedMinute">
+      <option
+        v-for="m in [0,15,30,45]"
+        :key="m"
+        :value="String(m).padStart(2,'0')"
+      >
+        {{ String(m).padStart(2,'0') }}
+      </option>
+    </select>
+  </div>
+
+  <!-- 🔒 Valeur finale (backend) -->
+  <input
+    class="final-date"
+    :value="dateCours"
+    readonly
+    placeholder="JJ/MM/AAAA HH:mm:00"
+  />
+</div>
+
 
         <div>
           <label>Fréquence</label>
@@ -114,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
+import { ref, onMounted, computed } from "vue"
 import Layout from "@/views/Layout.vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getValidToken } from "@/utils/api.ts"
@@ -127,6 +184,43 @@ const toast = useToast()
 const eleves = ref([])
 const step = ref(1)
 const router = useRouter()
+const selectedDate = ref(null) // Date JS
+const selectedHour = ref("10")
+const selectedMinute = ref("00")
+
+const dateCours = computed(() => {
+  if (!selectedDate.value) return ""
+  const d = selectedDate.value
+  const pad = n => String(n).padStart(2, "0")
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(selectedHour.value)}:${pad(selectedMinute.value)}:00`
+})
+const today = new Date()
+const currentYear = ref(today.getFullYear())
+const currentMonth = ref(today.getMonth())
+const selectedDay = ref(null)
+
+const monthNames = [
+  "Jan","Fév","Mar","Avr","Mai","Juin",
+  "Juil","Août","Sep","Oct","Nov","Déc"
+]
+
+const daysInMonth = computed(() =>
+  new Date(currentYear.value, currentMonth.value + 1, 0).getDate()
+)
+
+const setMonth = m => {
+  currentMonth.value = m
+  selectedDay.value = null
+}
+
+const selectDay = d => {
+  selectedDay.value = d
+  selectedDate.value = new Date(
+    currentYear.value,
+    currentMonth.value,
+    d
+  )
+}
 
 const goToStep = (n) => {
   step.value = n
@@ -149,7 +243,6 @@ const goNextFromStep2 = () => {
 const prenomEleve = ref("")
 const frequence = ref("chaque semaine")
 const trimestre = ref("trimestre 1")
-const dateCours = ref("")
 const nbSeances = ref(1)
 const duree = ref(60)
 const commentaire = ref("")
@@ -213,21 +306,37 @@ if (missingFields.length) {
     const jwt = await getValidToken()
     const url = getProxyPostURL()
 
-    const payload = {
-      route: "createplanning",
-      jwt,
-      prof_id: auth.user.prof_id,
-values: [
-  frequence.value,          // 1️⃣ Fréquence
-  trimestre.value,          // 2️⃣ Trimestre
-  prenomEleve.value,        // 3️⃣ Prénom élève
-  dateCours.value,          // 4️⃣ Date / heure
-  String(nbSeances.value),  // 5️⃣ Nombre séances
-  String(duree.value),      // 🔥 6️⃣ DURÉE (OBLIGATOIRE)
-  commentaire.value         // 7️⃣ Commentaire
+// ⚠️ DOIT matcher EXACTEMENT les en-têtes de la feuille "Planning Élèves"
+const headers = [
+  "prénom de l'élève",
+  "nom de l'élève",
+  "date et heure du premier cours",
+  "nombre de séances",
+  "durée de chaque séance",
+  "trimestre",
+  "commentaire",
+  "fréquence des cours"
 ]
 
-    }
+// tableau aligné feuille
+const values = new Array(headers.length).fill("")
+
+values[headers.indexOf("prénom de l'élève")] = prenomEleve.value
+values[headers.indexOf("nom de l'élève")] = prenomEleve.value
+values[headers.indexOf("date et heure du premier cours")] = dateCours.value
+values[headers.indexOf("nombre de séances")] = String(nbSeances.value)
+values[headers.indexOf("durée de chaque séance")] = String(duree.value)
+values[headers.indexOf("trimestre")] = trimestre.value
+values[headers.indexOf("commentaire")] = commentaire.value
+values[headers.indexOf("fréquence des cours")] = frequence.value
+
+const payload = {
+  route: "createplanning",
+  jwt,
+  prof_id: auth.user.prof_id,
+  values
+}
+
 
     // 🔎 LOGS DEBUG
     console.group("📤 CREATE PLANNING")
@@ -407,5 +516,115 @@ button.ghost {
   opacity: 0;
 }
 
+/* ============================= */
+/* 📅 Date picker – SBS polish   */
+/* ============================= */
+
+.months,
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.months button,
+.days button {
+  border: 1px solid #2e2e2e;
+  background: #121212;
+  color: #eee;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.months button {
+  min-width: 48px;
+  text-align: center;
+}
+
+.days button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-weight: 500;
+}
+
+/* hover */
+.months button:hover,
+.days button:hover {
+  background: #1f1f1f;
+  border-color: #444;
+}
+
+/* active */
+.months button.active,
+.days button.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+  transform: scale(1.05);
+}
+
+/* ============================= */
+/* ⏰ Time picker                */
+/* ============================= */
+
+.time-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.time-picker select {
+  background: #121212;
+  border: 1px solid #2e2e2e;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.time-picker select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* ============================= */
+/* 🔒 Date finale (readonly)     */
+/* ============================= */
+
+.final-date {
+  margin-top: 6px;
+  width: 100%;
+  background: #0f172a;
+  border: 1px dashed #3b82f6;
+  color: #e5edff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: monospace;
+  opacity: 0.9;
+}
+
+/* ============================= */
+/* 📱 Mobile tweak               */
+/* ============================= */
+
+@media (max-width: 600px) {
+  .months button {
+    min-width: 44px;
+    padding: 6px 8px;
+  }
+
+  .days button {
+    width: 34px;
+    height: 34px;
+  }
+}
 
 </style>

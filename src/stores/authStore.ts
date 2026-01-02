@@ -33,6 +33,7 @@ export interface AuthState {
   refreshFailed: boolean;
   isInitDone: boolean;
 sessionId: string | null;
+  deviceId: string | null; // ✅ AJOUT ICI
 
   isRefreshingToken: boolean;
   forceRefresh: number;
@@ -55,6 +56,7 @@ export const useAuthStore = defineStore("auth", {
     user: null,
     jwt: null,
     sessionId: null,
+  deviceId: localStorage.getItem("deviceId") as string | null,
 
     refreshToken: null,
     authLoading: false,
@@ -264,7 +266,16 @@ async refreshJwt(): Promise<string | null> {
   const start = performance.now();
 
   try {
-    const result = await apiRefreshToken(); // <= OBJET
+if (!this.refreshToken || !this.deviceId) {
+  throw new Error("refreshToken ou deviceId manquant");
+}
+
+const result = await apiRefreshToken({
+  refreshToken: this.refreshToken, // ici TS sait que ce n’est plus null
+  sessionId: this.sessionId,
+  deviceId: this.deviceId
+});
+
     if (!result || !result.jwt) throw new Error("JWT manquant dans le refresh");
 
     const jwtString = result.jwt; // <= EXTRACTION STRING

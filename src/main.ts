@@ -55,12 +55,7 @@ import {
 // ============================================================
 // 🎸 SunBassSchool — Service Worker UI Helpers
 // ============================================================
-let deviceId = localStorage.getItem("device_id")
-if (!deviceId) {
-  deviceId = crypto.randomUUID()
-  localStorage.setItem("device_id", deviceId)
-}
-export { deviceId }
+
 function showUpdateToast(registration: ServiceWorkerRegistration) {
   let toast = document.getElementById("update-toast");
 

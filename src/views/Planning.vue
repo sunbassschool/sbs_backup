@@ -212,6 +212,7 @@
 <script>
 import Layout from "../views/Layout.vue";
 import { useAuthStore } from "@/stores/authStore";
+import { getProxyGetURL, getProxyPostURL } from "@/config/gas";
 
 import axios from "axios";
 import { ref, computed, onMounted, nextTick, watchEffect } from "vue";
@@ -230,15 +231,7 @@ export default {
     // === URLs API ===
     const profId = computed(() => auth.user?.prof_id || "");
 
-const routes = {
-  POST: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
-};
 
-// === Helper POST via proxy ===
-const getProxyPostURL = (routeId) => {
-  const baseURL = `https://script.google.com/macros/s/${routeId}`;
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`;
-};
 const closeAllModals = () => {
   showCourseMenu.value = false;
   showReportModal.value = false;
@@ -357,10 +350,14 @@ const cacheKey = `planning_${email.value}_${profId.value}`;
   profId: profId.value
 });
 
-    const baseURL = "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec";
-const internalURL = `${baseURL}?route=planning&email=${encodeURIComponent(email.value)}&prof_id=${encodeURIComponent(profId.value)}`;
-    const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(internalURL)}`;
-    const response = await axios.get(finalURL);
+   const finalURL = getProxyGetURL(
+  `route=planning` +
+  `&email=${encodeURIComponent(email.value)}` +
+  `&prof_id=${encodeURIComponent(profId.value)}`
+);
+
+const response = await axios.get(finalURL);
+
 
     if (response.data.success && Array.isArray(response.data.planning)) {
       planningData.value = response.data.planning;
@@ -440,8 +437,8 @@ const submitReport = async () => {
   isSendingReport.value = true;
 
   try {
-    const endpoint = routes.POST; // ID du script Apps Script
-    const url = getProxyPostURL(endpoint); // 🔥 OBLIGATOIRE
+ const url = getProxyPostURL();
+
 
     const payload = {
       route: "reportcourse",
@@ -514,8 +511,8 @@ async function uploadFile() {
   try {
     // 1️⃣ récupérer le token d’upload
 
-const endpoint = routes.POST
-const url = getProxyPostURL(endpoint)
+const url = getProxyPostURL();
+
 
 log("requesting upload token")
 
@@ -565,8 +562,8 @@ xhr.onload = async () => {
     }
 
     // 📌 Appel GAS pour persister l’upload
-    const endpoint = routes.POST
-    const url = getProxyPostURL(endpoint)
+const url = getProxyPostURL();
+
 
     const attachResponse = await axios.post(url, {
       route: "attachfiletocours",

@@ -14,96 +14,96 @@
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
   
         <!-- ✅ Élèves -->
-        <div v-if="eleves.length && !loading" class="row g-3">
+      <!-- ========================= -->
+<!-- 👥 LISTE LIGHT DES ÉLÈVES -->
+<!-- ========================= -->
 <div
-  v-for="(eleve, index) in eleves"
-  :key="eleve.email"
-  class="col-12 col-md-6"
+  v-if="eleves.length && !loading && !selectedEleve"
+  class="eleves-grid"
 >
-
-<div
-  class="modern-card"
-  :class="{
-    'eleve-abandon': eleve.statut?.toLowerCase() === 'abandon',
-
-    'eleve-inscrit': eleve.statut === 'inscrit'
-  }"
->
-
-
-    <div class="card-header">
-      <h5 class="name">{{ eleve.prenom }} {{ eleve.nom }}</h5>
-      
-      <button class="toggle-btn" @click="toggleExpand(eleve.email)">
-        {{ expanded[eleve.email] ? '–' : '+' }}
-      </button>
-    </div>
-
-    <transition name="fade-slide">
-      <div v-if="expanded[eleve.email]" class="card-details">
-        <div v-for="champ in champs" :key="champ.key" class="field">
-          <label>{{ champ.label }}</label>
-
-     <div
-  v-if="!editing[eleve.email + champ.key]"
-  class="field-display d-flex justify-content-between align-items-center"
-  @click="enableEdit(eleve.email, champ.key)"
->
-  <span>{{ eleve[champ.key] || '—' }}</span>
-  <span
-    v-if="updated[eleve.email + '_' + champ.key]"
-    class="text-success ms-2"
-    style="font-size: 0.9rem;"
+  <div
+    v-for="eleve in eleves"
+    :key="eleve.email"
+    class="modern-card eleve-row"
+    @click="selectEleve(eleve)"
   >
-    ✔️
-  </span>
-</div>
+<div class="eleve-row">
+  <div class="eleve-line">
+    <strong class="eleve-name">
+      {{ eleve.prenom }} {{ eleve.nom }}
+    </strong>
 
-
-         <!-- Mode édition -->
- <div v-else>
-  <!-- 🟩 STATUT -->
-  <select
-    v-if="champ.key === 'statut'"
-    v-model="eleve.statut"
-    @blur="updateEleve(eleve); disableEdit(eleve.email, champ.key)"
-    @change="$event.target.blur()"
-    class="form-select bg-dark text-light"
-  >
-    <option value="inscrit">inscrit</option>
-    <option value="abandon">abandon</option>
-  </select>
-
-  <!-- 🟦 TRIMESTRE -->
-  <select
-    v-else-if="champ.key === 'trimestre'"
-    v-model="eleve.trimestre"
-    @blur="updateEleve(eleve); disableEdit(eleve.email, champ.key)"
-    @change="$event.target.blur()"
-    class="form-select bg-dark text-light"
-  >
-    <option value="trimestre 1">trimestre 1</option>
-    <option value="trimestre 2">trimestre 2</option>
-    <option value="trimestre 3">trimestre 3</option>
-  </select>
-
-  <!-- Autres champs -->
-  <input
-    v-else
-    :type="champ.type"
-    v-model="eleve[champ.key]"
-    @blur="updateEleve(eleve); disableEdit(eleve.email, champ.key)"
-    @keyup.enter="$event.target.blur()"
-  />
-</div>
-
-</div>
-      </div>
-    </transition>
+    <span
+      class="eleve-badge"
+      :class="eleve.statut === 'inscrit' ? 'ok' : 'ko'"
+    >
+      {{ eleve.statut }}
+    </span>
   </div>
 </div>
 
-        </div>
+  </div>
+</div>
+
+
+<!-- ========================= -->
+<!-- 👤 DÉTAIL ÉLÈVE (LAZY) -->
+<!-- ========================= -->
+<div v-if="selectedEleve && !loading" class="modern-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0">
+      {{ selectedEleve.prenom }} {{ selectedEleve.nom }}
+    </h5>
+
+    <button
+      class="btn btn-sm btn-outline-light"
+      @click="selectedEleve = null"
+    >
+      ← Retour
+    </button>
+  </div>
+
+  <div class="card-details">
+    <div
+      v-for="champ in champs"
+      :key="champ.key"
+      class="field"
+    >
+      <label>{{ champ.label }}</label>
+
+      <!-- SELECTS -->
+      <select
+        v-if="champ.key === 'statut'"
+        v-model="selectedEleve.statut"
+        class="form-select bg-dark text-light"
+        @blur="updateEleve(selectedEleve)"
+      >
+        <option value="inscrit">inscrit</option>
+        <option value="abandon">abandon</option>
+      </select>
+
+      <select
+        v-else-if="champ.key === 'trimestre'"
+        v-model="selectedEleve.trimestre"
+        class="form-select bg-dark text-light"
+        @blur="updateEleve(selectedEleve)"
+      >
+        <option value="trimestre 1">trimestre 1</option>
+        <option value="trimestre 2">trimestre 2</option>
+        <option value="trimestre 3">trimestre 3</option>
+      </select>
+
+      <!-- INPUTS -->
+      <input
+        v-else
+        :type="champ.type"
+        v-model="selectedEleve[champ.key]"
+        @blur="updateEleve(selectedEleve)"
+      />
+    </div>
+  </div>
+</div>
+
   
         <!-- ℹ️ Aucun élève -->
         <div v-if="!eleves.length && !loading" class="text-center text-light">
@@ -118,6 +118,7 @@
   import { getValidToken } from "@/utils/api.ts";
   import { useAuthStore } from "@/stores/authStore.js";
 import { useGestionElevesStore } from "@/stores/gestionElevesStore"
+import { getProxyPostURL } from "@/config/gas";
 
   export default {
     name: "GestionEleves",
@@ -126,6 +127,7 @@ import { useGestionElevesStore } from "@/stores/gestionElevesStore"
       return {
             auth: useAuthStore(),   // ← nécessaire sinon this.auth = undefined
 store: useGestionElevesStore(),
+selectedEleve: null,
 
         editing: {},
          updated: {},
@@ -138,58 +140,60 @@ champs: [
   { key: "objectif", label: "Objectif", type: "text" },
   { key: "trimestre", label: "Trimestre", type: "text" },
   { key: "cursus", label: "Cursus", type: "text" },
-  { key: "drive", label: "Lien Google Drive", type: "text" },
-  { key: "youtube", label: "Lien Playlist YouTube", type: "text" }
 ],
         eleves: [],
         loading: false,
         error: null,
-        apiURL: "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
       };
     },
-    async mounted() {
+mounted() {
   const hasCache = this.loadFromStore()
+
+  // UI instantanée si cache
   this.loading = !hasCache
 
-  this.fetchEleves().finally(() => {
-    this.loading = false
+  // fetch silencieux
+  this.fetchEleves({ silent: hasCache })
+}
+
+,
+    methods: {
+sortEleves(list) {
+  return [...list].sort((a, b) => {
+    if (a.statut === b.statut) return 0
+    return a.statut === "inscrit" ? -1 : 1
   })
 }
 ,
-    methods: {
-async fetchEleves() {
-  this.error = null;
+    selectEleve(eleve) {
+  // clone → pas de rerender de toute la liste
+  this.selectedEleve = JSON.parse(JSON.stringify(eleve))
+}
+,
+async fetchEleves({ silent = false } = {}) {
+  if (!silent) this.loading = true
+  this.error = null
 
-  console.group("👥 FETCH ÉLÈVES");
+  console.group("👥 FETCH ÉLÈVES")
 
   try {
     // ===================================================
     // 🔐 JWT
     // ===================================================
-    const jwt = await getValidToken();
-    console.log("🔐 jwt présent =", !!jwt);
-
-    if (!jwt) {
-      throw new Error("JWT non valide");
-    }
+    const jwt = await getValidToken()
+    if (!jwt) throw new Error("JWT non valide")
 
     // ===================================================
     // 👤 PROF ID
     // ===================================================
-    const profId = this.auth?.user?.prof_id;
-    console.log("👤 prof_id =", profId);
-
-    if (!profId) {
-      throw new Error("prof_id manquant");
-    }
+    const profId = this.auth?.user?.prof_id
+    if (!profId) throw new Error("prof_id manquant")
 
     // ===================================================
-    // 🌐 URL PROXY (POST)
+    // 🌐 URL PROXY
     // ===================================================
-    const url =
-      `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(this.apiURL)}`;
 
-    console.log("🌐 POST URL =", url);
+const url = getProxyPostURL()
 
     // ===================================================
     // 📦 PAYLOAD
@@ -198,73 +202,91 @@ async fetchEleves() {
       route: "getelevesbyprof",
       jwt,
       prof_id: profId
-    };
-
-    console.log("📤 PAYLOAD =", payload);
+    }
 
     // ===================================================
     // 🚀 FETCH
     // ===================================================
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+  const res = await fetch(url, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload)
+})
 
-    console.log("📶 HTTP status =", res.status);
+    if (!res.ok) throw new Error("Erreur réseau")
 
-    const raw = await res.text();
-    console.log("📥 RAW RESPONSE =", raw);
-
-    let result;
-    try {
-      result = JSON.parse(raw);
-    } catch {
-      throw new Error("JSON invalide renvoyé par le serveur");
+    const result = await res.json()
+    if (!result?.success || !Array.isArray(result.eleves)) {
+      throw new Error(result?.message || "Format invalide")
     }
 
-    console.log("📦 PARSED =", result);
-
     // ===================================================
-    // ✅ TRAITEMENT
+    // 🔄 DIFF (SWR)
     // ===================================================
-    if (result?.success && Array.isArray(result.eleves)) {
-      console.log("✅ élèves reçus =", result.eleves.length);
+const incoming = this.sortEleves(result.eleves)
+    const current = this.eleves || []
 
-      this.eleves = result.eleves.sort((a, b) => {
-        if (a.statut === b.statut) return 0;
-        return a.statut === "inscrit" ? -1 : 1;
-      });
+    const same =
+      incoming.length === current.length &&
+      incoming.every((e, i) =>
+        e.email === current[i]?.email &&
+        JSON.stringify(e) === JSON.stringify(current[i])
+      )
 
-      this.saveToStore();
-    } else {
-      throw new Error(result?.message || "Format inattendu");
+    if (!same) {
+      this.eleves = incoming
+      this.saveToStore()
     }
 
   } catch (err) {
-    console.error("❌ FETCH ÉLÈVES ERROR =", err);
-    this.error = err.message || "Erreur de connexion au serveur";
+    console.error("❌ FETCH ÉLÈVES ERROR =", err)
+    if (!silent) {
+      this.error = err.message || "Erreur serveur"
+    }
   } finally {
-    this.loading = false;
-    console.groupEnd();
+    if (!silent) this.loading = false
+    console.groupEnd()
   }
 }
+
 
 
 ,
 
 loadFromStore() {
-  const TTL = 2 * 60 * 1000
-  if (!this.store.eleves) return false
-  if (Date.now() - this.store.ts > TTL) return false
+  const TTL = 5 * 60 * 1000
+  const profId = this.auth?.user?.prof_id
+  if (!profId) return false
 
-  this.eleves = this.store.eleves
+  // 🔒 SAFE GUARD
+  if (!this.store.elevesByProf || !this.store.tsByProf) {
+    return false
+  }
+
+  const cached = this.store.elevesByProf[profId]
+  const ts = this.store.tsByProf[profId]
+
+  if (!cached || !ts) return false
+  if (Date.now() - ts > TTL) return false
+
+  this.eleves = cached
   return true
-},
+}
+
+,
 saveToStore() {
-  this.store.eleves = this.eleves
-  this.store.ts = Date.now()
-},
+  const profId = this.auth?.user?.prof_id
+  if (!profId) return
+
+  // 🔒 init si absent
+  if (!this.store.elevesByProf) this.store.elevesByProf = {}
+  if (!this.store.tsByProf) this.store.tsByProf = {}
+
+this.store.elevesByProf[profId] = this.sortEleves(this.eleves)
+  this.store.tsByProf[profId] = Date.now()
+}
+
+,
 
 
       toggleExpand(email) {
@@ -272,10 +294,7 @@ saveToStore() {
 
 }
 ,
-      getProxyPostURL(route) {
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(route)}`;
-}
-,
+    
 enableEdit(email, key) {
     this.editing = { ...this.editing, [email + key]: true };
 
@@ -292,7 +311,7 @@ async updateEleve(eleve) {
     return;
   }
 
-  const url = this.getProxyPostURL(this.apiURL);
+const url = getProxyPostURL();
  const payload = {
   route: "updateelevecomplet",
   jwt,
@@ -323,17 +342,23 @@ async updateEleve(eleve) {
     const result = await res.json();
     console.log("📥 Réponse reçue :", result);
 
-   if (result.success) {
-  // Marque le champ comme mis à jour
-  for (const key of Object.keys(eleve)) {
-    if (this.editing[eleve.email + key]) {
-      this.updated[eleve.email + "_" + key] = true;
-      setTimeout(() => {
-        this.$delete(this.updated, eleve.email + "_" + key);
-      }, 1500);
-    }
+if (result.success) {
+  const profId = this.auth?.user?.prof_id
+  if (!profId) return
+
+  // 🔹 update liste locale
+  const i = this.eleves.findIndex(e => e.email === eleve.email)
+  if (i !== -1) {
+    this.eleves[i] = { ...eleve }
+  }
+
+  // 🔹 update cache Pinia
+  if (this.store.elevesByProf?.[profId]) {
+    this.store.elevesByProf[profId][i] = { ...eleve }
+    this.store.tsByProf[profId] = Date.now()
   }
 }
+
 else {
       console.warn("❌ Erreur de mise à jour :", result.message || "Aucun message retourné");
       alert("Erreur : " + (result.message || "Aucun message retourné"));
@@ -395,8 +420,8 @@ else {
 }
 
 .name {
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: 1.05rem;
+  font-weight: 600;
   color: #ffffff;
   margin: 0;
   line-height: 1.2;
@@ -445,7 +470,7 @@ else {
 
 
 .field label {
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   color: #8f8f8f;
   margin-bottom: 1px;
   letter-spacing: 0.03em;
@@ -455,7 +480,7 @@ else {
 .field-display,
 .editable-field {
   padding: 2px 4px;      /* ⬅️ ULTRA COMPACT */
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   border-radius: 3px;
   line-height: 1.2;
 }
@@ -574,6 +599,73 @@ select:focus {
   line-height: 1;
   color:#fb923c
 }
+.eleve-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.eleve-row:hover {
+  background: rgba(255,255,255,0.05);
+}
+.eleves-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .eleves-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.eleve-badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.eleve-badge.ok {
+  background: #198754; /* vert */
+  color: #fff;
+}
+
+.eleve-badge.ko {
+  background: #6c757d; /* gris */
+  color: #fff;
+}
+.eleve-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.eleve-name {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eleve-detail {
+  max-width: 640px;   /* 👈 largeur utile */
+  margin: 0 auto;
+}
+
+@media (min-width: 769px) {
+  .eleve-detail {
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 100vh;
+    width: 420px;
+    margin: 0;
+    border-radius: 0;
+  }
+}
+
 
   </style>
   

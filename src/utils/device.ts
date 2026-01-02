@@ -1,15 +1,11 @@
-// src/utils/device.ts
-// Identifiant device STABLE pour le multi-device
+export function getDeviceId() {
+  let id = localStorage.getItem("deviceId")
 
-const DEVICE_ID_KEY = "sbs_device_id"
-
-export function getDeviceId(): string {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY)
-
-  if (!deviceId) {
-    deviceId = crypto.randomUUID()
-    localStorage.setItem(DEVICE_ID_KEY, deviceId)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem("deviceId", id)
+    console.log("🆕 deviceId généré :", id)
   }
 
-  return deviceId
+  return id
 }

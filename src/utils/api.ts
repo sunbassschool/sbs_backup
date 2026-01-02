@@ -8,6 +8,7 @@ declare global {
 
 import { openDB } from "idb";
 import type { IDBPDatabase } from 'idb';
+import { getProxyGetURL } from "@/config/gas"
 
 import { nextTick } from "vue";
 import { jwtDecode } from "jwt-decode";
@@ -349,78 +350,21 @@ export function isTokenExpired(token: string): boolean {
 
 
 let refreshPromise: Promise<string | null> | null = null;
-// ============================================================================
-// 🔐 VERSION CORRIGÉE — getValidToken()
-// Renvoie TOUJOURS une string ou null
-// Ne pollue jamais le store avec un objet
-// ============================================================================
-
-
-
-
-
 export async function getValidToken(): Promise<string | null> {
   const store = useAuthStore();
-  const jwt = store.jwt;
 
   if (store.isLoggingOut) return null;
-  if (!jwt) return null;
+  if (!store.jwt) return null;
 
-  // Ici tu peux garder ta condition exacte si tu veux limiter au démarrage
-  if (!store.authReady && isJwtExpired(jwt)) {
-    // 🔁 Mutualisation : si un refresh est déjà en cours, on réutilise la même promesse
-    if (refreshPromise) {
-      return await refreshPromise;
-    }
-
-    if (!store.refreshToken) return null;
-
-    document
-      .getElementById("refresh-indicator")
-      ?.classList.add("refresh-active");
-
-    console.log("🔄 Refresh lancé…");
-
-    // ✅ ICI : refreshPromise est bien un Promise<string | null>
-    refreshPromise = (async () => {
-      const result = await refreshToken();
-      if (!result || !result.jwt) return null;
-
-      const jwtString = result.jwt;
-
-      // 1️⃣ JWT dans le store
-      store.setUserToken(jwtString);
-
-      // 2️⃣ IndexedDB update
-      await saveSessionData({
-        jwt: jwtString,
-        refreshToken: result.refreshToken,
-        sessionId: result.sessionId,
-      });
-
-      // 3️⃣ localStorage synchro
-      localStorage.setItem("refreshToken", result.refreshToken);
-      localStorage.setItem("sessionId", result.sessionId);
-
-      // 4️⃣ store synchro
-      store.refreshToken = result.refreshToken;
-      store.sessionId = result.sessionId;
-
-      return jwtString; // 🔥 cohérent avec Promise<string | null>
-    })();
-
-    try {
-      return await refreshPromise;
-    } finally {
-      refreshPromise = null;
-      document
-        .getElementById("refresh-indicator")
-        ?.classList.remove("refresh-active");
-    }
+  // ⛔ ne JAMAIS refresh ici
+  if (isJwtExpired(store.jwt)) {
+    console.warn("⛔ getValidToken → JWT expiré (refresh géré par le store)");
+    return null;
   }
 
-  return jwt;
+  return store.jwt;
 }
+
 
 
 
@@ -638,12 +582,26 @@ export async function checkAndRefreshOnWakeUp() {
   }
 
   console.log("🔄 JWT expiré, on tente un refresh...");
-  const newJwt = await (refreshToken()); // ✅ Ajoute des parenthèses pour lever toute ambiguïté
+const deviceId = localStorage.getItem("deviceId")
+const refreshTokenValue = await getRefreshTokenFromDB()
+const sessionId = localStorage.getItem("sessionId")
 
-  if (newJwt) {
-    localStorage.setItem("lastRefreshTime", now.toString());
-    console.log("✅ JWT rafraîchi avec succès !");
-  } else {
+if (!refreshTokenValue || !deviceId) return null
+
+const result = await refreshToken({
+  refreshToken: refreshTokenValue,
+  sessionId,
+  deviceId
+})
+
+if (result?.jwt) {
+  await updateTokens(result.jwt, result.refreshToken)
+}
+
+if (result?.jwt) {
+  localStorage.setItem("lastRefreshTime", now.toString())
+}
+ else {
     console.warn("❌ Échec du refresh token.");
   }
 }
@@ -1549,126 +1507,82 @@ import { clearAuthStoreFromIndexedDB } from "@/utils/storageHelpers";
 
 
 
-// ============================================================================
-// 🔄 REFRESH TOKEN — VERSION PRO
-// API Pure — n'écrit rien, ne touche pas au DOM, ne gère pas le store
-// Compatible Apps Script & store PRO
-// ============================================================================
-
-export async function refreshToken(): Promise<{
-  jwt: string;
-  refreshToken: string;
-  sessionId: string;
-  [k: string]: any;
-} | null> {
-  const MAX_RETRIES = 2;     // 1 appel + 2 retries = 3 tentatives
-  const TIMEOUT_MS = 8000;   // timeout client
-  const RETRY_DELAY = 1500;  // pause entre tentatives
-const deviceId =
-  localStorage.getItem("deviceId") ||
-  localStorage.getItem("sessionId") ||
-  sessionStorage.getItem("sessionId") ||
-  "";
-
-
-const refreshToken =
-  (localStorage.getItem("refreshToken") || "").trim() ||
-  (sessionStorage.getItem("refreshToken") || "").trim();
-
-const sessionId =
-  (localStorage.getItem("sessionId") || "").trim() ||
-  (sessionStorage.getItem("sessionId") || "").trim();
-
-const did = deviceId || "";
-
-if (!refreshToken) {
-  console.warn("❌ refreshToken : refreshToken manquant");
-  return null;
+type RefreshTokenParams = {
+  refreshToken: string
+  sessionId?: string | null
+  deviceId: string
 }
 
-// compat : ancien backend
-if (!sessionId && !did) {
-  console.warn("❌ refreshToken : sessionId ou device_id manquant");
-  return null;
-}
+export async function refreshToken(
+  params: RefreshTokenParams
+): Promise<{ jwt: string; refreshToken: string; sessionId?: string } | null> {
 
+  const { refreshToken, sessionId, deviceId } = params
+  console.group("🧨 [REFRESH DEBUG FRONT]")
+  console.log("➡️ input", { refreshToken, sessionId, deviceId })
 
-  const base =
-    "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec";
-
-const query =
-  `route=refresh&refreshtoken=${encodeURIComponent(refreshToken)}` +
-  (sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : "") +
-  `&device_id=${encodeURIComponent(did)}`;
-
-
-  const fullURL =
-    "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
-    encodeURIComponent(`${base}?${query}`);
-
-  for (let attempt = 1; attempt <= 1 + MAX_RETRIES; attempt++) {
-    try {
-      console.log(`🔄 Refresh try #${attempt} →`, fullURL);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-      const res = await fetch(fullURL, {
-        method: "GET",
-        headers: { "X-Requested-With": "XMLHttpRequest" },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        console.warn(`❌ Refresh HTTP ${res.status} (try ${attempt})`);
-
-        if (
-          attempt <= MAX_RETRIES &&
-          (res.status === 504 || res.status >= 500)
-        ) {
-          await new Promise((r) => setTimeout(r, RETRY_DELAY));
-          continue;
-        }
-
-        return null;
-      }
-
-let data;
-try {
-  data = await res.json();
-} catch {
-  data = (res as any);
-}
-
-      if (!data?.jwt || !data?.refreshToken) {
-        console.warn("❌ Refresh API invalide :", data);
-        return null;
-      }
-
-  return {
-  ...data,
-  jwt: data.jwt,
-  refreshToken: data.refreshToken,
-  sessionId: sessionId, // 🔒 immuable côté front
-};
-
-    } catch (err) {
-      console.warn(`⚠️ Erreur réseau/timeout refresh (try ${attempt})`, err);
-
-      if (attempt <= MAX_RETRIES) {
-        await new Promise((r) => setTimeout(r, RETRY_DELAY));
-        continue;
-      }
-
-      console.error("❌ Erreur finale refreshToken() :", err);
-      return null;
-    }
+  if (!refreshToken || !deviceId) {
+    console.error("❌ paramètres manquants", { refreshToken, deviceId })
+    console.groupEnd()
+    return null
   }
 
-  return null;
+  const url = getProxyGetURL(
+    `route=refresh` +
+    `&refreshtoken=${encodeURIComponent(refreshToken)}` +
+    (sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : "") +
+    `&device_id=${encodeURIComponent(deviceId)}`
+  )
+
+  console.log("🌍 URL refresh =", url)
+
+  try {
+    const res = await fetch(url)
+    console.log("🌐 HTTP status =", res.status)
+
+    const text = await res.text()
+    console.log("📦 RAW response =", text)
+
+    let data = null
+    try {
+      data = JSON.parse(text)
+    } catch {
+      console.error("❌ JSON invalide")
+    }
+
+    console.log("📊 PARSED response =", data)
+
+    // normalisation
+    const payload =
+      data?.jwt ? data :
+      data?.success && data?.data ? data.data :
+      data?.success ? data :
+      null
+
+    console.log("🧬 payload normalisé =", payload)
+
+    if (!payload?.jwt || !payload?.refreshToken) {
+      console.error("❌ payload invalide", payload)
+      console.groupEnd()
+      return null
+    }
+
+    console.log("✅ refresh accepté")
+    console.groupEnd()
+
+    return {
+      jwt: payload.jwt,
+      refreshToken: payload.refreshToken,
+      sessionId: payload.sessionId
+    }
+
+  } catch (err) {
+    console.error("💥 FETCH ERROR", err)
+    console.groupEnd()
+    return null
+  }
 }
+
 
 
 
@@ -1949,64 +1863,30 @@ try {
 
 // Vérifie et rafraîchit le JWT si nécessaire
 export async function checkAndRefreshJWT() {
-  if (isLoggingOut) {
-  console.log("⏹ Ignoré : logout en cours");
-  return null;
-}
+  const store = useAuthStore()
 
-  if (isLoggingOut) {
-  console.log("⏹ Skip checkAndRefreshJWT : logout en cours");
-  return;
-}
-
-await syncRefreshToken(); // Synchronisation avant de vérifier le JWT
-
-// Vérifie si le refresh token est disponible dans tous les stockages
-let storedRefreshToken = await getRefreshTokenFromDB();
-
-if (storedRefreshToken) {
-  console.log("🔄 Vérification et restauration des autres stockages...");
-
-  // Restaurer dans localStorage, sessionStorage, cookies si nécessaire
-  if (!localStorage.getItem("refreshToken")) {
-    storageManager.setTokenInAllStorages("refreshToken", storedRefreshToken);
-    console.log("📦 Refresh token restauré dans LocalStorage.");
+  if (store.isLoggingOut) {
+    console.log("⏹ checkAndRefreshJWT ignoré → logout")
+    return null
   }
 
-  if (!sessionStorage.getItem("refreshToken")) {
-    storageManager.setTokenInAllStorages("refreshToken", storedRefreshToken);
-    console.log("📦 Refresh token restauré dans SessionStorage.");
+  // 🔍 JWT présent ?
+  if (!store.jwt) {
+    console.warn("🚨 Aucun JWT en mémoire")
+    return null
   }
 
-  const cookies = document.cookie.split("; ").find(row => row.startsWith("refreshToken="));
-  if (!cookies) {
-    document.cookie = `refreshToken=${storedRefreshToken}; Secure; SameSite=Strict; path=/`;
-    console.log("🍪 Refresh token restauré dans les cookies.");
+  // ⏭️ JWT encore valide → rien à faire
+  if (!isJwtExpired(store.jwt)) {
+    console.log("✅ JWT valide → aucun refresh")
+    return store.jwt
   }
+
+  // 🔄 JWT expiré → le STORE décide
+  console.log("🔄 JWT expiré → refresh via authStore")
+  return await store.refreshJwt()
 }
 
-const token = await getValidToken();
-console.log("🔍 Token récupéré :", token);
-
-if (!token || isJwtExpired(token)) {
-  console.warn("🚨 Pas de JWT valide, tentative de rafraîchissement...");
-
-  // Cherche le refreshToken dans cookies, IndexedDB et LocalStorage
-  let storedRefreshToken = await getRefreshTokenFromDB();
-
-
-  await refreshToken(); // Rafraîchit le JWT
-  return;
-}
-
-try {
-  const decoded = JSON.parse(atob(token.split(".")[1])); // Vérifie si le JWT est bien décodable
-  console.log(`⏳ JWT expire à : ${new Date(decoded.exp * 1000).toLocaleString()}`);
-} catch (e) {
-  console.error("❌ JWT corrompu, forçage de déconnexion.");
-
-}
-}
 export async function getRefreshTokenExpirationFromDB(): Promise<number> {
 try {
   const db = await getAuthDB();
@@ -2367,11 +2247,28 @@ const refreshInterval = /Mobi|Android/i.test(navigator.userAgent) ? 2 * 60 * 100
 // Planifie une vérification et un rafraîchissement du JWT à intervalle régulier
 setInterval(async () => {
   if (isLoggingOut || refreshFailed) return;
-  const newJwt = await refreshToken();
-  if (!newJwt) {
-    console.error("❌ Refresh échoué, logout forcé...");
-   
-  }
+const refreshTokenValue = await getRefreshTokenFromDB()
+const deviceId = localStorage.getItem("deviceId")
+const sessionId = localStorage.getItem("sessionId")
+
+if (!refreshTokenValue || !deviceId) return
+
+const result = await refreshToken({
+  refreshToken: refreshTokenValue,
+  sessionId,
+  deviceId
+})
+
+if (!result) {
+  console.error("❌ Refresh échoué")
+  return
+}
+
+await updateTokens(result.jwt, result.refreshToken)
+ if (!result?.jwt) {
+  console.error("❌ Refresh échoué")
+}
+
 }, refreshInterval);
 
  // Vérifie toutes les 2 ou 8 minutes

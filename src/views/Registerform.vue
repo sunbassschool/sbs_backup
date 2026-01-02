@@ -76,30 +76,6 @@
   </div>
   <small class="text-danger" v-if="confirmPasswordError">{{ confirmPasswordError }}</small>
 </div>
-<div class="mb-3">
-  <label class="form-label">Choisir une formule</label>
-  <div class="btn-group-toggle d-flex flex-column gap-2" data-toggle="buttons">
-    <label class="btn btn-outline-light" :class="{ active: formule === '1h-carte' }" @click="formule = '1h-carte'">
-      🎯 1H de cours (30€ / 10j)
-    </label>
-    <label class="btn btn-outline-light" :class="{ active: formule === '3h-mensuel' }" @click="formule = '3h-mensuel'">
-      🔥 3H/mois (90€ / 30j)
-    </label>
-
-    <hr class="my-2">
-
-    <label class="btn btn-outline-light" :class="{ active: formule === 'abonnement-app' }" @click="formule = 'abonnement-app'">
-      🎧 Abo App (4,99€ / 30j)
-    </label>
-    <label class="btn btn-outline-light" :class="{ active: formule === 'abo-mensuel' }" @click="formule = 'abo-mensuel'">
-      🚀 Abo Mensuel (90€ / 30j)
-    </label>
-    <label class="btn btn-outline-light" :class="{ active: formule === 'abo-trimestriel' }" @click="formule = 'abo-trimestriel'">
-      💼 Abo Trimestriel (270€ / 90j)
-    </label>
-  </div>
-  <small v-if="!formule && errorMessage" class="text-danger">Merci de choisir une formule</small>
-</div>
 
 
 
@@ -198,6 +174,7 @@
 
 <script>
 import Layout from "../views/Layout.vue";
+import { getProxyGetURL } from "@/config/gas"
 
 export default {
   name: "RegisterForm",
@@ -207,7 +184,7 @@ export default {
       email: localStorage.getItem("savedEmail") || "",
       emailError: "",
     prenom: localStorage.getItem("savedPrenom") || "",
-    formule: "",
+   
 
     codeAcces: "",
       confirmCodeAcces: "",
@@ -225,12 +202,22 @@ export default {
       showConfirmPassword: false, // 🔥 Gère l'affichage de la confirmation
     };
   },
-  watch: {
+watch: {
   email(newValue) {
     localStorage.setItem("savedEmail", newValue);
   },
   prenom(newValue) {
     localStorage.setItem("savedPrenom", newValue);
+  },
+
+  // 🔥 FIX mismatch live
+  codeAcces() {
+  this.validatePassword();
+this.validatePasswordMatch();
+if (this.passwordError || this.confirmPasswordError) return;
+  },
+  confirmCodeAcces() {
+    this.validatePasswordMatch();
   }
 },
   computed: {
@@ -250,9 +237,14 @@ export default {
     if (this.progressPercentage >= "50%") return "medium";
     return "weak";
   },
-    isSubmitDisabled() {
-      return !!this.passwordError || !!this.confirmPasswordError || !this.cguAccepted;
-    },
+ isSubmitDisabled() {
+  return (
+    !!this.passwordError ||
+    !!this.confirmPasswordError ||
+    !this.cguAccepted
+  );
+}
+,
     passwordStrengthClass() {
     if (this.codeAcces.length < 8) return "weak";
     if (/[A-Z]/.test(this.codeAcces) && /\d/.test(this.codeAcces) && /[@$!%*?&]/.test(this.codeAcces)) {
@@ -267,9 +259,17 @@ export default {
   },
   },
   methods: {
-    validatePasswordMatch() {
-    this.confirmPasswordError = this.passwordsMatch ? "" : "Les mots de passe ne correspondent pas.";
-  },
+validatePasswordMatch() {
+  if (!this.confirmCodeAcces) {
+    this.confirmPasswordError = "";
+    return;
+  }
+
+  this.confirmPasswordError =
+    this.codeAcces === this.confirmCodeAcces
+      ? ""
+      : "Les mots de passe ne correspondent pas.";
+},
     validatePassword() {
       const strongPasswordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
       if (!strongPasswordRegex.test(this.codeAcces)) {
@@ -312,10 +312,7 @@ export default {
     this.errorMessage = "Tous les champs sont obligatoires.";
     return;
   }
-if (!this.formule) {
-  this.errorMessage = "Merci de sélectionner une formule.";
-  return;
-}
+
 
   // Vérification correspondance des mots de passe
   if (this.codeAcces !== this.confirmCodeAcces) {
@@ -345,13 +342,12 @@ const stripeLinks = {
 
 
   try {
-    const baseURL = "https://script.google.com/macros/s/AKfycbwNKLd3qhS7JFaXgBJOisqkEeV8vIFoMMxJDwKizNFdlT1rjMtXiPasnOBen5KS0PuSJA/exec";
-const query = `route=register&email=${encodeURIComponent(this.email)}&prenom=${encodeURIComponent(this.prenom)}&codeAcces=${encodeURIComponent(this.codeAcces)}&formule=${encodeURIComponent(this.formule)}`;
+ const url = getProxyGetURL(
+  `route=register&email=${encodeURIComponent(this.email)}&prenom=${encodeURIComponent(this.prenom)}&codeAcces=${encodeURIComponent(this.codeAcces)}&formule=${encodeURIComponent(this.formule)}`
+)
 
-    const fullURL = `${baseURL}?${query}`;
-    const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullURL)}`;
+const response = await fetch(url, { method: "GET" });
 
-    const response = await fetch(fullURL, { method: "GET" });
 
     const result = await response.json();
 

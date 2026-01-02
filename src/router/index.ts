@@ -7,7 +7,6 @@ type AnyStore = ReturnType<typeof useAuthStore> & Record<string, any>;
 // =============================================================
 // 📌 Pages (import)
 // =============================================================
-import HomeView from "@/views/HomeView.vue";
 import IntroView from "@/views/IntroView.vue";
 import BassTuner from "@/views/BassTuner.vue";
 import Dashboard from "@/views/Dashboard.vue";
@@ -111,6 +110,24 @@ const router = createRouter({
     // =========================================================
     // 👨‍🏫 PROF (et ADMIN aussi)
     // =========================================================
+{
+  path: "/prof/revenus",
+  name: "ProfRevenus",
+  component: () => import("@/views/dashboard-prof/ProfRevenus.vue"),
+  meta: { requiresAuth: true, role: "prof" }
+}
+,
+{
+  path: "/prof/partitions",
+  name: "PartitionsProf",
+  component: () => import("@/views/Partitions_prof.vue"),
+  meta: {
+    requiresAuth: true,
+    role: "prof"
+  }
+}
+,
+
     {
       path: "/dashboard-prof",
       name: "dashboard-prof",
@@ -200,6 +217,14 @@ const router = createRouter({
     { path: "/planning", name: "planning", component: Planning, meta: { requiresAuth: true } },
     { path: "/replay", name: "replay", component: Replay, meta: { requiresAuth: true } },
         { path: "/LinkProf", name: "LinkProf", component: LinkProf, meta: { requiresAuth: true } },
+{
+  path: "/partitions",
+  name: "PartitionsEleve",
+  component: () => import("@/views/PartitionsEleve.vue"),
+  meta: {
+    requiresAuth: true,
+  }
+},
 
     {
   path: '/upload-test',
@@ -233,7 +258,6 @@ const router = createRouter({
     { path: "/intro", name: "intro", component: IntroView },
     { path: "/Feedback", name: "Feedback", component: Feedback },
     { path: "/FeedBackProf", name: "FeedBackProf", component: FeedBackProf },
-    { path: "/home", name: "home", component: HomeView },
     { path: "/partitions", name: "partitions", component: Partitions },
     { path: "/videos", name: "videos", component: Videos },
     { path: "/Metronome", name: "Metronome", component: Metronome },

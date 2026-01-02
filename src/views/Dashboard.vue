@@ -109,6 +109,8 @@
 <script>
 import Layout from "../views/Layout.vue";
 import { jwtDecode } from "jwt-decode";
+import { getProxyGetURL, getProxyPostURL } from "@/config/gas";
+
 import {
   getCache,
   setCache,
@@ -163,11 +165,6 @@ noteReady: false,      // le vrai indicateur d’API terminée
     destroyed: false,
     debounceTimer: null,
 noteLoadedFromCache: false,
-
-    routes: {
-      GET: "AKfycbwjjImCb86b4tqTapotLr-qq9BHuHtaS-V3JHoPT95SMigo51iinjQXUZ5PDoZqE4gYjA/exec",
-      POST: "AKfycbwjjImCb86b4tqTapotLr-qq9BHuHtaS-V3JHoPT95SMigo51iinjQXUZ5PDoZqE4gYjA/exec"
-    }
   };
 },
 
@@ -320,10 +317,10 @@ async syncNoteWithAPI() {
     return;
   }
 
-  const url = this.getProxyURL(this.routes.GET, {
-    route: "getnote",
-    jwt
-  });
+const url = getProxyGetURL(
+  `route=getnote&jwt=${encodeURIComponent(jwt)}`
+);
+
 
   try {
     const raw = await fetch(url).then(r => r.text());
@@ -363,7 +360,7 @@ async syncNoteWithAPI() {
       const jwt = await getValidToken();
       if (!jwt) return;
 
-      const url = this.getProxyPostURL(this.routes.POST);
+const url = getProxyPostURL();
       const payload = {
         route: "updatenote",
         jwt,
@@ -416,12 +413,12 @@ async fetchFromAPI(force = false) {
   const jwt = await getValidToken()
   if (!jwt) return router.replace("/login")
 
-  const url = this.getProxyURL(this.routes.GET, {
-    route: "planning",
-    jwt,
-    email: this.email,
-    prof_id: this.auth.user?.prof_id
-  })
+const url = getProxyGetURL(
+  `route=planning` +
+  `&jwt=${encodeURIComponent(jwt)}` +
+  `&email=${encodeURIComponent(this.email)}` +
+  `&prof_id=${encodeURIComponent(this.auth.user?.prof_id || "")}`
+);
 
   try {
     const raw = await fetch(url).then(r => r.text())
@@ -584,16 +581,6 @@ this.cards = [
       return Array.isArray(d.planning) || d.objectif;
     },
 
-    getProxyURL(route, params) {
-      const qs = new URLSearchParams(params).toString();
-      const base = `https://script.google.com/macros/s/${route}?${qs}`;
-      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
-    },
-
-    getProxyPostURL(route) {
-      const base = `https://script.google.com/macros/s/${route}`;
-      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
-    },
 
    getDayName(d) {
   return ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."][new Date(d).getDay()];

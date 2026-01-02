@@ -197,6 +197,8 @@
 <script>
 import Layout from "../views/Layout.vue";
 import axios from "axios";
+import { getProxyPostURL, getProxyGetURL } from "@/config/gas"
+
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { getValidToken } from "@/utils/api.ts"; // 🔐 Import sécurisé
@@ -241,30 +243,18 @@ const fetchElevesInscrits = async () => {
   try {
     const jwt = await getValidToken()
 
-    const targetURL =
-      "https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
+const proxyUrl = getProxyPostURL()
 
-    const proxyURL =
-      "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
-      encodeURIComponent(targetURL)
+const res = await fetch(proxyUrl, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    route: "getelevesbyprof",
+    jwt,
+    prof_id: profId.value
+  })
+})
 
-    console.log("🔗 GAS URL :", targetURL)
-    console.log("🔁 PROXY URL :", proxyURL)
-    console.log("📦 POST BODY :", {
-      route: "getelevesbyprof",
-      jwt: jwt ? "JWT_OK" : "JWT_MISSING",
-      prof_id: profId.value
-    })
-
-    const res = await fetch(proxyURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "getelevesbyprof",
-        jwt,
-        prof_id: profId.value
-      })
-    })
 
     const text = await res.text()
     console.log("📥 RAW RESPONSE :", text)
@@ -362,28 +352,15 @@ const fetchCours = async (noCache = false) => {
     const jwt = await getValidToken()
     if (!profId.value) throw new Error("prof_id manquant")
 
-    const base =
-      "https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
+  const proxyUrl = getProxyGetURL(
+  `route=suiviCours` +
+  `&prof_id=${encodeURIComponent(profId.value)}` +
+  `&jwt=${encodeURIComponent(jwt)}` +
+  (noCache ? `&t=${Date.now()}` : "")
+)
 
-    const fullUrl =
-      `${base}?route=suiviCours` +
-      `&prof_id=${encodeURIComponent(profId.value)}` +
-      `&jwt=${encodeURIComponent(jwt)}` +
-      (noCache ? `&t=${Date.now()}` : "")
+const response = await axios.get(proxyUrl)
 
-    const proxyUrl =
-      "https://cors-proxy-sbs.vercel.app/api/proxy?url=" +
-      encodeURIComponent(fullUrl)
-
-    console.log("🔗 GAS URL (cours) :", fullUrl)
-    console.log("🔁 PROXY URL (cours) :", proxyUrl)
-    console.log("📦 PARAMS :", {
-      route: "suiviCours",
-      prof_id: profId.value,
-      noCache
-    })
-
-    const response = await axios.get(proxyUrl)
 
     console.log("📥 RAW RESPONSE (cours) :", response.data)
 
@@ -520,17 +497,18 @@ const selectClosestWeek = () => {
     const jwt = await getValidToken();
 
     // ✅ Construction de l'URL via le proxy
-    const targetURL = `https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec?jwt=${encodeURIComponent(jwt)}`;
-    const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(targetURL)}`;
+   const proxyUrl = getProxyPostURL()
 
-    const response = await fetch(proxyUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "supprimerCoursEleve",
-        prenom: selectedStudent.value,
-      }),
-    });
+const response = await fetch(proxyUrl, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    route: "supprimerCoursEleve",
+    jwt,
+    prenom: selectedStudent.value
+  })
+})
+
 
     const result = await response.json();
 
@@ -596,21 +574,21 @@ const selectClosestWeek = () => {
   updating.value = true;
   try {
     const jwt = await getValidToken();
+const proxyUrl = getProxyPostURL()
 
-    const targetURL = `https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec?jwt=${encodeURIComponent(jwt)}`;
-    const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(targetURL)}`;
+const response = await fetch(proxyUrl, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    route: "updateCours",
+    jwt,
+    cours: {
+      ...editedCours.value,
+      AncienneDate: editedCours.value.AncienneDate
+    }
+  })
+})
 
-    const response = await fetch(proxyUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "updateCours",
-        cours: {
-          ...editedCours.value,
-          AncienneDate: editedCours.value.AncienneDate,
-        },
-      }),
-    });
 
     const result = await response.json();
 

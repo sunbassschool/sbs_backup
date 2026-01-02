@@ -456,6 +456,7 @@ import Layout from "@/views/Layout.vue";
 import { getValidToken } from "@/utils/api.ts";
 import { QuillEditor } from '@vueup/vue-quill';
 import { useAuthStore } from "@/stores/authStore";
+import { getProxyGetURL, getProxyPostURL } from "@/config/gas";
 
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 export default {
@@ -502,7 +503,6 @@ isLoadingEleves: false,
       nouveauFeedback: "",
       feedbackSentMessage: "",
       feedbacks: [],
-      apiURL: "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
     };
     
   },
@@ -647,7 +647,7 @@ async deleteReply(rep) {
   };
 
   try {
-    const res = await fetch(this.getProxyPostURL(), {
+    const res = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -684,7 +684,7 @@ async updateFeedbackStatut(feedbackId, newStatut) {
   };
 
   try {
-    const res = await fetch(this.getProxyPostURL(), {
+    const res = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -735,7 +735,7 @@ async submitEditedFeedback() {
 
   console.log("📤 Payload update :", payload);
 
-  const res = await fetch(this.getProxyPostURL(), {
+  const res = await fetch(getProxyPostURL(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -831,13 +831,13 @@ async fetchPlanningForEleve(emailVal, prenomVal) {
   const jwt = await getValidToken();
 const profId = this.auth?.user?.prof_id;
 
-const baseUrl =
-  `${this.apiURL}?route=planning` +
+const proxyUrl = getProxyGetURL(
+  `route=planning` +
   `&email=${encodeURIComponent(emailVal)}` +
   `&prenom=${encodeURIComponent(prenomVal)}` +
   `&prof_id=${encodeURIComponent(profId)}` +
-  `&jwt=${encodeURIComponent(jwt)}`;
-  const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseUrl)}`;
+  `&jwt=${encodeURIComponent(jwt)}`
+)
 
   try {
     const res = await fetch(proxyUrl);
@@ -909,7 +909,7 @@ async fetchEleves({ silent = false } = {}) {
 
   try {
     const jwt = await getValidToken()
-    const proxyUrl = this.getProxyPostURL()
+const proxyUrl = getProxyPostURL()
 
     const payload = {
       route: "getelevesbyprof",
@@ -1031,7 +1031,9 @@ async fetchAllFeedbacks({ silent = false } = {}) {
 
   try {
     const jwt = await getValidToken()
-    const url = this.getProxyURL({ route: "getfeedbacks", jwt })
+const url = getProxyGetURL(
+  `route=getfeedbacks&jwt=${encodeURIComponent(jwt)}`
+)
 
     const res = await fetch(url)
     const data = await res.json()
@@ -1074,11 +1076,12 @@ this.filterFeedbacksForEleve(eleve);
 ,
     async fetchFeedbacks() {
       const jwt = await getValidToken();
-      const url = this.getProxyURL({
-        route: "getfeedbacks",
-        jwt,
-        id_eleve: this.selectedEleve.email
-      });
+     const url = getProxyGetURL(
+  `route=getfeedbacks` +
+  `&jwt=${encodeURIComponent(jwt)}` +
+  `&id_eleve=${encodeURIComponent(this.selectedEleve.email)}`
+)
+
 
       console.log("📡 URL utilisée pour getfeedbacks :", url);
       try {
@@ -1147,10 +1150,10 @@ date_cours: effectiveDate
   // ------------------------------------------------------
   try {
     
-const fullURL = this.getProxyPostURL();
+const fullURL = getProxyPostURL();
 console.log("🌐 URL d’envoi POST :", fullURL);
 console.log("📤 Envoi feedback au backend :", payload);
-    const res = await fetch(this.getProxyPostURL(), {
+    const res = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1191,10 +1194,7 @@ console.log("📤 Envoi feedback au backend :", payload);
       const d = new Date(dateStr);
       return d.toLocaleString("fr-FR");
     },
-    getProxyURL(params) {
-      const base = `${this.apiURL}?` + new URLSearchParams(params).toString();
-      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
-    },
+ 
 organizeFeedbacks(all) {
   console.log("📊 DONNÉES BRUTES ALL :", all);
 
@@ -1336,7 +1336,7 @@ async sendReply(fb) {
     type: "Prof"
   };
 
-  const url = this.getProxyPostURL();
+const url = getProxyPostURL();
   console.log("📤 Réponse envoyée :", payload);
 
   try {
@@ -1363,9 +1363,7 @@ async sendReply(fb) {
   }
 }
 ,
-    getProxyPostURL() {
-      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(this.apiURL)}`;
-    }
+   
   }
 };
 </script>

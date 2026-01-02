@@ -62,19 +62,16 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getValidToken } from "@/utils/api.ts"
+import { getProxyPostURL } from "@/config/gas.ts"
 
 const auth = useAuthStore()
 const emit = defineEmits(["uploaded", "done"])
 const uploadSessionId = ref(null)
 
-const GAS_POST_ROUTE = "AKfycbywruw_pMa_mKp01OFXrlzpj2bXGdpppFW59S5jKa-666sxavdw5vLF-PQLlR77dkkB_A"
 const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent)
 const MAX_MOBILE_SIZE = 50 * 1024 * 1024 // 50 Mo
 
-const getProxyPostURL = () => {
-  const baseURL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`
-}
+
 
 // 🔧 props dynamiques
 const props = defineProps({
@@ -188,36 +185,48 @@ const uploadSingleFile = (fileWrapper) => {
           if (!res.success) throw res.error
 
           // 3️⃣ ATTACH SHEET
+          const effectiveFolderId = lockedFolderId.value || props.folderId
+
+console.log("🧷 EFFECTIVE folder_id =", effectiveFolderId)
+
+if (!effectiveFolderId) {
+  throw new Error("folder_id manquant – upload refusé")
+}
+
           const attachRes = await fetch(proxyUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              route: "attachfiletocours",
-              jwt,
-              prof_id: auth.user.prof_id,
-              file_url: res.url,
-              file_name: res.name,
-              file_size: res.size,
-              file_type: file.type,
-folder_id: lockedFolderId.value || props.folderId,
-              ...(props.eleveId ? { eleve_id: props.eleveId } : {}),
-              ...(props.coursId ? { cours_id: props.coursId } : {})
-            })
+body: JSON.stringify({
+  route: "attachfiletocours",
+  jwt,
+  prof_id: auth.user.prof_id,
+  cours_id: props.coursId || "PARTITION",
+  file_url: res.url,
+  file_name: res.name,
+  file_size: res.size,
+  file_type: file.type,
+  folder_id: effectiveFolderId,
+  ...(props.eleveId ? { eleve_id: props.eleveId } : {})
+})
+
+
           }).then(r => r.json())
 
           if (!attachRes.success) throw "attach failed"
 
           // 🔥 EMIT AVEC optimistic_id
-          emit("uploaded", {
-            upload_id: attachRes.upload_id,
-            optimistic_id: optimisticId,
-            file_name: res.name,
-            file_url: res.url,
-            file_size: res.size,
-            file_type: file.type,
-folder_id: lockedFolderId.value,            created_at: new Date().toISOString(),
-            session_id: uploadSessionId.value
-          })
+    emit("uploaded", {
+  upload_id: attachRes.upload_id,
+  optimistic_id: optimisticId,
+  file_name: res.name,
+  file_url: res.url,
+  file_size: res.size,
+  file_type: file.type,
+  folder_id: effectiveFolderId, // ✅
+  created_at: new Date().toISOString(),
+  session_id: uploadSessionId.value
+})
+
 
           resolve()
         } catch (err) {

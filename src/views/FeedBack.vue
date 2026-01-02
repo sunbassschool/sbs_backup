@@ -241,14 +241,17 @@
   <script>
   import Layout from "../views/Layout.vue";
   import { useAuthStore } from "@/stores/authStore";
+import { getProxyGetURL, getProxyPostURL } from "@/config/gas"
 
   import { getValidToken } from "@/utils/api.ts";
   import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
   import { jwtDecode } from "jwt-decode";
-  
+  const FEEDBACK_TTL = 2 * 60 * 1000 // 2 minutes
+
   export default {
+    
     name: "Feedback",
   components: {
   Layout,
@@ -260,9 +263,10 @@ import '@vueup/vue-quill/dist/vue-quill.snow.css';
         reponses: {}, // Chaque feedback aura son champ texte
 sendingReply: {},
 openedFeedbacks: [],
-selectedMonth: "",
+selectedMonth: null,
 openedFeedbackId: null,
 showNewFeedbackForm: false,
+    feedbackCacheKey: null,
 
         nouveauFeedback: "",
 feedbackSentMessage: "",
@@ -272,10 +276,7 @@ sendingFeedback: false,
         feedbackError: null,
         filterStatut: "ALL",
 
-        routes: {
-          GET: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec",
-          POST: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec",
-        },
+    
      email: null,
 prenom: null,
 userData: {},
@@ -357,32 +358,68 @@ async mounted() {
 
   this.email = auth.user?.email || null
   this.prenom = auth.user?.prenom || null
-  this.userData = auth.user || {}
 
-  await this.fetchFeedbacks()
+  this.feedbackCacheKey = `feedback_${this.email || this.prenom}`
+
+  // ⚡ affichage instantané
+  const hasCache = this.loadFeedbackFromCache()
+
+  // 🔄 refresh silencieux
+  this.fetchFeedbacks({ silent: hasCache })
+
   await this.$nextTick()
-
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-
-  this.selectedMonth =
-    this.availableMonths.find(m => m.value === currentMonth)?.value
-    || this.availableMonths[0]?.value
-    || ""
 }
+
+
 
 
 ,
 
   
     methods: {
+  loadFeedbackFromCache() {
+  if (!this.feedbackCacheKey) return false
+
+  const raw = localStorage.getItem(this.feedbackCacheKey)
+  if (!raw) return false
+
+  try {
+    const { data, ts, selectedMonth } = JSON.parse(raw)
+    if (!Array.isArray(data)) return false
+    if (Date.now() - ts > FEEDBACK_TTL) return false
+
+    this.feedbacks = data
+    this.selectedMonth = selectedMonth || ""
+    this.feedbackLoading = false
+
+    return true
+  } catch {
+    return false
+  }
+}
+,
+
+saveFeedbackToCache(list) {
+  if (!this.feedbackCacheKey) return
+
+  localStorage.setItem(
+    this.feedbackCacheKey,
+    JSON.stringify({
+      data: list,
+      selectedMonth: this.selectedMonth,
+      ts: Date.now()
+    })
+  )
+}
+,
+
         async deleteFeedback(id) {
   if (!confirm("❗ Supprimer ce feedback ?")) return;
 
   const jwt = await getValidToken();
   if (!jwt) return;
 
-  const url = this.getProxyPostURL(this.routes.POST);
+  const url = getProxyPostURL()
   const payload = {
     route: "deletefeedback",
     jwt,
@@ -403,6 +440,8 @@ async mounted() {
     const result = await res.json();
     if (result.success) {
       console.log("🗑️ Feedback supprimé :", result.message);
+      localStorage.removeItem(this.feedbackCacheKey)
+
       await this.fetchFeedbacks();
     } else {
       console.warn("❌ Erreur suppression :", result.message);
@@ -501,7 +540,7 @@ nettoyerContenu(contenu) {
   const jwt = await getValidToken();
   if (!jwt) return;
 
-  const url = this.getProxyPostURL(this.routes.POST);
+  const url = getProxyPostURL()
 const auth = useAuthStore();
 
 const payload = {
@@ -532,6 +571,7 @@ id_eleve: auth.user?.id || auth.user?.email,
 
     if (result.success) {
       this.reponses[feedbackId] = "";
+localStorage.removeItem(this.feedbackCacheKey)
 
       // 🔁 recharge la liste
       await this.fetchFeedbacks();
@@ -550,82 +590,74 @@ id_eleve: auth.user?.id || auth.user?.email,
 }
 
 ,
-async fetchFeedbacks() {
-  this.feedbackLoading = true;
-  this.feedbackError = null;
+async fetchFeedbacks({ silent = false } = {}) {
+  if (!silent) this.feedbackLoading = true
+  this.feedbackError = null
 
-  const jwt = await getValidToken();
-  if (!jwt) return;
+  const jwt = await getValidToken()
+  if (!jwt) return
 
-  const url = this.getProxyURL(this.routes.GET, {
-    route: "getfeedbacks",
-    jwt,
-    role: "admin"
-  });
+  const url = getProxyGetURL(
+    `route=getfeedbacks&jwt=${encodeURIComponent(jwt)}`
+  )
 
   try {
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await fetch(url)
+    const data = await res.json()
 
-    if (!data.feedbacks) {
-      this.feedbackError = "Aucun feedback trouvé.";
-      return;
+    if (!Array.isArray(data.feedbacks)) {
+      this.feedbackError = "Aucun feedback trouvé."
+      return
     }
 
-    const all = data.feedbacks;
-const auth = useAuthStore();
-const idEleveActuel = auth.user?.id || auth.user?.email;
+    const all = data.feedbacks
+    const auth = useAuthStore()
+    const idEleveActuel = auth.user?.id || auth.user?.email
 
-    // 🧠 Map des ID existants
-    const allIds = new Set(all.map(fb => String(fb.ID)));
+    const allIds = new Set(all.map(fb => String(fb.ID)))
 
-    // 🧹 fonction qui détecte un parent, même ancienne data
     const isParent = (fb) => {
-      const idc = String(fb.ID_Cours || "").trim().toLowerCase();
+      const idc = String(fb.ID_Cours || "").trim().toLowerCase()
+      if (!idc || idc === "null") return true
+      if (["prof", "sunny", "eleve", "cours", "test"].includes(idc)) return true
+      if (idc.startsWith("id") && !allIds.has(idc)) return true
+      return false
+    }
 
-      if (!idc || idc === "null" || idc === "") return true;
-
-      // anciennes datas douteuses
-      if (["prof", "sunny", "eleve", "cours", "test"].includes(idc)) return true;
-
-      // si "IDxxx" mais n’existe pas → parent
-      if (idc.startsWith("id") && !allIds.has(idc)) return true;
-
-      return false;
-    };
-
-    // 🟦 feedbacks principaux
     const principaux = all.filter(fb =>
       isParent(fb) && fb.ID_Eleve === idEleveActuel
-    );
+    )
 
-    // 🟧 réponses
-    const reponses = all.filter(fb =>
-      !isParent(fb)
-    );
+    const reponses = all.filter(fb => !isParent(fb))
 
-    // 🧩 association
     this.feedbacks = principaux.reverse().map(parent => {
-
-      const pid = String(parent.ID);
-      const pidNum = pid.replace("ID", "");
-
-      const reps = reponses.filter(rep => {
-        const rc = String(rep.ID_Cours);
-        return rc === pid || rc === pidNum;
-      });
+      const pid = String(parent.ID)
+      const pidNum = pid.replace("ID", "")
 
       return {
         ...parent,
-        reponses: reps
-      };
-    });
+        reponses: reponses.filter(rep => {
+          const rc = String(rep.ID_Cours)
+          return rc === pid || rc === pidNum
+        })
+      }
+    })
+// 🎯 recalage du mois affiché
+if (
+  !this.selectedMonth ||
+  !this.availableMonths.some(m => m.value === this.selectedMonth)
+) {
+  this.selectedMonth = this.availableMonths[0]?.value || null
+}
+
+    // ✅ cache uniquement après succès
+    this.saveFeedbackToCache(this.feedbacks)
 
   } catch (err) {
-    console.error("❌ Erreur récupération feedbacks :", err);
-    this.feedbackError = "Erreur de chargement.";
+    console.error("❌ Erreur récupération feedbacks :", err)
+    this.feedbackError = "Erreur de chargement."
   } finally {
-    this.feedbackLoading = false;
+    if (!silent) this.feedbackLoading = false
   }
 }
 
@@ -636,18 +668,10 @@ const idEleveActuel = auth.user?.id || auth.user?.email;
 
 
 
+
 ,
   
-      getProxyURL(routeId, params = {}) {
-        const baseURL = `https://script.google.com/macros/s/${routeId}`;
-        const query = new URLSearchParams(params).toString();
-        const fullURL = `${baseURL}?${query}`;
-        return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullURL)}`;
-      },
-      getProxyPostURL(routeId) {
-  const baseURL = `https://script.google.com/macros/s/${routeId}`;
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`;
-},
+  
 
       formatDate(dateString) {
         if (!dateString) return "Date inconnue";
@@ -674,7 +698,7 @@ const idEleveActuel = auth.user?.id || auth.user?.email;
   const jwt = await getValidToken();
   if (!jwt) return;
 
-  const url = this.getProxyPostURL(this.routes.POST);
+  const url = getProxyPostURL()
 const auth = useAuthStore();
 
 const payload = {
@@ -706,6 +730,8 @@ console.log("🧾 Payload envoyé :", payload);
     if (result.success) {
       this.feedbackSentMessage = "✅ Feedback envoyé !";
       this.nouveauFeedback = "";
+      localStorage.removeItem(this.feedbackCacheKey)
+
       await this.fetchFeedbacks(); // Recharge les feedbacks
     } else {
       console.warn("❌ Erreur API :", result.message);
@@ -727,7 +753,7 @@ async markAsRead(feedbackId) {
     ? Number(feedbackId.replace("ID", ""))
     : Number(feedbackId); // au cas où ce serait déjà un number
 
-  const url = this.getProxyPostURL(this.routes.POST);
+  const url = getProxyPostURL()
   const payload = {
     route: "validatefeedback",
     jwt,
@@ -749,6 +775,8 @@ console.log("📦 Payload envoyé pour validatefeedback :", payload);
     const result = await res.json();
     if (result.success) {
       console.log("✅ Statut mis à jour :", result.message);
+      localStorage.removeItem(this.feedbackCacheKey)
+
       await this.fetchFeedbacks(); // recharge les feedbacks
     } else {
       console.warn("❌ Erreur validation (backend) :", result);

@@ -124,6 +124,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
  import { useAuthStore } from "@/stores/authStore"
+ import { getProxyGetURL } from "@/config/gas"
+
 const auth = useAuthStore()
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination, Autoplay } from 'swiper/modules'
@@ -156,6 +158,36 @@ function onImageLoad(formattedDate, event) {
   }
 }
 
+const REPLAY_TTL = 15 * 60 * 1000 // 15 min
+const getReplayCacheKey = () =>
+  `replay_${auth.user?.email}_${auth.user?.prof_id}`
+function loadReplayFromCache() {
+  const key = getReplayCacheKey()
+  const raw = localStorage.getItem(key)
+  if (!raw) return false
+
+  try {
+    const { data, ts } = JSON.parse(raw)
+    if (!data || Date.now() - ts > REPLAY_TTL) return false
+
+    planningData.value = data
+    isLoading.value = false
+    return true
+  } catch {
+    return false
+  }
+}
+
+function saveReplayToCache(data) {
+  const key = getReplayCacheKey()
+  localStorage.setItem(
+    key,
+    JSON.stringify({
+      data,
+      ts: Date.now()
+    })
+  )
+}
 
 
 const erroredImages = ref({})
@@ -280,78 +312,48 @@ function updateWindowWidth() {
 
 
 
-async function fetchPlanningData() {
+async function fetchPlanningData(force = false) {
   isLoading.value = true
-  try {
-    const jwt = sessionStorage.getItem("jwt") || localStorage.getItem("jwt") || ""
 
-
-const email = auth.user?.email || localStorage.getItem("email") || ""
-const prenom = auth.user?.prenom || localStorage.getItem("prenom") || ""
-
-    if (!jwt || !email || !prenom) return
-
-function parseFrenchFormattedDate(dateStr) {
-  try {
-    const regex = /(\d{2}) (\w+) (\d{4}) à (\d{2}):(\d{2})/
-    const match = dateStr.match(regex)
-    if (!match) return new Date(0) // fallback très ancien si parsing échoue
-
-    const [, day, monthName, year, hours, minutes] = match
-    const month = moisFrancais[monthName.toLowerCase()]
-    return new Date(Number(year), month, Number(day), Number(hours), Number(minutes))
-  } catch {
-    return new Date(0)
+  // ⚡ affichage immédiat si cache
+  if (!force && loadReplayFromCache()) {
+    // 🔄 refresh silencieux
+    fetchPlanningData(true)
+    return
   }
-}
 
-    const route = "planning"
-    const targetBase = "https://script.google.com/macros/s/AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec"
-   const profId =
-  auth.user?.prof_id ||
-  JSON.parse(atob(jwt.split(".")[1]))?.prof_id ||
-  localStorage.getItem("prof_id") ||
-  ""
+  try {
+    const jwt = auth.jwt
+    const email = auth.user?.email
+    const prenom = auth.user?.prenom
+    const profId = auth.user?.prof_id
 
-const fullTargetUrl =
-  `${targetBase}?route=${route}` +
-  `&email=${encodeURIComponent(email)}` +
-  `&prenom=${encodeURIComponent(prenom)}` +
-  `&prof_id=${encodeURIComponent(profId)}` +
-  `&jwt=${encodeURIComponent(jwt)}`
+    if (!jwt || !email || !prenom || !profId) return
 
-    const proxyUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullTargetUrl)}`
-console.log("📡 FETCH PLANNING →", {
-  email,
-  prenom,
-  jwt: jwt ? "OK" : "MISSING",
-  proxyUrl
-})
+    const url = getProxyGetURL(
+      `route=planning` +
+      `&email=${encodeURIComponent(email)}` +
+      `&prenom=${encodeURIComponent(prenom)}` +
+      `&prof_id=${encodeURIComponent(profId)}` +
+      `&jwt=${encodeURIComponent(jwt)}`
+    )
 
-const res = await fetch(proxyUrl)
-console.log("📥 STATUS", res.status)
+    const res = await fetch(url)
+    const json = await res.json()
 
-const json = await res.json()
-console.log("📦 RAW JSON", json)
-
-if (json.success && json.planning) {
-  planningData.value = json.planning
-
-  console.log("🧩 PLANNING LENGTH", json.planning.length)
-  console.table(
-    json.planning.map(p => ({
-      date: p.formattedDate,
-      lienReplay: p.lienReplay
-    }))
-  )
-}
+    if (json.success && Array.isArray(json.planning)) {
+      planningData.value = json.planning
+      saveReplayToCache(json.planning)
+    }
 
   } catch (e) {
-    console.error("Erreur lors du chargement du planning:", e)
+    console.error("❌ fetch replay:", e)
   } finally {
     isLoading.value = false
   }
 }
+
+
 function extractShortDate(fullDate) {
   const match = fullDate.match(/^(\d{2}) (\w+) (\d{4})/)
   if (!match) return fullDate
@@ -368,6 +370,7 @@ onMounted(() => {
   fetchPlanningData()
   window.addEventListener("resize", updateWindowWidth)
 })
+
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateWindowWidth)

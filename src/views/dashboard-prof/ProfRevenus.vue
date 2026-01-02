@@ -1,11 +1,10 @@
 <template>
   <Layout>
-    <PurchasesPanel />
+    <StripeRevenusProf />
   </Layout>
 </template>
 
 <script setup>
 import Layout from "@/views/Layout.vue"
-import PurchasesPanel from "@/components/stripe/PurchasesPanel.vue"
-
+import StripeRevenusProf from "@/components/stripe/StripeRevenusProf.vue"
 </script>

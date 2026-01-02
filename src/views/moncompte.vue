@@ -318,7 +318,7 @@ import { ref, onMounted, watch, computed, nextTick } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
 import VueCropper from "vue-cropperjs";
 import "@/assets/styles/cropper.css";
-import { getProxyPostURL } from "@/config/gas"
+import { getProxyPostURL, getProxyGetURL } from "@/config/gas"
 
 
 import Layout from "@/views/Layout.vue";
@@ -555,8 +555,7 @@ async function resilierAbonnementStripe(emailLocal) {
     email: emailLocal
   };
 
-  const apiBaseURL = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec"; // Remplace par le bon ID
-  const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
+const proxyURL = getProxyPostURL();
 
   try {
     const res = await fetch(proxyURL, {
@@ -610,8 +609,7 @@ async function applyCrop() {
         mimeType: selectedFile.type || "image/png"
       };
 
-      const apiBaseURL = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
-      const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(apiBaseURL)}`;
+const proxyURL = getProxyPostURL();
 
       try {
         const res = await fetch(proxyURL, {
@@ -766,9 +764,11 @@ const email = computed(() => authStore.user?.email || "");
     sessions.value.splice(indexToRemove, 1);
   }
 
-  const apiBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
-  const url = `${apiBase}?route=revoke_session&email=${encodeURIComponent(email)}&sessionId=${encodeURIComponent(sessionId)}`;
-  const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
+const finalURL = getProxyGetURL(
+  `route=revoke_session` +
+  `&email=${encodeURIComponent(email)}` +
+  `&sessionId=${encodeURIComponent(sessionId)}`
+);
 
   console.log("🧪 URL de révocation :", finalURL);
 
@@ -884,12 +884,12 @@ async function updateTelephone() {
   const encodedJWT = encodeURIComponent(jwt);
   const encodedTel = encodeURIComponent(cleanInput);
 
-  const apiBaseURL =
-    "https://script.google.com/macros/s/AKfycbz1h1hzM7OUKR4Vh5UCk_eYa2m2A9x6SizhyQhJ-pP0081lBItntGE1K9s7XyQDxhLUHg/exec";
+const finalURL = getProxyGetURL(
+  `route=updateeleve` +
+  `&jwt=${encodedJWT}` +
+  `&telephone=${encodedTel}`
+);
 
-  const finalURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
-    `${apiBaseURL}?route=updateeleve&jwt=${encodedJWT}&telephone=${encodedTel}`
-  )}`;
 
   fetch(finalURL, {
     method: "GET",
@@ -924,9 +924,10 @@ const email =
     return;
   }
 
-  const apiBase = "https://script.google.com/macros/s/AKfycbz1h1hzM7OUKR4Vh5UCk_eYa2m2A9x6SizhyQhJ-pP0081lBItntGE1K9s7XyQDxhLUHg/exec";
-  const url = `${apiBase}?route=get_sessions&email=${encodeURIComponent(email)}`;
-  const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
+const proxyURL = getProxyGetURL(
+  `route=get_sessions&email=${encodeURIComponent(email)}`
+);
+
 
   try {
     const res = await fetch(proxyURL);
@@ -981,9 +982,12 @@ const userDataKey = `userData_${email}`;
   // 📡 3. Appel serveur ensuite
   const encodedJWT = encodeURIComponent(jwt);
   const encodedObjectif = encodeURIComponent(objectifValue);
-  const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(
-    `https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec?route=updateeleve&jwt=${encodedJWT}&objectif=${encodedObjectif}`
-  )}`;
+ const url = getProxyGetURL(
+  `route=updateeleve` +
+  `&jwt=${encodedJWT}` +
+  `&objectif=${encodedObjectif}`
+);
+
 
   console.log("🔗 URL envoi objectif :", url);
 
@@ -1016,9 +1020,9 @@ async function logoutAllDevices() {
     return;
   }
 
-  const apiBase = "https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec";
-  const url = `${apiBase}?route=revoke_all_sessions&email=${encodeURIComponent(email)}`;
-  const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(url)}`;
+ const proxyURL = getProxyGetURL(
+  `route=revoke_all_sessions&email=${encodeURIComponent(email)}`
+);
 
   try {
     const res = await fetch(proxyURL);
@@ -1163,10 +1167,9 @@ else {
     // ✅ Fallback si aucune donnée en localStorage
     console.warn("⏳ userData manquant — tentative de rechargement depuis Google Sheets");
 
-    const sheetAPI = `https://script.google.com/macros/s/AKfycbwHHn4fLoE8pa1LaoDKnUg6BVPNRH3t5qaFwD73g3cGfp-azNLIsWO8aqP_leoVSde2rA/exec`;
-const queryURL = `${sheetAPI}?route=getelevebyemail&email=${encodeURIComponent(email)}`;
-
-    const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(queryURL)}`;
+ const proxyURL = getProxyGetURL(
+  `route=getelevebyemail&email=${encodeURIComponent(email)}`
+);
 
     try {
       const res = await fetch(proxyURL);

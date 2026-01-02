@@ -1,7 +1,10 @@
 export const GAS_POST_ROUTE =
-  "AKfycbxPAfd9GBnWT39i64aMZzl2ZzVDsqBiK8LcWF1z7aNl6JobuDuymq1t9Id6vnhbJee2bA";
+"AKfycbwYwurSMNB-fNBgNNTJQE8KCFpX3SPxrM-y7AYYI_8-eFlYk-C28goeN4RGcrOw9_nbDA"
+const GAS_BASE_URL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`
+const CORS_PROXY = "https://cors-proxy-sbs.vercel.app/api/proxy?url="
 
-export const getProxyPostURL = () => {
-  const baseURL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`;
-  return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(baseURL)}`;
-};
+export const getProxyPostURL = () =>
+  CORS_PROXY + encodeURIComponent(GAS_BASE_URL)
+
+export const getProxyGetURL = (params: string) =>
+  CORS_PROXY + encodeURIComponent(`${GAS_BASE_URL}?${params}`)

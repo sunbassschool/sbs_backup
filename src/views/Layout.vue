@@ -302,12 +302,14 @@
       <router-link v-if="isProf" to="/FeedBackProf" class="nav-link">
         <i class="bi bi-chat"></i><span>Feedbacks </span>
       </router-link>
-
+   <router-link v-if="isProf" to="/mes-uploads" class="nav-link">
+        <i class="bi bi-calendar-check"></i><span>Drive</span>
+      </router-link>
       <router-link v-if="isProf" to="/gestioneleves" class="nav-link">
-        <i class="bi bi-people"></i><span>Élèves</span>
+        <i class="bi bi-people"></i><span>Mes élèves</span>
       </router-link>
 <router-link v-if="isProf" to="/cours" class="nav-link">
-  <i class="bi bi-tools"></i><span>Planning</span>
+  <i class="bi bi-tools"></i><span>Mes cours</span>
 </router-link>
       <router-link v-if="isProf" to="/prof/planning/create" class="nav-link">
   <i class="bi bi-calendar-event"></i><span>Créer planning</span>

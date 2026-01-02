@@ -60,6 +60,7 @@
 <script setup>
 import { Form, Field, ErrorMessage } from 'vee-validate'
 import { getDeviceId } from "@/utils/device.ts"
+import { getProxyPostURL } from "@/config/gas"
 
 import * as yup from 'yup'
 import { useToast } from 'vue-toastification'
@@ -140,10 +141,9 @@ async function onSubmit(values) {
     // 2) APPEL BACKEND
     // -------------------------
 const deviceInfo = navigator.userAgent;
-    const apiURL =
-      "https://cors-proxy-sbs.vercel.app/api/proxy?url=https://script.google.com/macros/s/AKfycbyOJfbN7sIfj75Tjnxv-avZOLsP8ZIkpSgICGjLM1v57iOnSISQOtRdX9-SMWI8c0Hcmg/exec";
-
-    fetchStart = performance.now();
+const apiURL = getProxyPostURL();
+   
+fetchStart = performance.now();
 const controller = new AbortController();
 setTimeout(() => controller.abort(), 8000);
 
@@ -156,11 +156,11 @@ body: JSON.stringify({
   email: values.email,
   password: hashedPassword,
 
+  // 🔐 CANONIQUE
   device_id: deviceId,
-  deviceId: deviceId,        // ✅ AJOUT
-  device_info: deviceInfo,
-  deviceInfo: deviceInfo     // ✅ AJOUT
+  device_info: deviceInfo
 })
+
 
 });
 

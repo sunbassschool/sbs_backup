@@ -39,6 +39,18 @@
       </div>
     </div>
 
+    <!-- Revenus -->
+<div class="dash-card" @click="goToRevenus">
+  <div class="icon-circle">
+    <i class="bi bi-cash-stack"></i>
+  </div>
+  <div class="info">
+    <h3>Revenus</h3>
+    <p>Paiements & solde</p>
+  </div>
+</div>
+
+
     <!-- Demandes de report -->
     <div class="dash-card" @click="goTo('prof-reports')">
       <div class="icon-circle">
@@ -59,6 +71,25 @@
     <p>Document à un élève</p>
   </div>
 </div>
+
+
+<!-- Partitions -->
+<div class="dash-card" @click="goToPartitions">
+  <div class="icon-circle">
+    <i class="bi bi-file-earmark-music"></i>
+  </div>
+
+  <div class="info">
+    <h3>{{ partitionsCount }}</h3>
+    <p>
+      Partitions<br />
+      <small class="muted">Clique pour ajouter / gérer</small>
+    </p>
+  </div>
+</div>
+
+
+
   </div>
 
 
@@ -115,6 +146,7 @@ import Layout from "@/views/Layout.vue";
 import { useAuthStore } from "@/stores/authStore";
 import { useDashboardStore } from "@/stores/dashboardStore";
 import StripeConnectCard from "@/components/stripe/StripeConnectCard.vue"
+import { getProxyGetURL, getProxyPostURL } from "@/config/gas"
 
 // === STORES ===
 const auth = useAuthStore();
@@ -125,6 +157,7 @@ const loading = ref(true);
 const profName = ref("");
 const profId = ref("");
 const inviteLink = ref("");
+const partitionsCount = ref(0);
 
 const totalEleves = ref(0);
 const upcomingCount = ref(0);
@@ -136,25 +169,84 @@ const CACHE_PREFIX = "dashboard_cache_"
 
 const regenLoading = ref(false);
 const data = ref(null)
+const goToRevenus = () => {
+  router.push("/prof/revenus")
+}
 
 // === ROUTES ===
-const routes = {
-  GET: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec",
-  POST: "AKfycbypPWCq2Q9Ro4YXaNnSSLgDrk6Jc2ayN7HdFDxvq4KuS2yxizow42ADiHrWEy0Eh1av9w/exec",
-};
 
 // === HELPERS API ===
 
 
+async function fetchPartitionsCount() {
+  if (!auth.jwt || !profId.value) return
 
-function buildGet(params) {
-  const qs = new URLSearchParams(params).toString();
-  const base = `https://script.google.com/macros/s/${routes.GET}/exec?${qs}`;
-  const finalUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
+  console.group("🎵 FETCH PARTITIONS COUNT")
 
-  console.log("🔵 GET URL:", finalUrl);
-  return finalUrl;
+  try {
+    const payload = {
+      route: "getuploadsbyprof",
+      jwt: auth.jwt,
+      prof_id: profId.value
+    }
+
+    console.log("📤 PAYLOAD →", payload)
+
+    const res = await fetch(getProxyPostURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+
+    console.log("📡 HTTP STATUS →", res.status)
+
+    const text = await res.text()
+    console.log("📥 RAW RESPONSE →", text)
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (e) {
+      console.error("❌ JSON PARSE ERROR", e)
+      return
+    }
+
+    console.log("📦 PARSED DATA →", data)
+
+    if (!data.success || !Array.isArray(data.uploads)) {
+      console.warn("⚠️ Format invalide", data)
+      return
+    }
+
+    // ⚠️ RÈGLE MÉTIER : partition = PDF dans le dossier partitions
+    const PARTITIONS_FOLDER_ID = "d3c54982-b7d7-4383-8472-b66d2f82f913"
+
+    const partitions = data.uploads.filter(
+      u =>
+        u.file_type === "application/pdf" &&
+        u.folder_id === PARTITIONS_FOLDER_ID
+    )
+
+    console.table(
+      partitions.map(u => ({
+        upload_id: u.upload_id,
+        file_name: u.file_name,
+        folder_id: u.folder_id
+      }))
+    )
+
+    partitionsCount.value = partitions.length
+    console.log("✅ partitionsCount =", partitionsCount.value)
+
+  } catch (e) {
+    console.error("❌ fetchPartitionsCount ERROR", e)
+  } finally {
+    console.groupEnd()
+  }
 }
+
+
+
 function goToSendDoc() {
   router.push({
     name: "EleveUploads",
@@ -169,21 +261,19 @@ function goToCours() {
 function goToGestionEleves() {
   router.push({ name: "GestionEleves" })
 }
-
-function buildPost() {
-  const base = `https://script.google.com/macros/s/${routes.POST}/exec`;
-  const finalUrl = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
-
-  console.log("🟠 POST URL:", finalUrl);
-  return finalUrl;
+function goToPartitions() {
+  router.push({ name: "PartitionsProf" })
 }
+
 async function refreshDashboard() {
-  await Promise.all([
-    fetchEleves(),
-    fetchPlanning(),
-    fetchReports(),
-    fetchInviteLink()
-  ])
+await Promise.all([
+  fetchEleves(),
+  fetchPlanning(),
+  fetchReports(),
+  fetchInviteLink(),
+  fetchPartitionsCount()
+])
+
 
   const payload = {
     totalEleves: totalEleves.value,
@@ -247,42 +337,57 @@ async function copyLink() {
 }
 
 async function fetchEleves() {
+  if (!auth.jwt || !profId.value) return
+
   try {
-    const jwt = localStorage.getItem("jwt");
+    const res = await fetch(getProxyPostURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        route: "getelevesbyprof",
+        jwt: auth.jwt,
+        prof_id: profId.value
+      })
+    })
 
-    console.log("📡 fetchEleves() start");
+    const data = await res.json()
 
-    const res = await fetch(
-      buildGet({ route: "getelevesbyprof", jwt, prof_id: profId.value })
-    );
-    const data = await res.json();
+    totalEleves.value =
+      data?.eleves?.filter(e => e.statut === "inscrit").length || 0
 
-    console.log("📨 fetchEleves RESPONSE:", data);
-
-    totalEleves.value = data?.eleves?.length || 0;
   } catch (err) {
-    console.error("❌ fetchEleves ERROR:", err);
+    console.error("❌ fetchEleves ERROR:", err)
   }
 }
+
 
 async function fetchPlanning() {
   try {
-    const jwt = localStorage.getItem("jwt");
+    const jwt = auth.jwt
+    if (!jwt || !profId.value) return
 
-    console.log("📡 fetchPlanning() start");
+    console.log("📡 fetchPlanning() start")
 
-    const res = await fetch(
-      buildGet({ route: "getplanningprof", jwt, prof_id: profId.value })
-    );
-    const data = await res.json();
+ const res = await fetch(
+  getProxyGetURL(
+    `route=getplanningprof` +
+    `&jwt=${encodeURIComponent(jwt)}` +
+    `&prof_id=${encodeURIComponent(profId.value)}`
+  )
+)
 
-    console.log("📨 fetchPlanning RESPONSE:", data);
 
-    upcomingCount.value = data?.planning?.length || 0;
+    const data = await res.json()
+
+    console.log("📨 fetchPlanning RESPONSE:", data)
+
+    upcomingCount.value =
+      data?.planning?.filter(p => p.status === "A_VENIR")?.length || 0
   } catch (err) {
-    console.error("❌ fetchPlanning ERROR:", err);
+    console.error("❌ fetchPlanning ERROR:", err)
   }
 }
+
 
 async function fetchReports() {
   try {
@@ -290,9 +395,14 @@ async function fetchReports() {
 
     console.log("📡 fetchReports() start");
 
-    const res = await fetch(
-      buildGet({ route: "getreportsprof", jwt, prof_id: profId.value })
-    );
+ const res = await fetch(
+  getProxyGetURL(
+    `route=getreportsprof` +
+    `&jwt=${encodeURIComponent(jwt)}` +
+    `&prof_id=${encodeURIComponent(profId.value)}`
+  )
+)
+;
     const data = await res.json();
 
     console.log("📨 fetchReports RESPONSE:", data);
@@ -310,11 +420,15 @@ async function fetchInviteLink() {
 
     console.log("📡 fetchInviteLink() start");
 
-    const res = await fetch(buildPost(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ route: "createInviteLink", jwt }),
-    });
+  const res = await fetch(getProxyPostURL(), {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    route: "createInviteLink",
+    jwt
+  })
+})
+;
 
     const data = await res.json();
 

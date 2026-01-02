@@ -8,6 +8,24 @@
       <div class="uploads-header">
         <div>
           <h3>📎 Mes documents</h3>
+          <div class="finder-tabs">
+  <button
+    class="tab"
+    :class="{ active: finderMode === 'normal' }"
+    @click="switchToNormal"
+  >
+    📎 Mes documents
+  </button>
+
+  <button
+    class="tab"
+    :class="{ active: finderMode === 'shared' }"
+    @click="switchToShared"
+  >
+    🔗 Partagé avec moi
+  </button>
+</div>
+
           <p class="subtitle">Fichiers liés à tes cours</p>
           <input
   v-model="searchQuery"
@@ -37,6 +55,8 @@
         <button
           ref="addBtn"
           class="add-btn"
+            v-if="!isReadOnlyShared"
+
           :class="{ active: addMenu.visible }"
           @click.stop="openAddMenuFromButton"
         >
@@ -73,14 +93,17 @@
       <!-- ===================================================== -->
       <!-- ⬆️ MODALE UPLOAD -->
       <!-- ===================================================== -->
-  <UploadModal
+<UploadModal
   v-if="showUpload"
   :cours-id="effectiveCoursId"
   :folder-id="effectiveFolderId || undefined"
   :eleve-id="effectiveEleveId || undefined"
   @uploaded="onUploadSuccess"
-  @done="showUpload = false"
+  @done="onCloseUpload"
+  @close="onCloseUpload"
+  @cancel="onCloseUpload"
 />
+
 
 
       <!-- ===================================================== -->
@@ -107,6 +130,8 @@
       <!-- 📦 EXPLORER -->
       <!-- ===================================================== -->
       <div
+        ref="explorerScroll"
+
         class="explorer-zone"
         :class="{ dragging: isDragging, disabled: creatingWorkspace }"
         @click.self="clearSelection"
@@ -142,12 +167,19 @@
 </div>
 
 
+<div
+  v-if="isSharedMode && !sharedPrefetched"
+  class="shared-loading"
+>
+  Chargement des dossiers partagés…
+</div>
 
         <!-- ================= CONTENT ================= -->
         <div
           v-if="foldersLoaded"
           class="explorer-content"
-          :key="explorerKey"
+            :class="{ 'no-anim': isNavigating }"
+
         >
 <div
   v-if="searchQuery && !hasSearchResults"
@@ -165,29 +197,44 @@
           <!-- ================================================= -->
            <!-- 👨‍🎓 VUE ÉLÈVES (PROF) -->
 
-          <transition-group name="fade-slide" tag="div">
-            <div
-v-for="folder in searchedFolders"
-              :key="folder.folder_id"
-              class="upload-item folder"
-           :class="{
+<div
+  v-for="folder in searchedFolders"
+  :key="folder.folder_id"
+  class="upload-item folder"
+:class="{
   active: currentFolderId === folder.folder_id,
   selected: selectedFolders.includes(folder.folder_id),
-  pending: folder.pending
+  pending: folder.pending,
+  'shared-with-me': sharedWithMeIds?.value?.has?.(folder.folder_id) ?? false,
+  'shared-by-me': sharedByMeIds?.value?.has?.(folder.folder_id) ?? false
 }"
+
+
+
               @dragover.prevent
 @drop.prevent="handleDropOnFolder($event, folder.folder_id)"
              @click.stop="onFolderTap(folder, $event)"
 @contextmenu.prevent.stop="openFolderMenu($event, folder)"
 
             >
-              <div
-                class="folder-main"
-                draggable="true"
-                @dragstart="onFolderDragStart($event, folder)"
-                @dragend="onDragEnd"
-              >
-<i class="bi bi-collection folder-icon"></i>
+             <div
+  class="folder-main"
+:class="{
+  'is-shared': folder.is_shared,
+  '_optimistic_share': folder._optimistic_share,
+      'shared-by-me': folder.shared_by_me,
+
+  '_optimistic_revoke': folder._optimistic_revoke
+}"
+
+
+  draggable="true"
+  @dragstart="onFolderDragStart($event, folder)"
+  @dragend="onDragEnd"
+>
+  <i class="bi bi-collection folder-icon"></i>
+<span v-if="folder.is_shared || folder.shared_with_me" class="shared-icon">🔗</span>
+
 
 
                 <strong v-if="editingFolderId !== folder.folder_id">
@@ -205,7 +252,6 @@ v-for="folder in searchedFolders"
                 />
               </div>
             </div>
-          </transition-group>
 
           <!-- ================================================= -->
           <!-- 📄 FICHIERS -->
@@ -265,8 +311,9 @@ v-for="file in searchedFiles"             :key="file.upload_id"
           <!-- ================================================= -->
           <!-- 🫥 EMPTY -->
           <!-- ================================================= -->
-  <div
+<div
   v-show="
+    !isSharedMode &&
     foldersLoaded &&
     visibleFolders.length === 0 &&
     visibleFiles.length === 0
@@ -278,9 +325,10 @@ v-for="file in searchedFiles"             :key="file.upload_id"
     :cours-id="effectiveCoursId"
     :folder-id="currentFolderId"
     @uploaded="onUploadSuccess"
-      @done="onUploadDone"
+    @done="onUploadDone"
   />
 </div>
+
 
 
         </div>
@@ -349,6 +397,24 @@ v-for="file in searchedFiles"             :key="file.upload_id"
     🗑️ Supprimer
   </div>
 
+<div
+  v-if="isProfLike && !isSharedMode && !contextMenu.target?._isSharedByMe"
+  class="context-item"
+  @click="openShareModal(contextMenu.target)"
+>
+  🔗 Partager
+</div>
+
+
+<div
+  v-if="isProfLike && contextMenu.target?.is_shared && !isSharedMode"
+  class="context-item danger"
+  @click="revokeFolderShare(contextMenu.target)"
+>
+  🚫 Arrêter le partage
+</div>
+
+
 </template>
 
 
@@ -358,6 +424,34 @@ v-for="file in searchedFiles"             :key="file.upload_id"
       </div>
 
     </div>
+ <div v-if="showShareModal" class="context-backdrop" @click="showShareModal = false">
+  <div
+    class="context-menu"
+    style="
+      min-width:260px;
+      top:50%;
+      left:50%;
+      transform:translate(-50%, -50%);
+    "
+    @click.stop
+  >
+    <h4 style="padding:8px 12px">🔗 Partager le dossier</h4>
+
+    <div class="context-item">
+     
+    </div>
+
+    <div class="context-item" @click="confirmShareFolder">
+      🚀 Activer le partage
+    </div>
+
+    <div class="context-item danger" @click="showShareModal = false">
+      Fermer
+    </div>
+  </div>
+</div>
+
+
   </Layout>
 </template>
 
@@ -384,7 +478,137 @@ import UploadFileCore from "@/components/UploadFileCore.vue"
 // 🔐 AUTH + ROUTE
 // ============================================================================
 const auth = useAuthStore()
+const sharedWithMeIds = ref(new Set())
+const sharedByMeIds  = ref(new Set())
+const onCloseUpload = () => {
+  showUpload.value = false
+  uploadSession.value = null
+  uploadFinished.value = false
+}
+
 const route = useRoute()
+const sharedPrefetched = ref(false)
+const sharedFoldersCache = ref([])
+const sharedUploadsCache = ref([])
+const sharedReady = computed(() => {
+  return (
+    !isSharedMode.value ||
+    (sharedFolders.value && sharedFolders.value.length > 0)
+  )
+})
+const sharedUploadsPrefetched = ref(false)
+
+
+const sharedRealFoldersCache = ref([])
+const sharedLoading = ref(false)
+const isSharedWithMe = (folderId) => {
+  return sharedFolders.value.some(s => s.folder_id === folderId)
+}
+
+// =====================================================
+// 🔵 SHARED BY ME (PROF) — FRONT ONLY PERSISTENCE
+// =====================================================
+const SHARED_BY_ME_KEY = computed(() => `sharedByMe_${profId.value}`)
+
+const readSharedByMe = async () => {
+  const { data } = await axios.post(getProxyPostURL(routes.POST), {
+    route: "readsharedbyme",
+    jwt: auth.jwt,
+    prof_id: profId.value
+  })
+
+  console.log("👁️ RAW sharedByMe response", data) // 👈 AJOUTE ÇA
+
+  const actifs = data.shared?.filter(s => s.status === "active") || []
+  sharedByMeIds.value = new Set(actifs.map(s => s.folder_id))
+
+  console.log("📁 sharedByMeIds =", [...sharedByMeIds.value]) // 👈 ET ÇA
+}
+
+
+
+const writeSharedByMe = (map) => {
+  try {
+    localStorage.setItem(SHARED_BY_ME_KEY.value, JSON.stringify(map || {}))
+  } catch {}
+}
+
+const markSharedByMe = (folderId, isShared) => {
+  if (!folderId) return
+  const map = readSharedByMe()
+  map[folderId] = !!isShared
+  writeSharedByMe(map)
+}
+
+const getSharedByMe = (folderId) => {
+  const map = readSharedByMe()
+  return !!map[folderId]
+}
+
+const hydrateSharedExplorer = () => {
+  if (!sharedPrefetched.value) return
+
+  console.log("🔄 HYDRATE SHARED (SAFE)")
+
+  // droits uniquement
+  sharedFolders.value = sharedFoldersCache.value
+
+  // ⚠️ NE PAS toucher à folders.value
+  // on garde l’arbo complète
+
+
+  currentFolderId.value = SHARED_ROOT_ID
+
+  console.log("🧪 SHARED STATE", {
+    rights: sharedFolders.value.map(s => s.folder_id),
+    totalFoldersAvailable: folders.value.length
+  })
+}
+
+
+const openSharedRoot = async () => {
+  console.log("🧪 CLICK SHARED")
+
+  // snapshot état normal
+  normalStateSnapshot.value = {
+    folders: [...folders.value],
+    uploadsByFolder: JSON.parse(JSON.stringify(uploadsByFolder.value)),
+    currentFolderId: currentFolderId.value
+  }
+
+  finderMode.value = "shared"
+  selectedFiles.value = []
+  selectedFolders.value = []
+
+  if (!sharedPrefetched.value) {
+    await prefetchSharedData()
+  }
+
+  // 🔥 ICI LE FIX
+  sharedFolders.value = [...sharedFoldersCache.value]
+
+  currentFolderId.value = SHARED_ROOT_ID
+
+  console.log("✅ SHARED READY", {
+    rights: sharedFolders.value.map(s => s.folder_id)
+  })
+}
+
+
+
+const normalStateSnapshot = ref(null)
+
+const groupUploadsByFolder = (uploads = []) => {
+  const map = {}
+  uploads.forEach(u => {
+    const fid = u.folder_id ?? null
+    if (!map[fid]) map[fid] = []
+    map[fid].push(u)
+  })
+  return map
+}
+const SHARED_TTL = 5 * 60 * 1000 // 5 min
+const sharedFetchedAt = ref(0)
 
 const uploadSession = ref(null)
 const uploadFinished = ref(false)
@@ -400,6 +624,7 @@ const allFiles = computed(() =>
   Object.values(uploadsByFolder.value).flat()
 )
 const isSearching = computed(() => !!searchQuery.value)
+const SHARED_ROOT_ID = "__shared_root__"
 
 const uploadsByFolder = ref({})
 // ⚠️ COMPAT TEMPORAIRE — legacy code
@@ -444,6 +669,20 @@ const onFolderTap = (folder, e) => {
 }
 
 
+// =====================================================
+// 🔗 SHARE MODAL
+// =====================================================
+const showShareModal = ref(false)
+const shareTargetFolder = ref(null)
+const sharePermission = ref("read")
+const shareLink = ref("")
+
+const openShareModal = async (folder) => {
+  closeContextMenu()
+  shareTargetFolder.value = folder
+  sharePermission.value = "read"
+  showShareModal.value = true
+}
 const onFolderClick = (folder, e) => {
   // 📱 vrai tactile → ouvrir
   if (e?.pointerType === "touch") {
@@ -476,6 +715,26 @@ const getEventPosition = (e) => {
     y: e.pageY
   }
 }
+
+// Générer le lien 
+
+// =====================================================
+// 🔗 MODE FINDER
+// =====================================================
+const finderMode = ref("normal") // normal | shared
+
+const sharedFolders = ref([]) 
+// [{ folder_id, permission, prof_id, share_id }]
+
+const sharedPermissionsByFolder = computed(() => {
+  const map = {}
+  sharedFolders.value.forEach(s => {
+    map[s.folder_id] = s.permission
+  })
+  return map
+})
+
+const isSharedMode = computed(() => finderMode.value === "shared")
 
 const CACHE_VERSION = "v1"
 const t0 = performance.now()
@@ -535,6 +794,73 @@ const cancelLongPress = () => {
 
 
 
+// ACTION PARTAGE API
+const confirmShareFolder = async () => {
+  if (!shareTargetFolder.value) return
+
+  // 🔥 CLOSE MODAL IMMEDIATELY
+  showShareModal.value = false
+
+  // 🔥 OPTIMISTIC UI
+  const folderId = shareTargetFolder.value.folder_id
+  folders.value = folders.value.map(f =>
+    f.folder_id === folderId
+      ? { ...f, is_shared: true, _optimistic_share: true }
+      : f
+  )
+
+  try {
+    const payload = {
+      route: "sharefolder_create_or_update",
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      folder_id: folderId,
+      permission: "read", // lecture seule pour l’instant
+      user_id: userId.value
+    }
+
+    console.log("📤 SHARE payload =", payload)
+
+    const res = await axios.post(
+      getProxyPostURL(routes.POST),
+      payload
+    )
+
+    console.log("📥 SHARE response =", res?.data)
+
+    if (!res?.data?.success) {
+      throw new Error(res?.data?.error || "share_failed")
+    }
+
+    // ✅ CONFIRM OPTIMISTIC
+    folders.value = folders.value.map(f =>
+      f.folder_id === folderId
+        ? { ...f, is_shared: true, _optimistic_share: false }
+        : f
+    )
+markSharedByMe(folderId, true)
+
+    invalidateSharedCache()
+
+    console.log("✅ SHARE OK", folderId)
+
+  } catch (e) {
+    console.error("💥 SHARE FAILED — rollback", e)
+
+    // 🔁 ROLLBACK
+    folders.value = folders.value.map(f =>
+      f.folder_id === folderId
+        ? { ...f, is_shared: false, _optimistic_share: false }
+        : f
+    )
+    markSharedByMe(folderId, false)
+
+
+    alert("Erreur lors du partage du dossier")
+  }
+}
+
+
 
 
 const isMovingFolder = ref(false)
@@ -550,7 +876,7 @@ const cacheStart = ref(performance.now())
 // ⚠️ Doit être IDENTIQUE à tes autres vues (Planning.vue etc.)
 // ============================================================================
 const routes = {
-  POST: "AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec"
+  POST: "AKfycbzlwwgOxBdbd_AbBrWjxkPD2WQ26Fa8Cah6mFA7N30UYhLNdEemNxgTHhfK0qt1vMfMTw/exec"
 }
 const loaderStep = ref("init")
 const filteredFolders = computed(() => {
@@ -737,7 +1063,7 @@ const startRename = async (file) => {
   editingName.value = file.file_name
 
   await nextTick()
-  fileRenameRefs.get(file.upload_id)?.focus()
+fileRenameRefs.get(file.upload_id)?.focus({ preventScroll: true })
   fileRenameRefs.get(file.upload_id)?.select()
 }
 
@@ -1148,15 +1474,72 @@ const breadcrumb = computed(() => {
   return chain
 })
 
+const isReadOnlyShared = computed(() => {
+  if (!isSharedMode.value) return false
+  if (!currentFolderId.value) return true
+
+  return sharedPermissionsByFolder.value[currentFolderId.value] === "read"
+})
 
 
 
 // Dossiers visibles au niveau courant (déduits des folder_path)
 
+const isInsideSharedTree = (folderId) => {
+  let cur = folderId
+  let guard = 0
 
-const visibleFolders = computed(() =>
-  foldersByParentCache.value[currentFolderId.value ?? null] || []
-)
+  while (cur && guard++ < 50) {
+    // ✅ racine partagée trouvée
+    if (sharedFolders.value.some(s => s.folder_id === cur)) {
+      return true
+    }
+
+    const folder = foldersById.value[cur]
+    if (!folder) break
+
+    cur = folder.parent_id
+  }
+
+  return false
+}
+
+
+
+const visibleFolders = computed(() => {
+  // 🔗 RACINE PARTAGÉE
+  if (isSharedMode.value && currentFolderId.value === SHARED_ROOT_ID) {
+    console.log("🧪 VISIBLE SHARED ROOT", {
+      sharedRoots: sharedFolders.value.map(s => s.folder_id),
+      allFolders: folders.value.length
+    })
+
+    return folders.value.filter(f =>
+      sharedFolders.value.some(s => s.folder_id === f.folder_id)
+    )
+  }
+
+  // 🔗 NAVIGATION DANS UN DOSSIER PARTAGÉ
+  if (isSharedMode.value) {
+    const visibles = folders.value.filter(
+      f =>
+        f.parent_id === currentFolderId.value &&
+        isInsideSharedTree(f.folder_id)
+    )
+
+    console.log("🧪 VISIBLE SHARED CHILDREN", {
+      currentFolderId: currentFolderId.value,
+      visibles: visibles.map(f => f.folder_id)
+    })
+
+    return visibles
+  }
+
+  // 📁 MODE NORMAL
+  return foldersByParentCache.value[currentFolderId.value ?? null] || []
+})
+
+
 
 
 
@@ -1172,8 +1555,31 @@ const clearSelection = () => {
 // Fichiers du dossier courant uniquement
 const visibleFiles = computed(() => {
   if (!currentFolderId.value) return []
-  return uploadsByFolder.value[currentFolderId.value] || []
+
+  const files = uploadsByFolder.value[currentFolderId.value] || []
+
+  // 🧠 RACINE ÉLÈVE : filtrage métier
+  if (
+    !isProfLike.value &&
+    !isSharedMode.value &&
+    currentFolderId.value === eleveRootId.value
+  ) {
+    return files.filter(f =>
+      // fichiers destinés aux élèves
+      f.visibility === "eleves" ||
+      // fichiers privés de l’élève
+      String(f.eleve_id).trim() === String(auth.user_id).trim()
+    )
+  }
+
+  // 📁 DOSSIERS : PAS de filtre visibility
+  return files
 })
+
+
+
+
+
 
 
 
@@ -1285,6 +1691,141 @@ last.uploads.forEach(u => {
 
 }
 // FUNCTIONS
+const prefetchSharedData = async () => {
+  const now = Date.now()
+
+  if (sharedPrefetched.value && now - sharedFetchedAt.value < SHARED_TTL) {
+    console.log("⏭️ shared cache fresh")
+    return
+  }
+
+  if (!auth.jwt || !userId.value) {
+    console.warn("⛔ prefetchSharedData aborted", {
+      jwt: !!auth.jwt,
+      userId: userId.value
+    })
+    return
+  }
+
+  console.log("🔄 PREFETCH SHARED — start")
+
+  const { data } = await axios.post(
+    getProxyPostURL(routes.POST),
+    {
+      route: "getsharedfoldersforme",
+      jwt: auth.jwt,
+      user_id: userId.value,
+      prof_id: profId.value // optionnel (debug)
+    }
+  )
+
+  console.log("📥 PREFETCH RAW RESPONSE", data)
+
+  if (!data?.success) {
+    console.warn("⛔ PREFETCH FAILED", data)
+    return
+  }
+
+  const actifs = data.shared?.filter(s => s.status === "active") || []
+  sharedFoldersCache.value = actifs
+  sharedWithMeIds.value = new Set(actifs.map(s => s.folder_id))
+
+  // ==============================================
+  // 👨‍🏫 SI PROF — CHARGER LES DOSSIERS QU’IL A PARTAGÉS
+  // ==============================================
+  if (isProfLike.value) {
+    const { data: sharedData } = await axios.post(getProxyPostURL(routes.POST), {
+      route: "readsharedbyme",
+      jwt: auth.jwt,
+      prof_id: profId.value
+    })
+
+    const actifsByMe = sharedData.shared?.filter(s => s.status === "active") || []
+    sharedByMeIds.value = new Set(actifsByMe.map(s => s.folder_id))
+    console.log("👁️ SHARED BY ME", [...sharedByMeIds.value])
+  }
+
+  sharedUploadsCache.value = [] // Toujours vide (par design)
+
+  // ✅ Injection dans folders pour activer visuel + menu contextuel
+  for (const folder of folders.value) {
+    folder.is_shared = sharedByMeIds.value.has(folder.folder_id)
+    folder.shared_with_me = sharedWithMeIds.value.has(folder.folder_id)
+  }
+
+  // 🔄 Forcer le re-render
+  explorerKey.value++
+
+  sharedPrefetched.value = true
+  sharedFetchedAt.value = now
+
+  console.log("🧪 SHARED PREFETCH STATE", {
+    sharedPrefetched: sharedPrefetched.value,
+    rightsCount: sharedFoldersCache.value.length,
+    rightsIds: sharedFoldersCache.value.map(s => s.folder_id),
+    uploadsCount: sharedUploadsCache.value.length
+  })
+
+  console.log("✅ PREFETCH SHARED — done")
+}
+
+
+
+
+
+const invalidateSharedCache = () => {
+  sharedPrefetched.value = false
+  sharedFoldersCache.value = []
+  sharedUploadsCache.value = []
+  // ✅ Injecter `is_shared = true` dans folders.value pour refléter le backend
+if (Array.isArray(folders.value) && folders.value.length) {
+  const sharedIds = new Set(
+    sharedFoldersCache.value.map(s => s.folder_id)
+  )
+
+
+}
+
+}
+
+
+
+const switchToNormal = () => {
+  finderMode.value = "normal"
+  selectedFiles.value = []
+  selectedFolders.value = []
+
+  if (normalStateSnapshot.value) {
+    folders.value = normalStateSnapshot.value.folders
+    uploadsByFolder.value = normalStateSnapshot.value.uploadsByFolder
+    currentFolderId.value = normalStateSnapshot.value.currentFolderId
+  } else {
+    goHome()
+  }
+}
+
+const switchToShared = () => {
+  normalStateSnapshot.value = {
+    folders: [...folders.value],
+    uploadsByFolder: JSON.parse(JSON.stringify(uploadsByFolder.value)),
+    currentFolderId: currentFolderId.value
+  }
+
+  finderMode.value = "shared"
+  selectedFiles.value = []
+  selectedFolders.value = []
+
+  sharedFolders.value = [...sharedFoldersCache.value]
+  currentFolderId.value = SHARED_ROOT_ID
+
+  console.log("✅ SWITCH TO SHARED (instant, data ready)")
+}
+
+
+
+
+
+
 const startFileLongPress = (file, e) => {
   longPressTimer = setTimeout(() => {
     selectedFiles.value = [file.upload_id]
@@ -1409,15 +1950,24 @@ const selectFolder = (folder, e) => {
   }
 }
 
+const allowedSharedRootIds = computed(() =>
+  sharedFolders.value.map(s => s.folder_id)
+)
 
 const openFolder = (folder) => {
+  if (finderMode.value === "shared") {
+    currentFolderId.value = folder.folder_id
+    return
+  }
+
+  // logique existante
   currentFolderId.value = folder.folder_id
 
-  // prof → set eleve si besoin
   if (isProfLike.value && folder.owner_type === "eleve") {
     currentEleveId.value = folder.owner_id
   }
 }
+
 
 
 const onUploadSuccess = (upload) => {
@@ -1882,14 +2432,21 @@ const selectedFiles = ref([]) // array d'upload_id
 const fetchAllUploadsOnce = async () => {
   if (!auth.jwt || !profId.value) return
 
-  console.log("🌐 FETCH ALL UPLOADS (GLOBAL)")
+  console.log("🌐 FETCH ALL UPLOADS (GLOBAL)", {
+    mode: finderMode.value
+  })
+const payload = {
+  route: "getalluploadsbyprof",
+  jwt: auth.jwt,
+  prof_id: profId.value,
+  ...(finderMode.value === "shared"
+    ? {}                      // 🔑 PAS de eleve_id
+    : isProfLike.value
+      ? {}
+      : { eleve_id: userId.value }
+  )
+}
 
-  const payload = {
-    route: "getalluploadsbyprof",
-    jwt: auth.jwt,
-    prof_id: profId.value,
-    ...(isProfLike.value ? {} : { eleve_id: userId.value })
-  }
 
   try {
     const { data } = await axios.post(
@@ -1907,13 +2464,10 @@ const fetchAllUploadsOnce = async () => {
       nextMap[fid].push(u)
     }
 
-    // 🔄 reconcile (ne pas écraser l’optimistic en cours)
-   for (const fid in nextMap) {
-  if (!uploadsByFolder.value[fid]) {
-    uploadsByFolder.value[fid] = nextMap[fid]
-  }
-}
-
+    // reconcile
+    for (const fid in nextMap) {
+      uploadsByFolder.value[fid] = nextMap[fid]
+    }
 
     writeUploadsCache(
       effectiveOwnerType.value,
@@ -1929,6 +2483,102 @@ const fetchAllUploadsOnce = async () => {
   }
 }
 
+
+const fetchSharedUploadsOnce = async () => {
+  if (!auth.jwt || !profId.value) return
+
+  console.log("🌐 FETCH SHARED UPLOADS (DEDICATED)")
+
+  const { data } = await axios.post(
+    getProxyPostURL(routes.POST),
+    {
+      route: "getalluploadsbyprof",
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      shared_only: true // 👈 CLÉ
+    }
+  )
+
+  const uploads = Array.isArray(data?.uploads) ? data.uploads : []
+
+  uploads.forEach(u => {
+    const fid = u.folder_id ?? null
+    if (!uploadsByFolder.value[fid]) {
+      uploadsByFolder.value[fid] = []
+    }
+    uploadsByFolder.value[fid].push(u)
+  })
+
+  console.log("📦 shared uploads reçus =", uploads.length)
+}
+
+const revokeFolderShare = async (folder) => {
+  closeContextMenu()
+
+  if (!confirm("Arrêter le partage de ce dossier ?")) return
+
+  // ============================
+  // 🔥 OPTIMISTIC UI
+  // ============================
+  const prevIsShared = folder.is_shared
+
+  folders.value = folders.value.map(f =>
+    f.folder_id === folder.folder_id
+      ? { ...f, is_shared: false, _optimistic_revoke: true }
+      : f
+  )
+
+  try {
+    const payload = {
+      route: "sharefolder_revoke",
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      folder_id: folder.folder_id
+    }
+
+    console.log("📤 REVOKE payload =", payload)
+
+    const res = await axios.post(
+      getProxyPostURL(routes.POST),
+      payload
+    )
+
+    console.log("📥 REVOKE response =", res?.data)
+markSharedByMe(folder.folder_id, false)
+
+    if (!res?.data?.success) {
+      throw new Error(res?.data?.error || "revoke_failed")
+    }
+
+    // ============================
+    // ✅ CONFIRM OPTIMISTIC
+    // ============================
+    folders.value = folders.value.map(f =>
+      f.folder_id === folder.folder_id
+        ? { ...f, is_shared: false, _optimistic_revoke: false }
+        : f
+    )
+
+    invalidateSharedCache()
+
+    console.log("✅ REVOKE SUCCESS", folder.folder_id)
+
+  } catch (e) {
+    console.error("💥 REVOKE FAILED — rollback", e)
+markSharedByMe(folder.folder_id, prevIsShared)
+
+    // ============================
+    // 🔁 ROLLBACK
+    // ============================
+    folders.value = folders.value.map(f =>
+      f.folder_id === folder.folder_id
+        ? { ...f, is_shared: prevIsShared, _optimistic_revoke: false }
+        : f
+    )
+
+    alert("Erreur lors du retrait du partage")
+  }
+}
 
 
 
@@ -1968,51 +2618,60 @@ const effectiveOwnerType = computed(() =>
 const effectiveOwnerId = computed(() =>
   isProfLike.value ? profId.value : userId.value
 )
+// recup folder partagés
+async function fetchSharedFolders() {
+  const { data } = await axios.post(
+    getProxyPostURL(routes.POST),
+ {
+  route: "getsharedfoldersforme",
+  jwt: auth.jwt,
+  user_id: userId.value
+}
+
+  )
+
+  if (!data?.success) {
+    sharedFolders.value = []
+    return
+  }
+
+  sharedFolders.value = data.folders || []
+}
 
 // recup dossier
 async function fetchFolders() {
+  if (finderMode.value === "shared") {
+    console.log("⏭️ fetchFolders skipped (shared mode)")
+    return
+  }
+
   console.log("📁 FETCH FOLDERS — start")
 
   try {
-    // -------------------------------
-    // STEP 0 — state
-    // -------------------------------
-    console.log("▶️ step 0 — state", {
-      jwt: !!auth.jwt,
-      profId: auth.user?.prof_id,
-      role: auth.role
-    })
-
+    // =====================================================
+    // 🔐 GUARDS
+    // =====================================================
     if (!auth.jwt || !auth.user?.prof_id) {
-      console.warn("⛔ fetchFolders aborted — missing auth")
+      console.warn("⛔ fetchFolders aborted — auth missing")
       return
     }
 
-    // -------------------------------
-    // STEP 1 — payload
-    // -------------------------------
+    // =====================================================
+    // 📤 PAYLOAD
+    // =====================================================
     const payload = {
       route: "getfoldersbyprof",
       jwt: auth.jwt,
       prof_id: auth.user.prof_id,
-        role: auth.user.role   // 🔥 OBLIGATOIRE
-
+      role: auth.user.role
     }
 
-    console.log("▶️ step 1 — payload", payload)
-
-    // -------------------------------
-    // STEP 2 — API call
-    // -------------------------------
     const url = getProxyPostURL(routes.POST)
-    console.log("▶️ step 2 — API call", url)
 
+    // =====================================================
+    // 🌍 API CALL
+    // =====================================================
     const res = await axios.post(url, payload)
-
-    // -------------------------------
-    // STEP 3 — raw response
-    // -------------------------------
-    console.log("▶️ step 3 — raw response", res.data)
 
     if (!res.data?.success) {
       console.error("❌ fetchFolders failed", res.data)
@@ -2020,40 +2679,60 @@ async function fetchFolders() {
       return
     }
 
-    // -------------------------------
-    // STEP 4 — normalize
-    // -------------------------------
-  const normalized = (res.data.folders || []).map(f => ({
-  ...f,
-  parent_id: f.parent_id || null,
-  owner_name: f.owner_name || null, // 👈 IMPORTANT
-    is_system: Boolean(f.is_system) // 🔥 CRITIQUE
+ 
 
-}))
+    // =====================================================
+    // 🧼 NORMALIZE + MERGE SHARE STATE
+    // =====================================================
+const localShared = readSharedByMe()
 
+const normalized = (res.data.folders || []).map(f => {
+  const apiShared = !!f.is_shared
 
-    console.log("▶️ step 4 — normalized folders", {
-      count: normalized.length,
-      folders: normalized.map(f => `${f.owner_type}:${f.name}`)
-    })
+  // 🔥 le front gagne si on a une valeur persistée
+  const mergedShared =
+    typeof localShared[f.folder_id] === "boolean"
+      ? localShared[f.folder_id]
+      : apiShared
 
-    // -------------------------------
-    // STEP 5 — hydrate state
-    // -------------------------------
-folders.value = normalized
-foldersLoaded.value = true
-
-// ✅ WRITE CACHE
-writeFoldersCache(
-  effectiveOwnerType.value,
-  effectiveOwnerId.value,
-  folders.value
-)
+  return {
+    ...f,
+    parent_id: f.parent_id || null,
+    owner_name: f.owner_name || null,
+    is_system: Boolean(f.is_system),
+    is_shared: mergedShared
+  }
+})
 
 
-    console.log("▶️ step 5 — folders hydrated", {
-      foldersLoaded: foldersLoaded.value,
-      total: folders.value.length
+
+    // =====================================================
+    // 🧠 HYDRATE STATE
+    // =====================================================
+// 🔥 Patch : préserver les flags `is_shared` déjà connus
+const oldById = new Map(folders.value.map(f => [f.folder_id, f]))
+
+folders.value = normalized.map(f => {
+  const previous = oldById.get(f.folder_id)
+  return {
+    ...f,
+    is_shared: previous?.is_shared || false
+  }
+})
+    foldersLoaded.value = true
+
+    // =====================================================
+    // 💾 CACHE
+    // =====================================================
+    writeFoldersCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      folders.value
+    )
+
+    console.log("✅ FETCH FOLDERS OK", {
+      total: folders.value.length,
+      shared: folders.value.filter(f => f.is_shared).length
     })
 
   } catch (err) {
@@ -2063,6 +2742,7 @@ writeFoldersCache(
 
   console.log("📁 FETCH FOLDERS — done")
 }
+
 
 
 
@@ -2143,7 +2823,7 @@ const createFolder = async () => {
   editingFolderName.value = tmpFolder.name
 
   await nextTick()
-  folderRenameRefs.get(tmpId)?.focus()
+folderRenameRefs.get(tmpId)?.focus({ preventScroll: true })
   folderRenameRefs.get(tmpId)?.select()
 
   // état navigation
@@ -2497,14 +3177,16 @@ const openFolderMenu = (e, folder) => {
   closeContextMenu()
 
   const { x, y } = getEventPosition(e)
+folder._isSharedByMe = sharedByMeIds?.value?.has?.(folder.folder_id) ?? false
 
-  contextMenu.value = {
-    visible: true,
-    x,
-    y: y + 8,
-    type: "folder",
-    target: folder
-  }
+contextMenu.value = {
+  visible: true,
+  x,
+  y: y + 8,
+  type: "folder",
+  target: folder
+}
+
 }
 
 const folderRenameRefs = new Map()
@@ -3133,7 +3815,46 @@ const closePreview = () => {
 // ============================================================================
 // 👀 WATCHERS — MINIMAUX, SANS FETCH, SANS EFFET DE BORD
 // ============================================================================
+const explorerScroll = ref(null)
+
+watch(currentFolderId, async () => {
+  const el = explorerScroll.value
+  if (!el) return
+
+  const y = el.scrollTop
+
+  await nextTick()
+
+  el.scrollTop = y
+})
+
 watch(currentFolderId, (id) => {
+  if (finderMode.value !== "shared") return
+  if (!id || id === SHARED_ROOT_ID) return
+
+  let cur = id
+  let guard = 0
+  let allowed = false
+
+  while (cur && guard++ < 20) {
+    if (allowedSharedRootIds.value.includes(cur)) {
+      allowed = true
+      break
+    }
+    cur = foldersById.value[cur]?.parent_id
+  }
+
+  if (!allowed) {
+    console.warn("⛔ shared scope violation, reset")
+    currentFolderId.value = SHARED_ROOT_ID
+  }
+})
+
+
+
+watch(currentFolderId, (id) => {
+    if (finderMode.value === "shared") return   // 🔥 FIX
+
   if (role.value === "admin") return
   if (!id || !profRootFolder.value) return
 
@@ -3156,7 +3877,8 @@ watch(currentFolderId, (id) => {
 })
 
 watch(currentFolderId, (id) => {
-    if (searchQuery.value) return        // 🔥 AJOUT
+  if (finderMode.value === "shared") return   // ✅ FIX CRITIQUE
+  if (searchQuery.value) return
 
   if (isProfLike.value) return
   if (!id || !eleveRootId.value) return
@@ -3179,6 +3901,7 @@ watch(currentFolderId, (id) => {
   }
 })
 
+
 watch(showLoader, v =>
   console.log("⏳ loader =", v, {
     cache: hydratedFromCache.value,
@@ -3190,17 +3913,9 @@ watch(showLoader, v =>
  * 2️⃣ UI — NAVIGATION DOSSIERS (RESET ÉTAT / ANIM)
  * ============================================================================ */
 watch(currentFolderId, () => {
-  // animation soft
-  isNavigating.value = true
-  requestAnimationFrame(() => {
-    isNavigating.value = false
-  })
 
-  // reset sélection / drag
-  if (!isDragging.value) {
-    draggedFiles.value = []
-    draggedFolder.value = null
-  }
+
+ 
 
   closeAddMenu()
   itemEls.value.clear()
@@ -3246,26 +3961,7 @@ watch(
   { once: true }
 )
 
-/* ============================================================================
- * 6️⃣ DEBUG — LECTURE SEULE (À SUPPRIMER PLUS TARD)
- * ============================================================================ */
-watchEffect(() => {
-    if (searchQuery.value) return        // 🔥 AJOUT
 
-  console.log("🧭 view", {
-    isElevesView: isElevesView.value,
-    currentFolderId: currentFolderId.value,
-    elevesFolderId: profElevesFolderId.value
-  })
-})
-
-watch(currentEleveId, v =>
-  console.log("👤 currentEleveId =", v)
-)
-
-watch(currentFolderId, v =>
-  console.log("📁 currentFolderId =", v)
-)
 
 
 const blockNativeContextMenu = (e) => {
@@ -3314,6 +4010,13 @@ window.addEventListener("contextmenu", blockNativeContextMenu)
     userId: userId.value,
     profId: profId.value
   })
+// 🔗 prefetch partagé (background)
+prefetchSharedData()
+// 🔥 PREFETCH UPLOADS PARTAGÉS (background)
+fetchAllUploadsOnce().then(() => {
+  sharedUploadsPrefetched.value = true
+  console.log("⚡ shared uploads prefetched")
+})
 
   // =====================================================
   // 1️⃣ RESET UI
@@ -3327,8 +4030,21 @@ window.addEventListener("contextmenu", blockNativeContextMenu)
   // =====================================================
   // 👨‍🎓 MODE ÉLÈVE
   // =====================================================
-  if (!isProfLike.value) {
-console.group("👨‍🎓 MODE ÉLÈVE")
+  
+if (!isProfLike.value) {
+  if (finderMode.value === "shared") {
+    console.log("🔗 MODE ÉLÈVE SHARED — skip normal mount")
+
+    // 🔥 uniquement le prefetch (non bloquant)
+    prefetchSharedData()
+// 🔥 prefetch shared uploads (background)
+fetchSharedUploadsOnce().then(() => {
+  console.log("⚡ shared uploads prefetched")
+})
+    mountedDone.value = true
+    return
+  }
+
 
 // ⚡ 1️⃣ LECTURE CACHE IMMÉDIATE
 const cachedFolders = readFoldersCache("eleve", userId.value)
@@ -3387,6 +4103,15 @@ if (!currentFolderId.value) {
     loaderStep.value = "uploads"
     console.log("🚀 trigger global uploads fetch (élève)")
     await fetchAllUploadsOnce()
+// 🔥 AUTO-OPEN dossier contenant des uploads (élève)
+if (!isProfLike.value) {
+  const foldersWithFiles = Object.keys(uploadsByFolder.value)
+    .filter(fid => fid && uploadsByFolder.value[fid]?.length)
+
+  if (foldersWithFiles.length) {
+    console.log("🎯 auto-open folder with uploads =", foldersWithFiles[0])
+  }
+}
 
     console.log("📁 folders élève =", folders.value.length)
     console.log("📦 uploadsByFolder =", Object.keys(uploadsByFolder.value).length)
@@ -3523,603 +4248,491 @@ onUnmounted(() => {
 
 </script>
 
-<style lang="css" scoped>
+<style scoped>
+/* =========================================================
+   🌑 SUNBASS FINDER — FULL REPLACE (CLEAN / SAAS)
+   ========================================================= */
+.no-anim * {
+  transition: none !important;
+  animation: none !important;
+}
 
-/* ==========================================================================
-   🌑 THÈME GLOBAL
-   ========================================================================== */
+/* ===================== TOKENS ===================== */
+.uploads-page.dark-theme {
+  --bg: #121212;
+  --panel: #161616;
+  --panel-2: #1a1a1a;
+  --border: #242424;
+  --border-soft: #2f2f2f;
+
+  --text: #f2f2f2;
+  --muted: #a7a7a7;
+
+  --accent: #ff8c00;
+  --accent-2: #ff9f2d;
+
+  --blue: #5a8cff;     /* partagé avec moi */
+  --blue-2: #3399ff;   /* partagé par moi */
+}
+
+/* ===================== PAGE ===================== */
+.uploads-page {
+  padding: 32px;
+}
+@media (max-width: 768px) {
+  .uploads-page { padding: 12px; }
+}
+
 .dark-theme {
-  background: #121212;
-  color: #fff;
+  background: var(--bg);
+  color: var(--text);
   min-height: 100vh;
 }
 
-/* ==========================================================================
-   📄 PAGE & HEADER
-   ========================================================================== */
-.uploads-page {
-  padding: 40px;
-}
-
-@media (max-width: 768px) {
-  .uploads-page {
-    padding: 10px;
-  }
-}
+/* ===============================
+   🧭 HEADER — ALIGNEMENT DES BOUTONS
+   =============================== */
 
 .uploads-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 18px;
+  align-items: flex-start; /* 🔥 clé */
+  gap: 12px;
+  flex-wrap: wrap;
 }
+
+.uploads-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* force les actions à être bien alignées */
+.upload-badge,
+.add-btn {
+  align-self: flex-start;
+}
+
 
 .subtitle {
-  font-size: 0.85rem;
-  color: #aaa;
+  font-size: .85rem;
+  color: var(--muted);
 }
 
-/* ==========================================================================
-   📦 ZONE EXPLORER
-   ========================================================================== */
+/* tabs */
+/* ===============================
+   🧭 TABS FINDER — RESPONSIVE FIX
+   =============================== */
+
+.finder-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.finder-tabs .tab {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  line-height: 1;
+  border-radius: 999px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+/* actif */
+.finder-tabs .tab.active {
+  background: rgba(255,140,0,0.18);
+  color: #ffb347;
+  border-color: rgba(255,140,0,0.55);
+}
+
+/* hover desktop only */
+@media (hover: hover) {
+  .finder-tabs .tab:hover {
+    border-color: rgba(255,140,0,0.45);
+  }
+}
+
+/* 📱 mobile : ultra compact */
+@media (max-width: 520px) {
+  .finder-tabs {
+    gap: 4px;
+  }
+
+  .finder-tabs .tab {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+  }
+}
+
+
+/* search */
+.search-input {
+  width: min(520px, 100%);
+  margin-top: 8px;
+  background: #151515;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+}
+.search-input:focus {
+  outline: none;
+  border-color: rgba(255,140,0,.55);
+  box-shadow: 0 0 0 3px rgba(255,140,0,.15);
+}
+
+/* badge upload */
+.upload-badge {
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: .8rem;
+  background: rgba(255,140,0,.15);
+  border: 1px solid var(--accent);
+  color: #ffb347;
+  cursor: pointer;
+}
+.upload-badge:hover {
+  background: rgba(255,140,0,.25);
+}
+.upload-badge.done {
+  background: rgba(76,175,80,.15);
+  border-color: #4caf50;
+  color: #7dff9c;
+  cursor: default;
+}
+
+/* ===============================
+   ➕ BOUTON AJOUTER — RESPONSIVE
+   =============================== */
+
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top:50px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255,140,0,0.15);
+  border: 1px solid rgba(255,140,0,0.45);
+  color: #ffb347;
+  font-weight: 600;
+  font-size: 0.75rem;
+  box-shadow: none;
+  transition: background .15s, border-color .15s;
+}
+
+.add-btn .icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+/* hover desktop */
+@media (hover: hover) {
+  .add-btn:hover {
+    background: rgba(255,140,0,0.25);
+    border-color: rgba(255,140,0,0.65);
+  }
+}
+
+.add-btn.active {
+  box-shadow: 0 0 0 2px rgba(255,140,0,0.25);
+}
+
+/* 📱 mobile : ultra discret */
+@media (max-width: 520px) {
+  .add-btn {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    margin-top:45px;
+    gap: 4px;
+  }
+
+  /* optionnel : cacher le texte */
+  .add-btn:not(:hover) span:not(.icon) {
+    display: none;
+  }
+}
+.upload-item[data-type="pdf"] .file-icon { color: #ff6b6b; }
+.upload-item[data-type="audio"] .file-icon { color: #6c7cff; }
+.upload-item[data-type="image"] .file-icon { color: #7dff9c; }
+.explorer-content {
+  min-height: 40vh;
+}
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: none;
+}
 .explorer-zone {
-  min-height: calc(100vh - 260px);
-  width: 100%;
-  padding: 12px;
+  scroll-behavior: auto;
+  overflow-anchor: none; /* 🔥 clé */
+}
+
+
+/* ===================== BREADCRUMB ===================== */
+/* ===============================
+   🧭 BREADCRUMB — VERSION CLEAN
+   =============================== */
+
+.finder-breadcrumb {
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.finder-breadcrumb .crumb {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  font-size: 0.78rem;
+  color: #cfcfcf;
+  border-radius: 6px;
+}
+
+.finder-breadcrumb .crumb::after {
+  content: "›";
+  margin-left: 6px;
+  opacity: 0.35;
+}
+
+.finder-breadcrumb .crumb:last-child::after {
+  content: "";
+}
+
+.finder-breadcrumb .crumb:last-child {
+  color: #ffb347;
+  font-weight: 600;
+}
+
+.finder-breadcrumb .crumb:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.crumb {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  border: 1px solid var(--border-soft);
+  font-size: .78rem;
+  cursor: pointer;
+}
+.crumb:hover {
+  border-color: rgba(255,140,0,.45);
+}
+.crumb:last-child {
+  background: rgba(255,140,0,.16);
+  border-color: rgba(255,140,0,.55);
+  font-weight: 600;
+}
+.crumb.disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+/* ===================== EXPLORER ===================== */
+.explorer-zone {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.02);
+  border: 1px solid var(--border);
   position: relative;
 }
-
-/* ⚠️ DND SAFE : jamais bloquer pointer-events */
 .explorer-zone.disabled {
-  opacity: 0.85;
+  opacity: .85;
 }
 
-
-
-/* ==========================================================================
-   📄 ITEM COMMUN (FICHIER / DOSSIER)
-   ========================================================================== */
+/* ===================== ITEMS ===================== */
 .upload-item {
-  background: linear-gradient(180deg, #1f1f1f, #191919);
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 12px 14px;
   display: flex;
   align-items: center;
+  gap: 10px;
   margin-bottom: 10px;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1b1b1b, #141414);
+  border: 1px solid var(--border);
+  transition: background .15s, border-color .15s, box-shadow .15s;
 }
-
-/* hover */
 .upload-item:hover {
-  border-color: #ff8c00;
-  background: rgba(255, 140, 0, 0.08);
+  border-color: rgba(255,140,0,.55);
+  background: rgba(255,140,0,.06);
 }
-
-/* sélection */
 .upload-item.selected {
-  border-color: #ff8c00;
-  background: rgba(255, 140, 0, 0.18);
-  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.25) inset;
+  border-color: rgba(255,140,0,.85);
+  background: rgba(255,140,0,.14);
+  box-shadow: 0 0 0 3px rgba(255,140,0,.12);
 }
+.upload-item[draggable="true"] { cursor: grab; }
+.upload-item[draggable="true"]:active { cursor: grabbing; opacity: .6; }
 
-/* draggable cursor */
-.upload-item[draggable="true"],
-.folder-main[draggable="true"] {
-  cursor: grab;
-}
+.upload-item.cut { opacity: .45; }
+.upload-item.optimistic { opacity: .6; pointer-events: none; }
 
-.folder-main[draggable="true"]:active,
-.upload-item[draggable="true"]:active {
-  cursor: grabbing;
-  opacity: 0.6;
-}
-
-/* optimistic */
-.upload-item.optimistic {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-/* cut */
-.upload-item.cut {
-  opacity: 0.45;
-}
-
-/* ==========================================================================
-   📁 DOSSIER
-   ========================================================================== */
+/* ===================== DOSSIERS ===================== */
 .upload-item.folder {
-  background: linear-gradient(180deg, #222, #1b1b1b);
-  border: 1px dashed #444;
   font-weight: 600;
-  color: #ffb347;
 }
-
 .upload-item.folder.active {
-  border-color: #ff8c00;
-  background: rgba(255, 140, 0, 0.18);
+  border-color: rgba(255,140,0,.9);
+  background: rgba(255,140,0,.16);
 }
 
-/* contenu dossier */
 .folder-main {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: 1;
-  min-width: 0;
+  padding: 6px 10px;
+  border-left: 3px solid transparent;
+  border-radius: 10px;
 }
 
+/* shared */
+.folder-main.is-shared {
+  background: rgba(90,140,255,.08);
+  border-left-color: var(--blue);
+}
+.folder-main.shared-by-me {
+  background: rgba(51,153,255,.08);
+  border-left-color: var(--blue-2);
+}
+
+/* états */
+.folder.pending {
+  opacity: .55;
+  pointer-events: none;
+}
+.folder.pending::after {
+  content: "⏳";
+  margin-left: auto;
+}
+
+/* icon */
 .folder-icon {
-  font-size: 1.4rem;
-  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: var(--accent-2);
 }
 
-/* ==========================================================================
-   📄 FICHIER
-   ========================================================================== */
+/* ===================== FICHIERS ===================== */
 .file-main {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: 1;
-  min-width: 0;
 }
-
 .file-icon {
-  font-size: 1.4rem;
+  font-size: 1.25rem;
 }
-
 .file-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
+}
+.file-path {
+  font-size: .75rem;
+  color: var(--muted);
 }
 
-.file-date {
-  font-size: 0.75rem;
-  color: #888;
-}
-
-/* ==========================================================================
-   ✏️ RENAME INPUT
-   ========================================================================== */
+/* ===================== RENAME ===================== */
 .rename-input {
-  background: #121212;
-  border: 1px solid #ffaa00;
-  border-radius: 4px;
-  padding: 2px 6px;
-  color: #fff;
-  font-size: 0.9rem;
-  width: 70%;
-  height: 28px;
-  line-height: 28px;
+  width: min(420px, 100%);
+  height: 34px;
+  padding: 6px 10px;
+  background: #101010;
+  border: 1px solid rgba(255,140,0,.65);
+  border-radius: 10px;
+  color: var(--text);
+}
+.rename-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255,140,0,.15);
 }
 
-/* ==========================================================================
-   📋 CONTEXT MENU
-   ========================================================================== */
-.context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: #1e1e1e;
-  border: 1px solid #333;
-  border-radius: 6px;
-  padding: 4px 0;
-  min-width: 160px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-  color: #f1f1f1;
-}
-
-.context-item {
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.context-item:hover {
-  background: rgba(255, 140, 0, 0.15);
-}
-
-.context-item.danger {
-  color: #ff6b6b;
-}
-
-.context-item.danger:hover {
-  background: rgba(255, 80, 80, 0.15);
-}
-
-/* ⚠️ backdrop n’intercepte pas le drag */
+/* ===================== CONTEXT MENU ===================== */
 .context-backdrop {
   position: fixed;
   inset: 0;
   z-index: 9998;
 }
-
-/* ==========================================================================
-   🫥 EMPTY STATE
-   ========================================================================== */
-.empty-state {
-  margin-top: 24px;
-  text-align: center;
-  font-size: 0.9rem;
-  color: #777;
-  animation: emptyFadeIn 0.15s ease forwards;
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #141414;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
 }
-
-@keyframes emptyFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-/* ==========================================================================
-   🎞️ TRANSITIONS
-   ========================================================================== */
-.fade-slide-enter-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.fade-slide-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-2px);
-}
-
-/* ==========================================================================
-   🧭 BREADCRUMB
-   ========================================================================== */
-.finder-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: #1a1a1a;
-  border-radius: 8px;
-  border: 1px solid #2a2a2a;
-  margin-bottom: 14px;
-}
-
-.finder-breadcrumb .crumb {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  background: linear-gradient(180deg, #2a2a2a, #222);
-  border-radius: 999px;
-  font-size: 0.8rem;
-  color: #e0e0e0;
-  cursor: pointer;
-  border: 1px solid #333;
-}
-
-.finder-breadcrumb .crumb:last-child {
-  background: linear-gradient(180deg, #ff9f2d, #ff8c00);
-  color: #000;
-  font-weight: 700;
-  border-color: #ff8c00;
-}
-
-/* ==========================================================================
-   ⏳ LOADER
-   ========================================================================== */
-.loader-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 4px solid rgba(255, 140, 0, 0.25);
-  border-top-color: #ff8c00;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 12px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.workspace-text {
-  text-align: center;
-  line-height: 1.4;
-}
-
-/* ==========================================================================
-   ➕ BOUTON AJOUTER
-   ========================================================================== */
-.add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+.context-item {
+  padding: 8px 12px;
   border-radius: 10px;
-  background: linear-gradient(180deg, #ff9f2d, #ff8c00);
-  color: #000;
-  font-weight: 700;
-  font-size: 0.9rem;
-  border: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(255,140,0,0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  font-size: .85rem;
+}
+.context-item:hover {
+  background: rgba(255,140,0,.12);
+}
+.context-item.danger {
+  color: #ff6b6b;
+}
+.context-item.danger:hover {
+  background: rgba(255,80,80,.15);
 }
 
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(255,140,0,0.45);
-}
-
-.add-btn.active {
-  box-shadow: 0 0 0 3px rgba(255,140,0,0.35);
-}
-
+/* ===================== LOADER ===================== */
 .loader-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(12, 12, 16, 0.85);
+  z-index: 50;
+  background: rgba(10,10,12,.78);
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
 }
 
-.workflow-loader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
-  animation: fadeIn 0.25s ease;
-}
-
-.workflow-loader strong {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-
-.workflow-loader .sub {
-  font-size: 13px;
-  opacity: 0.55;
-}
-
-/* 🔵 animation workflow */
-.dots {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #6c7cff;
-  animation: dotPulse 1.4s infinite ease-in-out;
-  opacity: 0.6;
-}
-
-.dots span:nth-child(2) {
-  animation-delay: .15s;
-}
-
-.dots span:nth-child(3) {
-  animation-delay: .3s;
-}
-
-@keyframes dotPulse {
-  0%, 80%, 100% {
-    transform: scale(0.7);
-    opacity: 0.4;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0 }
-  to { opacity: 1 }
-}
-/* ===============================
-   📁 DOSSIER – MODERNE / SAAS
-   =============================== */
-.folder-icon.modern-folder {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: rgba(255, 159, 45, 0.12);
-  border: 1px solid rgba(255, 159, 45, 0.35);
-  position: relative;
-  flex-shrink: 0;
-}
-
-/* accent vertical (signature moderne) */
-.folder-icon.modern-folder::after {
-  content: "";
-  position: absolute;
-  left: -3px;
-  top: 4px;
-  width: 2px;
-  height: 12px;
-  border-radius: 2px;
-  background: #ff9f2d;
-}
-.upload-item.folder {
-  background: #161616;
-  border: 1px solid #242424;
-  border-radius: 14px;
-}
-
-.upload-item.folder:hover {
-  border-color: rgba(255,159,45,.5);
-}
-
-.upload-item.folder strong {
-  font-weight: 500;
-  font-size: 0.95rem;
-  letter-spacing: .2px;
-}
-/* ===============================
-   📁 DOSSIER – BOOTSTRAP ICON
-   =============================== */
-.folder-icon {
-  font-size: 1.25rem;
-  color: #ff9f2d;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-/* dossier sélectionné */
-.upload-item.folder.selected .folder-icon {
-  color: #ffb347;
-}
-
-/* hover subtil */
-.upload-item.folder:hover .folder-icon {
-  color: #ffc26a;
-}
-.eleve-blocked {
-  margin: 2rem auto;
-  max-width: 480px;
-  text-align: center;
-  opacity: 0.85;
-}
-.folder.pending {
-  opacity: 0.5;
-  pointer-events: none;
-  position: relative;
-}
-.crumb.disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.folder.pending::after {
-  content: "⏳";
-  position: absolute;
-  right: 8px;
-}
-.upload-item {
-  -webkit-user-drag: none;
-}
-.rename-input {
-  -webkit-user-select: text;
-  user-select: text;
-}
-.upload-item,
-.upload-item * {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-.upload-item {
-  -webkit-user-drag: none;
-}
-.upload-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  margin-left: 6px;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  border-top-color: rgba(255, 255, 255, 0.8);
-  border-radius: 50%;
-  animation: upload-spin 0.8s linear infinite;
-  vertical-align: middle;
-  opacity: 0.7;
-}
-
-@keyframes upload-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.upload-badge {
-  background: rgba(255, 140, 0, 0.15);
-  border: 1px solid #ff8c00;
-  color: #ffb347;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.upload-badge:hover {
-  background: rgba(255, 140, 0, 0.25);
-}
-.uploads-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.upload-badge {
-  margin-left: auto; /* 🔥 pousse à droite */
-}
-.upload-badge.done {
-  background: rgba(76, 175, 80, 0.15);
-  border-color: #4caf50;
-  color: #7dff9c;
-  animation: pop 0.25s ease;
-  cursor: default;
-}
-
-@keyframes pop {
-  0%   { transform: scale(0.95); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
+/* ===================== EMPTY / STATES ===================== */
+.empty-state,
+.shared-loading,
 .search-empty {
   padding: 32px;
   text-align: center;
-  color: #aaa;
+  color: var(--muted);
 }
-
 .search-empty button {
   margin-top: 12px;
   background: none;
-  border: 1px solid #ff8c00;
-  color: #ff8c00;
+  border: 1px solid var(--accent);
+  color: var(--accent);
   padding: 6px 12px;
   border-radius: 8px;
   cursor: pointer;
 }
-.crumb {
-  cursor: pointer;
+.explorer-zone,
+.explorer-content {
+  scroll-behavior: auto;
 }
 
-.crumb[data-search] {
-  cursor: default;
-  opacity: 0.6;
+.uploads-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
-.file-path {
-  font-size: 0.75rem;
-  color: #888;
-  margin-top: 2px;
-  padding-left: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.uploads-header,
+.finder-breadcrumb {
+  flex-shrink: 0;
 }
-.crumb.home {
-  font-weight: 600;
+.explorer-zone {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* 🔥 CRITIQUE */
 }
+
 
 </style>
 
