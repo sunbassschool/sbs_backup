@@ -315,7 +315,7 @@ import { useAuthStore } from "@/stores/authStore.js";
 // 🔌 CONFIG API + PROXY
 // ============================
 const routes = {
-  POST: "AKfycbzeh9vGiTKbzVXhE5NmI03Zg8zhEjbL-7UUJU-bbpYMBP4GNsBKqVRtb782ED2yIe8ODw/exec"
+  POST: "AKfycbzxXlNmLmDu5IgGDc3aUNpmKfilJrGedFgYW9f4TN3wPte4TzVzlUBK0goVCuqORm_91w/exec"
 };
 
 const getProxyPostURL = (routeId) => {

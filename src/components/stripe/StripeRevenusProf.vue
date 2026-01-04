@@ -88,7 +88,7 @@
 
 
   <transition name="accordion">
-    <div v-show="open" class="accordion-content">
+<div v-if="open" class="accordion-content">
 
       <div v-if="!payments.length" class="empty">
         Aucun paiement enregistré
@@ -130,7 +130,7 @@
 
 
 <script setup>
-import { ref, watch, computed } from "vue"
+import { ref, watch, computed,watchEffect } from "vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getProxyPostURL } from "@/config/gas"
 
@@ -141,6 +141,8 @@ const dateFR = (ts) =>
   ts ? new Date(ts * 1000).toLocaleDateString("fr-FR") : "—"
 const open = ref(false)
 const month = ref({ total: 0 })
+const profId = computed(() => auth.user?.prof_id || null)
+const role = computed(() => auth.user?.role || null)
 
 const loading = ref(false)
 const balance = ref({ available: 0, pending: 0, currency: "eur" })
@@ -152,9 +154,10 @@ const debug = true // passe à false quand OK
 
 //----- CACHE SESSION STORAGE
 const CACHE_TTL = 4 * 60 * 1000
-const REVENUS_KEY = `stripe_revenus_${auth.prof_id}`
-const STRIPE_STATUS_KEY = `stripe_status_${auth.prof_id}`
-
+const REVENUS_KEY = `stripe_revenus_${profId.value}`
+const stripeStatusKey = computed(() =>
+  profId.value ? `stripe_status_${profId.value}` : null
+)
 // ---- RÈGLES ----
 const status = computed(() => {
   if (!stripeStatus.value?.stripe_account_id) return "none"
@@ -204,6 +207,13 @@ function getCache(key) {
   }
   return data
 }
+function openExternal(url) {
+  if (window.matchMedia("(display-mode: standalone)").matches) {
+    window.location.href = url
+  } else {
+    window.open(url, "_blank", "noopener")
+  }
+}
 
 function setCache(key, data) {
   sessionStorage.setItem(
@@ -214,27 +224,32 @@ function setCache(key, data) {
 
 // 🔁 attendre prof_id avant de fetch
 watch(
-  () => auth.prof_id,
-  (profId) => {
-    if (!profId) {
-      console.log("⏳ attente prof_id…")
+  () => [auth.authReady, profId.value],
+  ([ready, profId]) => {
+    if (!ready || !profId) {
+      console.log("⏳ attente authReady + prof_id…")
       return
     }
 
-    console.group("🟢 prof_id READY")
-    console.log("prof_id:", profId)
-    console.groupEnd()
-
     fetchRevenus()
-fetchStripeStatus()
-
+    fetchStripeStatus()
   },
   { immediate: true }
 )
 
+watchEffect(() => {
+  console.log("DEBUG auth:", {
+    authReady: auth.authReady,
+    prof_id: profId.value,
+    role: role.value
+  })
+})
+
 
 async function fetchStripeStatus() {
-    const STRIPE_STATUS_KEY = `stripe_status_${auth.prof_id}`
+    const STRIPE_STATUS_KEY = computed(() =>
+  profId.value ? `stripe_status_${profId.value}` : null
+)
 const cached = getCache(STRIPE_STATUS_KEY)
 
 if (cached) {
@@ -247,7 +262,7 @@ if (cached) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       route: "stripeconnectstatus",
-      prof_id: auth.prof_id,
+      prof_id: profId.value,
       jwt: auth.jwt
     })
   }).then(r => r.json())
@@ -266,7 +281,7 @@ async function onStripeAction() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       route: "createstripeloginlink",
-      prof_id: auth.prof_id,
+      prof_id: profId.value,
       jwt: auth.jwt
     })
   }).then(r => r.json())
@@ -275,13 +290,15 @@ async function onStripeAction() {
 }
 
 async function fetchRevenus() {
-  if (!auth.prof_id) {
+  if (!profId.value) {
     console.warn("🚫 fetchRevenus appelé sans prof_id")
     return
   }
 
   console.group("💳 [StripeRevenusProf] FETCH")
-  const REVENUS_KEY = `stripe_revenus_${auth.prof_id}`
+  const revenusKey = computed(() =>
+  profId.value ? `stripe_revenus_${profId.value}` : null
+)
 const cached = getCache(REVENUS_KEY)
 
 if (cached) {
@@ -296,7 +313,7 @@ if (cached) {
   try {
     const payload = {
       route: "getprofstripeoverview",
-      prof_id: auth.prof_id,
+      prof_id: profId.value,
       jwt: auth.jwt
     }
 
@@ -356,13 +373,13 @@ async function openStripeDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         route: "createstripeloginlink",
-        prof_id: auth.prof_id,
+        prof_id: profId.value,
         jwt: auth.jwt
       })
     }).then(r => r.json())
 
     if (res.success && res.url) {
-      window.open(res.url, "_blank")
+  openExternal(res.url)
     } else {
       alert("Impossible d’ouvrir Stripe")
     }
@@ -675,6 +692,27 @@ async function openStripeDashboard() {
 .stripe-status.error .dot {
   background: #ef4444;
 }
+/* ✅ FIX iOS Safari – scroll page Revenus */
+.stripe-revenus {
+  min-height: calc(100dvh - 80px);
+  overflow: visible;
+}
 
+.stripe-revenus::after {
+  content: "";
+  display: block;
+  height: 1px;
+}
+
+.accordion-toggle {
+  touch-action: pan-y;
+}
+.payments {
+  flex-grow: 1;
+}
+.stripe-revenus {
+  display: flex;
+  flex-direction: column;
+}
 
 </style>

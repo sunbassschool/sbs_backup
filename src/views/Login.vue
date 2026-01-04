@@ -217,9 +217,7 @@ auth.setSessionData({
 console.log("💥 USER STORE (login):", JSON.parse(JSON.stringify(auth.user)))
 
 
-auth.jwtReady = true;
-auth.authReady = true;
-auth.isInitDone = true;
+
 
 
 

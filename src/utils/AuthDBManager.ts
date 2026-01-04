@@ -165,8 +165,7 @@ export async function saveSessionData({
   console.log("🚀 [saveSessionData] Début sauvegarde...");
 
   try {
-    console.warn("⚠️ saveSessionData appelé avec sessionId =", sessionId);
-console.trace("📍 Trace sessionId source");
+   
     if (!jwt || !refreshToken || !sessionId) {
       console.warn("⚠️ Données manquantes :", { jwt, refreshToken, sessionId });
       throw new Error("Des données obligatoires sont absentes");

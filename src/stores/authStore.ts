@@ -8,6 +8,7 @@ import {
   refreshToken as apiRefreshToken,
   logoutUser,checkForStoredTokens
 } from "@/utils/api.ts";
+let _ensureJwtPromise: Promise<string | null> | null = null
 
 interface User {
   email: string;
@@ -81,6 +82,8 @@ export const useAuthStore = defineStore("auth", {
         return false;
       }
     },
+    email: (state) => state.user?.email || null,
+
     isAdmin: (state): boolean => {
       if (!state.user) return false;
       if (state.impersonateStudent) return false;
@@ -111,6 +114,42 @@ export const useAuthStore = defineStore("auth", {
         this.menuOpen = !this.menuOpen;
       }
     },
+    setLoginSuccess(payload: {
+  jwt: string
+  refreshToken?: string | null
+  sessionId?: string | null
+  user: any
+}) {
+  this.jwt = payload.jwt
+  if (payload.refreshToken !== undefined) {
+    this.refreshToken = payload.refreshToken
+  }
+  if (payload.sessionId !== undefined) {
+    this.sessionId = payload.sessionId
+  }
+
+  this.user = payload.user
+  this.isInitDone = true
+  this.refreshFailed = false
+}
+,
+hardLogoutReset() {
+  // verrous
+  this.isLoggingOut = true
+  this.isRefreshingToken = false
+  this.isInitDone = false
+
+  // cœur auth
+  this.jwt = null
+  this.refreshToken = null
+  this.sessionId = null
+  this.user = null
+
+  // flags
+  this.refreshFailed = false
+  this.impersonateStudent = false
+}
+,
 setSessionId(id: string) {
   this.sessionId = id;
 }
@@ -145,7 +184,7 @@ setUserToken(token: string) {
   try {
     const prenom = this.user.prenom;
     const apiBase = "https://script.google.com/macros/s/";
-    const routeID = "AKfycbw-LmDbIdL0asIu5WrQcskGh1J2Pr_ZxxepoUsC5B5yWpo_WDDH0MqzrFZAPMm0Tyls-A";
+    const routeID = "AKfycbzxXlNmLmDu5IgGDc3aUNpmKfilJrGedFgYW9f4TN3wPte4TzVzlUBK0goVCuqORm_91w";
     const url = `${apiBase}${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(
       this.jwt
     )}&prenom=${encodeURIComponent(prenom)}`;
@@ -175,6 +214,33 @@ setUserToken(token: string) {
   
   }
 }
+,
+async ensureValidJwt(): Promise<string | null> {
+  if (this.isLoggingOut) return null
+  if (!this.jwt) return null
+
+  // ✅ JWT encore valide
+  if (!this.needsRefresh) {
+    return this.jwt
+  }
+
+  // ⏳ mutex actif → on attend la même promesse
+  if (_ensureJwtPromise) {
+    return await _ensureJwtPromise
+  }
+
+  _ensureJwtPromise = (async () => {
+    try {
+      const refreshed = await this.refreshJwt()
+      return refreshed
+    } finally {
+      _ensureJwtPromise = null
+    }
+  })()
+
+  return await _ensureJwtPromise
+}
+
 ,
 async loadUser(): Promise<boolean | void> {
   console.log("🔄 Chargement des infos utilisateur...");

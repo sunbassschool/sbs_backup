@@ -11,13 +11,20 @@
     >
 
     <style>
- html, body {
+html, body {
   margin: 0;
   padding: 0;
   background: #000 !important;
-  min-height: 100vh;
+  min-height: 100%;
+  height: auto;
   overflow-x: hidden;
-  overflow-y: scroll; /* ✅ FIX DÉCALAGE */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#app {
+  min-height: 100dvh; /* ✅ iOS safe */
+  overflow-y: auto;
 }
 
 

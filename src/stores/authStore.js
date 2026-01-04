@@ -51,12 +51,12 @@ export const useAuthStore = defineStore("auth", {
 
     user: null,                 // Données utilisateur
     role: null,                 // Rôle utilisateur (admin / adherent / etc)
+  prof_id: null,   // ✅ AJOUT
 
     pendingReportsCount: 0,     // nombre de demandes de report de cours en attente
 
     impersonateStudent: localStorage.getItem("impersonateStudent") === "true",
 
-    authReady: false,           // L'app est prête
                // Le JWT est prêt pour l'UI
     authLoading: false,         // Flag de chargement (login / fetch user ...)
 
@@ -95,6 +95,18 @@ export const useAuthStore = defineStore("auth", {
         return false;
       }
     },
+authReady(state) {
+  if (!state.jwt) return false
+  if (!state.user) return false
+  if (!state.user.role) return false
+
+  // prof / admin → prof_id obligatoire
+  if (["prof", "admin"].includes(state.user.role)) {
+    return !!state.user.prof_id
+  }
+
+  return true
+},
 
     // 👑 Est-ce que l'utilisateur est admin (et pas en mode impersonation) ?
     isAdmin: (state) => {
@@ -145,11 +157,39 @@ export const useAuthStore = defineStore("auth", {
       this.impersonateStudent = !this.impersonateStudent;
       // (on ne stocke pas dans LS ici, mais tu peux le faire si besoin)
     },
+    hardLogoutReset() {
+  // verrous
+  this.isLoggingOut = true
+  this.isRefreshingToken = false
+  this.isInitDone = false
+  this.jwtReady = false
+
+  // cœur auth
+  this.jwt = null
+  this.refreshToken = null
+  this.sessionId = null
+  this.user = null
+  this.role = null
+  this.prof_id = null
+
+  // flags
+  this.refreshFailed = false
+  this.impersonateStudent = false
+}
+,
+setLoginSuccess({ jwt, user }) {
+  this.jwt = jwt
+  this.jwtReady = true
+  this.user = user
+  this.isInitDone = true
+  this.refreshFailed = false
+}
+,
 
     // 📥 Charge le nombre de demandes de report de cours via un endpoint externe
    async fetchPendingReports() {
   try {
-    const jwt = this.jwt
+const jwt = await this.ensureValidJwt()
     if (!jwt) return
 
     const url = getProxyGetURL(
@@ -196,6 +236,29 @@ async restoreSessionFromStorage() {
 
 ,
 
+async ensureValidJwt() {
+  if (this.isLoggingOut) return null
+  if (!this.jwt) return null
+
+  // ✅ JWT encore valide
+  if (!isJwtExpired(this.jwt)) {
+    return this.jwt
+  }
+
+  // ⏳ refresh déjà en cours → on attend
+  if (this.isRefreshingToken) {
+    while (this.isRefreshingToken) {
+      await new Promise(r => setTimeout(r, 50))
+    }
+    return this.jwt && !isJwtExpired(this.jwt) ? this.jwt : null
+  }
+
+  // 🔄 refresh nécessaire
+  const refreshed = await this.refreshJwt()
+  return refreshed && !isJwtExpired(refreshed) ? refreshed : null
+}
+
+,
     // 🧪 (Compat legacy) Permet de définir un JWT manuellement depuis l'extérieur (ex: api.ts)
     setUserToken(jwt) {
       this.jwt = jwt;
@@ -701,7 +764,6 @@ if (!jwt) {
     localStorage.setItem("jwt", finalJwt)
 
     this.jwtReady = true
-    this.authReady = true
 
     // 6️⃣ Décodage payload
     const payload = decodeJwt(finalJwt) || {}
@@ -711,6 +773,7 @@ if (!jwt) {
       user_id: payload.user_id != null ? payload.user_id : null,
       prof_id: payload.prof_id != null ? payload.prof_id : null
     }
+// ✅ synchro globale
 
     // 7️⃣ Fetchs non bloquants
     setTimeout(() => {

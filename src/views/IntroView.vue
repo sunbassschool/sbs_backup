@@ -52,84 +52,73 @@
 
 <script setup lang="ts">
 import { useAuthStore } from "@/stores/authStore";
-import { watch, nextTick } from "vue";
-import { registerSW } from 'virtual:pwa-register';
-
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, nextTick } from "vue";
 import { useRouter } from "vue-router";
-import { preventIndexedDBCleanup, checkIndexedDBStatus } from "@/utils/api";
+import { registerSW } from "virtual:pwa-register";
+import { preventIndexedDBCleanup, checkIndexedDBStatus } from "@/utils/api.ts";
 import { getCache } from "@/utils/cacheManager";
+
 const store = useAuthStore();
-const authLoading = computed(() => store.isRefreshingToken);
 const router = useRouter();
+
 const showModal = ref(false);
 const offlineMode = ref(false);
 const showOverlay = ref(false);
+const updateAvailable = ref(false);
+
+const authReady = computed(() => !!store.jwt && !!store.user);
+const authLoading = computed(() => store.isRefreshingToken);
 
 const baseUrl = import.meta.env.VITE_BASE_URL || "/app/";
-const logoUrl = ref(`${baseUrl}images/logo.png`);
-const updateAvailable = ref(false);
+const logoUrl = `${baseUrl}images/logo.png`;
 
 const updateSW = registerSW({
   onNeedRefresh() {
     updateAvailable.value = true;
   },
-  onOfflineReady() {
-    console.log("📦 Application prête hors ligne");
-  },
 });
 
-const refreshApp = () => {
-  updateSW(true); // 🔄 Force update + reload
-};
+const refreshApp = () => updateSW(true);
 
 onMounted(async () => {
-  console.log("🚀 Début de l'initialisation de IntroView...");
-  await store.loadUser(); // pour garantir que l'état initial est chargé
-
-  // 🛡️ Maintenance session côté IndexedDB
   preventIndexedDBCleanup();
   checkIndexedDBStatus();
 
-  // 📴 Mode hors ligne + données en cache ?
-  if (!navigator.onLine && getCache("userData_sunny")) {
-    console.warn("⚠️ Mode hors ligne activé, utilisation du cache...");
+  // 🚀 skip auto si déjà loggé
+  if (authReady.value) {
+    router.replace("/dashboard");
+    return;
+  }
+
+  // 📴 offline + cache dispo
+  const cacheKey = store.email ? `userData_${store.email}` : null;
+  if (!navigator.onLine && cacheKey && getCache(cacheKey)) {
     offlineMode.value = true;
     return;
   }
 
-  // ✅ Sinon on affiche la modale
-  showModal.value = true;
-});
-
-// 🎬 Action au clic sur "Commencer"
-const goToDashboard = async () => {
-  showOverlay.value = true;
-
-  // Si déjà en refresh, on attend la fin
-  if (store.isRefreshingToken) {
-    await new Promise((resolve) => {
-     const stop = watch(() => store.isRefreshingToken, (val: any) => {
-  if (!val) {
-    stop();
-    resolve(null);
-  }
-}, { immediate: true });
-
-    });
-  }
-
-  // Petit délai pour éviter flash noir
+  // 🎬 animation intro
   await nextTick();
   setTimeout(() => {
-    sessionStorage.setItem("comingFromIntro", "true");
+    showModal.value = true;
+  }, 300);
+});
+
+const goToDashboard = async () => {
+  if (offlineMode.value) {
     router.replace("/dashboard");
-  }, 100);
+    return;
+  }
+
+  showOverlay.value = true;
+
+  while (store.isRefreshingToken) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+
+  await nextTick();
+  router.replace("/dashboard");
 };
-
-
-
-
 </script>
 
 <style scoped>
@@ -268,6 +257,24 @@ const goToDashboard = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+/* logo fade */
+.logo-container {
+  animation: fadeDown 0.8s ease-out forwards;
+}
+
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* intro slide up */
+.fade-enter-active {
+  transition: all 0.6s ease;
+}
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(30px);
 }
 
 </style>

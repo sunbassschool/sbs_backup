@@ -99,12 +99,7 @@ const router = createRouter({
       component: AdminFeedback,
       meta: { requiresAuth: true, role: "admin" },
     },
-    {
-      path: "/dashboardreports",
-      name: "dashboardreports",
-      component: dashboardreports,
-      meta: { requiresAuth: true, role: "admin" },
-    },
+   
 
 
     // =========================================================
@@ -117,6 +112,12 @@ const router = createRouter({
   meta: { requiresAuth: true, role: "prof" }
 }
 ,
+ {
+      path: "/dashboardreports",
+      name: "dashboardreports",
+      component: dashboardreports,
+      meta: { requiresAuth: true, role: "prof" },
+    },
 {
   path: "/prof/partitions",
   name: "PartitionsProf",

@@ -947,7 +947,6 @@ textarea.form-control:focus {
    flex-grow:1;
   max-width: 800px;
   text-align: center;
-  padding-bottom: 100px; /* ✅ Ajoute de l’espace sous le contenu */
 
 }
 

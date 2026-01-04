@@ -52,7 +52,7 @@
 
 
     <!-- Demandes de report -->
-    <div class="dash-card" @click="goTo('prof-reports')">
+    <div class="dash-card" @click="goToReports">
       <div class="icon-circle">
         <i class="bi bi-arrow-repeat"></i>
       </div>
@@ -140,9 +140,10 @@
 </template>
 
 <script setup>
+  import Layout from "@/views/Layout.vue";
+
 import { ref, onMounted,watch } from "vue";
 import { useRouter } from "vue-router";
-import Layout from "@/views/Layout.vue";
 import { useAuthStore } from "@/stores/authStore";
 import { useDashboardStore } from "@/stores/dashboardStore";
 import StripeConnectCard from "@/components/stripe/StripeConnectCard.vue"
@@ -201,7 +202,6 @@ async function fetchPartitionsCount() {
     console.log("📡 HTTP STATUS →", res.status)
 
     const text = await res.text()
-    console.log("📥 RAW RESPONSE →", text)
 
     let data
     try {
@@ -211,7 +211,6 @@ async function fetchPartitionsCount() {
       return
     }
 
-    console.log("📦 PARSED DATA →", data)
 
     if (!data.success || !Array.isArray(data.uploads)) {
       console.warn("⚠️ Format invalide", data)
@@ -227,13 +226,7 @@ async function fetchPartitionsCount() {
         u.folder_id === PARTITIONS_FOLDER_ID
     )
 
-    console.table(
-      partitions.map(u => ({
-        upload_id: u.upload_id,
-        file_name: u.file_name,
-        folder_id: u.folder_id
-      }))
-    )
+   
 
     partitionsCount.value = partitions.length
     console.log("✅ partitionsCount =", partitionsCount.value)
@@ -258,6 +251,7 @@ function goToSendDoc() {
 function goToCours() {
   router.push({ name: "cours" })
 }
+
 function goToGestionEleves() {
   router.push({ name: "GestionEleves" })
 }
@@ -275,12 +269,14 @@ await Promise.all([
 ])
 
 
-  const payload = {
-    totalEleves: totalEleves.value,
-    upcomingCount: upcomingCount.value,
-    pendingReports: pendingReports.value,
-    inviteLink: inviteLink.value
-  }
+const payload = {
+  totalEleves: totalEleves.value,
+  upcomingCount: upcomingCount.value,
+  pendingReports: pendingReports.value,
+  inviteLink: inviteLink.value,
+  partitionsCount: partitionsCount.value
+}
+
 
   localStorage.setItem(
     CACHE_PREFIX + profId.value,
@@ -294,8 +290,7 @@ await Promise.all([
 function loadFromStore() {
   if (!profId.value) return false
 
-  const key = CACHE_PREFIX + profId.value
-  const raw = localStorage.getItem(key)
+  const raw = localStorage.getItem(CACHE_PREFIX + profId.value)
   if (!raw) return false
 
   try {
@@ -306,6 +301,7 @@ function loadFromStore() {
     upcomingCount.value = data.upcomingCount ?? 0
     pendingReports.value = data.pendingReports ?? 0
     inviteLink.value = data.inviteLink ?? ""
+    partitionsCount.value = data.partitionsCount ?? 0
 
     return true
   } catch {
@@ -464,7 +460,20 @@ function goToPlanning() {
 }
 
 function goToReports() {
-  router.push("/prof-reports");
+  router.push("/dashboardreports");
+}
+function isCacheFresh() {
+  if (!profId.value) return false
+
+  const raw = localStorage.getItem(CACHE_PREFIX + profId.value)
+  if (!raw) return false
+
+  try {
+    const { ts } = JSON.parse(raw)
+    return Date.now() - ts < TTL
+  } catch {
+    return false
+  }
 }
 
 // ======================================================================
@@ -479,15 +488,18 @@ watch(
     if (!profId.value) return
 
     const hasCache = loadFromStore()
+    const cacheFresh = isCacheFresh()
 
-    // 👇 on affiche direct le cache
-    if (hasCache) {
+    // ⚡ affichage immédiat
+    loading.value = !hasCache
+
+    // 🚫 cache OK → PAS DE FETCH
+    if (cacheFresh) {
       loading.value = false
-    } else {
-      loading.value = true
+      return
     }
 
-    // 👇 TOUJOURS revalider en background
+    // 🔄 cache absent ou expiré → fetch
     try {
       await refreshDashboard()
     } finally {

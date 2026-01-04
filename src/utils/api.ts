@@ -349,20 +349,9 @@ export function isTokenExpired(token: string): boolean {
 
 
 
-let refreshPromise: Promise<string | null> | null = null;
 export async function getValidToken(): Promise<string | null> {
-  const store = useAuthStore();
-
-  if (store.isLoggingOut) return null;
-  if (!store.jwt) return null;
-
-  // ⛔ ne JAMAIS refresh ici
-  if (isJwtExpired(store.jwt)) {
-    console.warn("⛔ getValidToken → JWT expiré (refresh géré par le store)");
-    return null;
-  }
-
-  return store.jwt;
+  const store = useAuthStore()
+  return await store.ensureValidJwt()
 }
 
 
@@ -1990,25 +1979,7 @@ export async function logoutUser() {
   // ---------------------------------------------------------
   // 🔒 1) Verrouillage immédiat auth (anti watchers / flash)
   // ---------------------------------------------------------
-  store.authReady = false;
-(store as any).jwtReady = false;
-  store.isInitDone = false;
-
-  // ---------------------------------------------------------
-  // 🔒 1bis) Stop refresh / race conditions
-  // ---------------------------------------------------------
-  if (typeof refreshInProgress !== "undefined") {
-    refreshInProgress = null;
-  }
-  store.isRefreshingToken = false;
-
-  // ---------------------------------------------------------
-  // 🧹 2) Purge immédiate du store
-  // ---------------------------------------------------------
-  store.user = null;
-  store.jwt = null;
-  store.impersonateStudent = false;
-  store.refreshFailed = false;
+store.hardLogoutReset()
 
   window.dispatchEvent(new Event("user-data-updated"));
 

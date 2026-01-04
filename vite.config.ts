@@ -30,7 +30,7 @@ base: mode === "production" ? "/app/" : "/",
       vue(),
 
       VitePWA({
-        registerType: "autoUpdate",
+       registerType: "prompt",
         strategies: "injectManifest",
         srcDir: "src",
         filename: "sw-custom.js",

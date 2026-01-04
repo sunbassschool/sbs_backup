@@ -314,6 +314,7 @@
   </Layout>
 </template>
 <script setup>
+  import Layout from "@/views/Layout.vue";
 import { ref, onMounted, watch, computed, nextTick } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
 import VueCropper from "vue-cropperjs";
@@ -321,7 +322,7 @@ import "@/assets/styles/cropper.css";
 import { getProxyPostURL, getProxyGetURL } from "@/config/gas"
 
 
-import Layout from "@/views/Layout.vue";
+
 import { logoutUser } from "@/utils/api.ts";
 import { useAuthStore } from "@/stores/authStore.js";
 
@@ -1263,226 +1264,106 @@ window.addEventListener('userDataUpdated', (event) => {
 
 <style scoped>
 
-/** Avatar style  */
+/* =========================
+   🎵 SBS PREMIUM — MON COMPTE
+   ========================= */
+
+/* 🎭 Avatar */
 .avatar-placeholder {
   position: relative;
   display: inline-block;
 }
+
 .avatar-uploading {
-  opacity: 0.4;
+  opacity: 0.45;
   pointer-events: none;
   filter: blur(1px);
-  transition: opacity 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .avatar-label {
   cursor: pointer;
-  display: inline-block;
   position: relative;
+  display: inline-block;
 }
 
 .avatar-image {
   width: 120px;
   height: 120px;
   object-fit: cover;
-  border: 2px solid #666;
-}
-
-/* ✏️ Icône toujours visible */
-.avatar-edit-icon {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: #333;
-  color: white;
-  border-radius: 50%;
-  font-size: 0.9rem;
-  padding: 5px;
-  line-height: 1;
-  box-shadow: 0 0 6px rgba(0,0,0,0.4);
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.avatar-label:hover .avatar-edit-icon {
-  transform: scale(1.15);
-  background: #555;
-}
-
-
-
-
-.avatar-label:hover .avatar-edit-overlay {
-  opacity: 1;
-}
-
-
-.account-page {
-  color: #fff;
-  background: linear-gradient(145deg, #1c1c1c, #111);
-  padding: 30px 15px;
-  border-radius: 12px;
-}
-
-.account-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  backdrop-filter: blur(6px);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.account-card:hover {
-  transform: scale(1.01);
-  box-shadow: 0 0 15px rgba(0, 255, 150, 0.1);
+  border-radius: 14px;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: #0f1115;
 }
 
 .avatar-placeholder i {
   font-size: 120px;
-  color: #888;
+  color: #6b7280;
 }
 
-h2 {
-  font-size: 2rem;
-  color: #f1c40f;
+/* ✏️ Icône édition */
+.avatar-edit-icon {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: linear-gradient(135deg,#fb923c,#f97316);
+  color: #0b0c0f;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  padding: 6px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(249,115,22,0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-a {
-  color: #d7491e;
-  text-decoration: none;
+.avatar-label:hover .avatar-edit-icon {
+  transform: scale(1.15);
+  box-shadow: 0 6px 18px rgba(249,115,22,0.55);
 }
 
-a:hover {
-  text-decoration: none;
-  color: #d7491e;
-    font-weight: bold;
+/* =========================
+   📄 Page / Cards
+   ========================= */
 
+.account-page {
+  color: #e5e7eb;
+  background: linear-gradient(160deg,#0b0c0f,#12141a);
+  padding: 28px 16px;
+  border-radius: 16px;
+}
+
+.account-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  padding: 18px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  min-height: 100%;
+}
+
+.account-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.45);
 }
 
 .account-card h5 {
   color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 5px;
-  margin-bottom: 10px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
 }
 
 .account-card li {
-  padding: 5px 0;
-  font-size: 1rem;
+  padding: 6px 0;
+  font-size: 0.95rem;
 }
 
-.text-muted {
-  color: #aaa !important;
-}
+/* =========================
+   🧩 Grille
+   ========================= */
 
-.text-success {
-  color: #d7491e !important;
-}
-
-.text-danger {
-  color: #e53935 !important;
-}
-.logout-account-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #ff4d4d, #b30000);
-  color: white;
-  font-weight: bold;
-  font-size: 1rem;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
-  transition: all 0.3s ease-in-out;
-}
-
-.logout-account-btn:hover {
-  background: linear-gradient(135deg, #e60000, #990000);
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 20px rgba(255, 0, 0, 0.4);
-}
-
-/* style de la modale pour modifier les infos */
-.overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-/* 🌈 Nouvelle modale */
-.modal-content {
-  background: rgba(18, 18, 18, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  color: #fff;
-  padding: 30px 25px;
-  border-radius: 20px;
-  width: 90%;
-  max-width: 400px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
-  position: relative;
-  animation: fadeInScale 0.3s ease;
-}
-
-/* ✖️ bouton de fermeture */
-.close-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: transparent;
-  border: none;
-  font-size: 1.6rem;
-  color: #ff6b6b;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-.close-btn:hover {
-  transform: rotate(90deg) scale(1.2);
-}
-
-/* 📞 Champ input téléphone */
-.modal-content input[type="text"] {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 10px 14px;
-  color: #fff;
-  font-size: 1rem;
-  border-radius: 10px;
-  outline: none;
-  transition: all 0.25s ease;
-  margin-top: 8px;
-}
-
-.modal-content input[type="text"]:focus {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: #1db954;
-  box-shadow: 0 0 0 2px rgba(30, 215, 96, 0.3);
-}
-
-/* 🧊 apparition modale smooth */
-@keyframes fadeInScale {
-  0% {
-    opacity: 0;
-    transform: scale(0.8) translateY(30px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-
-/* account card */
-.account-card {
-  min-height: 100%;
-}
 .cards-grid {
   display: grid;
   gap: 1rem;
@@ -1490,188 +1371,190 @@ a:hover {
 
 @media (min-width: 768px) {
   .cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .cards-grid .account-card {
-    height: 100%;
+    grid-template-columns: repeat(2,1fr);
   }
 }
 
-/* TOAST de modification d'objectif */
+/* =========================
+   🎨 Typo / liens
+   ========================= */
+
+h2 {
+  font-size: 1.9rem;
+  color: #fb923c;
+}
+
+a,
+.link-edit-password {
+  color: #fb923c;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+a:hover,
+.link-edit-password:hover {
+  font-weight: 700;
+}
+
+.text-muted {
+  color: #9ca3af !important;
+}
+
+.text-success {
+  color: #fb923c !important;
+}
+
+.text-danger {
+  color: #ef4444 !important;
+}
+
+/* =========================
+   🚪 Bouton logout
+   ========================= */
+
+.logout-account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  background: linear-gradient(135deg,#ef4444,#991b1b);
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(239,68,68,0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.logout-account-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(239,68,68,0.5);
+}
+
+/* =========================
+   🪟 Modales
+   ========================= */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: rgba(18,18,18,0.8);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  padding: 26px 24px;
+  border-radius: 22px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  animation: fadeInScale 0.25s ease;
+  position: relative;
+}
+
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  color: #fb923c;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.close-btn:hover {
+  transform: rotate(90deg) scale(1.15);
+}
+
+/* Inputs */
+.modal-content input[type="text"] {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 0.95rem;
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.25s ease;
+  margin-top: 8px;
+}
+
+.modal-content input[type="text"]:focus {
+  background: rgba(255,255,255,0.1);
+  border-color: #fb923c;
+  box-shadow: 0 0 0 2px rgba(251,146,60,0.35);
+}
+
+/* =========================
+   🔔 Toast / loaders
+   ========================= */
+
 .toast-feedback {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(40, 167, 69, 0.6);
-  color: #fff;
+  background: rgba(251,146,60,0.75);
+  color: #0b0c0f;
   padding: 8px 18px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
   z-index: 9999;
-  animation: slideIn 1.4s forwards ease-in-out; /* 🔥 animation complète ici */
+  animation: slideIn 1.4s forwards ease-in-out;
 }
 
+.skeleton-item {
+  height: 16px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 999px;
+  animation: pulseSkeleton 1.5s infinite;
+}
 
+/* =========================
+   🔄 Animations
+   ========================= */
 
-/* fade-in/out transition */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s;
+  transition: opacity 0.25s;
 }
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
 }
 
-@keyframes slideIn {
-  0% {
-    transform: translateX(-50%) translateY(20px);
-    opacity: 0;
-  }
-  50% {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(-50%) translateY(-10px); /* vers le haut */
-    opacity: 0;
-  }
+@keyframes fadeInScale {
+  from { opacity:0; transform:scale(0.9) translateY(20px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
 }
-/* style lien modifier passpword */ 
-.link-edit-password {
-  color: #d7491e;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.95rem;
-  transition: color 0.2s ease;
-}
-.link-edit-password:hover {
-  color: #d7491e;
-  text-decoration: none;
-    font-weight: bold;
 
-}
-/* loader RESSOURCS */
-.skeleton-item {
-  height: 16px;
-  background: rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  animation: pulseSkeleton 1.5s infinite;
+@keyframes slideIn {
+  0% { opacity:0; transform:translateX(-50%) translateY(20px); }
+  50% { opacity:1; transform:translateX(-50%) translateY(0); }
+  100% { opacity:0; transform:translateX(-50%) translateY(-10px); }
 }
 
 @keyframes pulseSkeleton {
-  0% {
-    background-color: rgba(255, 255, 255, 0.04);
-  }
-  50% {
-    background-color: rgba(255, 255, 255, 0.09);
-  }
-  100% {
-    background-color: rgba(255, 255, 255, 0.04);
-  }
+  0%,100% { background: rgba(255,255,255,0.05); }
+  50% { background: rgba(255,255,255,0.1); }
 }
 
-/** loading style */
-.loading-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.85);
-  color: white;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-}
+/* =========================
+   🔗 Liens compte
+   ========================= */
 
-.spinner-border {
-  width: 3rem;
-  height: 3rem;
-  border: 0.25em solid rgba(255, 255, 255, 0.3);
-  border-top: 0.25em solid red;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/** style message erreur téléphone */
-.is-invalid {
-  border-color: #dc3545;
-  box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25);
-}
-/** liens pour les boutons */
-.btn-neutral {
-  background-color: #333 !important;
-  color: white !important;
-  border: none;
-}
-.btn-neutral:hover {
-  background-color: #444 !important;
-  color: white !important;
-}
-.logout-container-wrapper {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 99999;
-  pointer-events: none;
-}
-
-.logout-container {
-  
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #121212, #1e1e1e);
-  color: #ff4c4c;
-  font-size: 14px;
-  font-weight: 500;
-  border: 1px solid #ff4c4c33;
-  box-shadow: 0 0 10px rgba(255, 76, 76, 0.25);
-  border-radius: 6px;
-  animation: fadeIn 0.3s ease-in-out;
-  white-space: nowrap;
-}
-
-.logout-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #ff4c4c55;
-  border-top: 2px solid #ff7f50;
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-
-.logout-text {
-  margin: 0;
-  color: #ff7f50;
-  text-shadow: 0 0 3px rgba(255, 127, 80, 0.3);
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 .account-link {
   display: flex;
   align-items: center;
@@ -1679,8 +1562,7 @@ a:hover {
   padding: 14px 16px;
   margin-top: 12px;
   background: #0b0c0f;
-  border-radius: 14px;
-  text-decoration: none;
+  border-radius: 16px;
   color: #e5e7eb;
 }
 
@@ -1693,9 +1575,10 @@ a:hover {
 }
 
 .account-link .arrow {
-  color: #fb923c; /* orange SBS */
+  color: #fb923c;
   font-size: 1rem;
 }
+
 .account-action {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
@@ -1705,5 +1588,11 @@ a:hover {
   transform: translateX(2px);
 }
 
+/* ========================= */
+
+.is-invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 0.15rem rgba(239,68,68,0.35);
+}
 
 </style>

@@ -14,7 +14,6 @@ function sendMessageToClients(message) {
 self.addEventListener("install", (event) => {
   console.log("[SW] install");
   sendMessageToClients("sw-installing");
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -30,4 +29,4 @@ self.addEventListener("message", (event) => {
   }
 });
 // Envoi d'un message aux clients
-// Envoi d'un message aux clients modif du  06/12/2025 à 22:10:25:5456
+// Envoi d'un message aux clients modif du  06/12/2025 à 22:10:25:5456////

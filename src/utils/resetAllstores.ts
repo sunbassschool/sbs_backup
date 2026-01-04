@@ -1,4 +1,4 @@
-import { pinia } from "@/main.ts";
+import { pinia } from "@/stores/pinia";
 import type { Store } from "pinia";
 
 export function resetAllStores() {

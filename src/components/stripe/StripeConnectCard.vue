@@ -67,7 +67,7 @@
 <script setup>
 import { ref, onMounted } from "vue"
 import { useAuthStore } from "@/stores/authStore"
-import { getValidToken } from "@/utils/api"
+import { getValidToken } from "@/utils/api.ts"
 import { getProxyPostURL } from "@/config/gas"
 
 const auth = useAuthStore()

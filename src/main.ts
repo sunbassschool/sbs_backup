@@ -2,7 +2,6 @@ import { createApp } from "vue";
 import { saveSessionData } from "@/utils/AuthDBManager"
 import piniaPersist from "pinia-plugin-persistedstate"
 import App from "@/App.vue";
-import { createPinia } from "pinia";
 
 // 🔒 BOOTSTRAP SESSION AVANT VUE / PINIA (NON BLOQUANT)
 const jwt = localStorage.getItem("jwt")
@@ -14,11 +13,7 @@ if (jwt && refreshToken && sessionId) {
     .catch(() => {})
 }
 
-export const pinia = createPinia()
-pinia.use(piniaPersist)
 
-const app = createApp(App)
-app.use(pinia)
 
 import router from "./router";
 declare global {
@@ -45,6 +40,7 @@ import "./assets/main.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "@fortawesome/fontawesome-free/css/all.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
+import { pinia } from "@/stores/pinia"
 
 import {
   verifyIndexedDBSetup,
@@ -56,53 +52,151 @@ import {
 // 🎸 SunBassSchool — Service Worker UI Helpers
 // ============================================================
 
+
 function showUpdateToast(registration: ServiceWorkerRegistration) {
+    console.log("🟣 showUpdateToast CALLED")
+if (sessionStorage.getItem("swUpdateIgnored") === "1") return
+
   let toast = document.getElementById("update-toast");
 
   if (!toast) {
     toast = document.createElement("div");
     toast.id = "update-toast";
     toast.innerHTML = `
-      <div class="update-toast-wrapper">
-        <p>Nouvelle version disponible</p>
-        <button id="update-btn">Mettre à jour</button>
-      </div>
+   <div class="update-toast-wrapper">
+  <p>Améliorations disponibles</p>
+
+  <div class="update-actions">
+    <span id="update-later">Plus tard</span>
+    <button id="update-btn">Actualiser</button>
+  </div>
+</div>
+
     `;
     document.body.appendChild(toast);
 
     const style = document.createElement("style");
     style.textContent = `
-      #update-toast {
-        position: fixed;
-        bottom: 25px;
-        right: 25px;
-        background: #111;
-        padding: 16px 22px;
-        border-radius: 10px;
-        color: white;
-        border: 1px solid #ff4c4c33;
-        box-shadow: 0 0 12px #ff4c4c55;
-        z-index: 99999;
-      }
-      #update-btn {
-        background: #ff4c4c;
-        border: none;
-        padding: 8px 14px;
-        color: white;
-        border-radius: 6px;
-        cursor: pointer;
-        margin-top: 8px;
-      }
+   #update-toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(20,20,20,0.92);
+  backdrop-filter: blur(10px);
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #eee;
+  font-size: 13px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  z-index: 1000000000;
+  max-width: 220px;
+}
+
+.update-toast-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.update-toast-wrapper p {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+#update-btn {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #ff5a3c, #ff2f2f);
+  border: none;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 0 0 rgba(255,90,60,0);
+  transition: all 0.2s ease;
+}
+
+#update-btn:hover {
+  box-shadow: 0 0 12px rgba(255,90,60,0.6);
+  transform: translateY(-1px);
+}
+.update-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#update-later {
+  font-size: 11px;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+#update-later:hover {
+  opacity: 1;
+}
+#update-toast {
+  animation: slideUp 0.35s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
     `;
     document.head.appendChild(style);
   }
 
-  toast.style.display = "block";
-  const btn = document.getElementById("update-btn") as HTMLButtonElement | null;
-  btn?.addEventListener("click", () => {
-    registration.waiting?.postMessage({ type: "SKIP_WAITING" });
-    window.location.reload();
-  });
+  toast.style.display = "block"
+
+const later = document.getElementById("update-later") as HTMLElement | null
+const btn   = document.getElementById("update-btn") as HTMLButtonElement | null
+
+// anti double bind
+later?.replaceWith(later.cloneNode(true))
+btn?.replaceWith(btn.cloneNode(true))
+
+const laterFresh = document.getElementById("update-later") as HTMLElement | null
+const btnFresh   = document.getElementById("update-btn") as HTMLButtonElement | null
+
+laterFresh?.addEventListener("click", () => {
+  sessionStorage.setItem("swUpdateIgnored", "1")
+  toast.remove()
+}, { once: true })
+
+btnFresh?.addEventListener("click", async () => {
+  // feedback immédiat
+  btnFresh.disabled = true
+  btnFresh.textContent = "Mise à jour…"
+
+  if (!registration.waiting) {
+    // pas de SW en attente => on enlève quand même le toast
+    toast.remove()
+    return
+  }
+
+  registration.waiting.postMessage({ type: "SKIP_WAITING" })
+
+  // attendre la prise de contrôle avant reload
+  await new Promise<void>((resolve) => {
+    navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true })
+  })
+
+  toast.remove()
+  location.reload()
+}, { once: true })
+
+
+;
 }
 
 let swInstallStart = 0;
@@ -193,7 +287,9 @@ if ("serviceWorker" in navigator) {
 
   navigator.serviceWorker.ready.then((registration) => {
     // 🔔 Affiche le toast si une mise à jour est déjà en attente
-    if (registration.waiting) showUpdateToast(registration);
+if (registration.waiting) {
+  showUpdateToast(registration)
+}
 
     // 🔄 Détection automatique d'une nouvelle version
     registration.addEventListener("updatefound", () => {
@@ -230,8 +326,10 @@ export async function initializeApp() {
   }
 
   // --- 1) Création App + Pinia ---
-  const app = createApp(App);
-  const pinia = createPinia();
+const app = createApp(App);
+
+pinia.use(piniaPersist);
+
   app.use(pinia);
 
  const authStore = useAuthStore() as AnyStore;
@@ -239,6 +337,8 @@ export async function initializeApp() {
 
   // --- 2) INIT AUTH AVANT ROUTER ---
   console.log("🚀 App init → lancement initAuth()");
+  sessionStorage.removeItem("AUTH_ABORTED");
+
   await authStore.initAuth();              // ← FIX CRITIQUE
 
   console.log("🟢 initAuth terminé, authReady =", authStore.authReady);
@@ -261,5 +361,6 @@ export async function initializeApp() {
     if (appContainer) appContainer.classList.add("app-visible");
   });
 }
+
 
 
