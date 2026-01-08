@@ -1,13 +1,13 @@
 <template>
   <div class="card stripe-card">
-   
+
 
     <!-- LOADING -->
     <p v-if="loading">🔄 Vérification Stripe…</p>
 
     <!-- READY -->
  <div v-else-if="stripeReady" class="state ok">
-  
+
 
   <router-link
     to="/dashboard-prof/offres"
@@ -65,76 +65,74 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
-import { useAuthStore } from "@/stores/authStore"
+import { ref, onMounted, computed } from "vue"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getValidToken } from "@/utils/api.ts"
 import { getProxyPostURL } from "@/config/gas"
 
 const auth = useAuthStore()
 const proxyUrl = getProxyPostURL()
+const stripeActionLog = ref("")
 
 const loading = ref(false)
-const stripeReady = ref(false)
-const stripeAccountId = ref(null)
 const onboardingStarted = ref(false)
 const onboardingLoading = ref(false)
-const stripePending = ref(false)
+const stripeReady = computed(() => auth.stripe.status === "ready")
+const stripePending = computed(() => auth.stripe.status === "pending")
+
 // =====================================================
 // CACHE STRIPE STATUS (SWR)
 // =====================================================
 const STRIPE_CACHE_TTL = 5 * 60 * 1000
-const getStripeCacheKey = profId => `stripe_status_${profId}`
+const getStripeCacheKey = userId => `stripe_status_${userId}`
+const logStripe = (msg) => {
+  stripeActionLog.value = msg
+  console.log("💳 STRIPE:", msg)
+}
 
-const loadStripeFromCache = (profId) => {
+const loadStripeFromCache = (userId) => {
   try {
-    const raw = sessionStorage.getItem(getStripeCacheKey(profId))
+    const raw = sessionStorage.getItem(getStripeCacheKey(userId))
     if (!raw) return null
-
     const parsed = JSON.parse(raw)
     if (Date.now() - parsed.ts > STRIPE_CACHE_TTL) return null
-
     return parsed.data
   } catch {
     return null
   }
 }
 
-const saveStripeToCache = (profId, data) => {
+const saveStripeToCache = (userId, data) => {
   sessionStorage.setItem(
-    getStripeCacheKey(profId),
+    getStripeCacheKey(userId),
     JSON.stringify({ ts: Date.now(), data })
   )
 }
 
-const clearStripeCache = (profId) => {
-  sessionStorage.removeItem(getStripeCacheKey(profId))
+const clearStripeCache = (userId) => {
+  sessionStorage.removeItem(getStripeCacheKey(userId))
 }
-const applyStripeState = (res) => {
-  if (res?.stripe_ready === true) {
-    stripeReady.value = true
-    stripePending.value = false
-    auth.user.stripe_ready = true
-  } else if (res?.stripe_account_id) {
-    stripeReady.value = false
-    stripePending.value = true
-    auth.user.stripe_ready = false
-  } else {
-    stripeReady.value = false
-    stripePending.value = false
-    auth.user.stripe_ready = false
-  }
 
-  stripeAccountId.value = res?.stripe_account_id || null
+const applyStripeState = (res) => {
+  let status = "off"
+
+  if (res?.stripe_ready === true) status = "ready"
+  else if (res?.stripe_account_id) status = "pending"
+
+  auth.setStripeStatus({
+    status,
+    accountId: res?.stripe_account_id || null
+  })
 }
+
 const checkStatusNetwork = async () => {
   loading.value = !stripeReady.value && !stripePending.value
+  logStripe("Vérification du statut Stripe…")
 
   try {
     const jwt = await getValidToken()
-    console.log("🟡 stripeconnectstatus → payload", {
-      prof_id: auth.user.prof_id,
-      jwt: jwt?.slice(0, 20) + "..."
-    })
+
+    logStripe("Contact du serveur…")
 
     const resp = await fetch(proxyUrl, {
       method: "POST",
@@ -142,47 +140,58 @@ const checkStatusNetwork = async () => {
       body: JSON.stringify({
         route: "stripeconnectstatus",
         jwt,
-        prof_id: auth.user.prof_id
+        user_id: auth.user.user_id
       })
     })
 
-    console.log("🟡 stripeconnectstatus → HTTP", resp.status)
+    logStripe(`Réponse serveur (${resp.status})`)
 
     const text = await resp.text()
-    console.log("🟡 stripeconnectstatus → raw", text)
+
+    if (!text.trim().startsWith("{")) {
+      logStripe("Erreur serveur Stripe ❌")
+      throw new Error("Non-JSON response")
+    }
 
     const res = JSON.parse(text)
-    console.log("🟢 stripeconnectstatus → parsed", res)
 
     applyStripeState(res)
-    saveStripeToCache(auth.user.prof_id, res)
+    saveStripeToCache(auth.user.user_id, res)
+
+    if (res.stripe_ready) {
+      logStripe("Paiements Stripe activés ✅")
+    } else if (res.stripe_account_id) {
+      logStripe("Compte Stripe créé — onboarding requis ⏳")
+    } else {
+      logStripe("Stripe non initialisé ❌")
+    }
 
   } catch (e) {
     console.error("❌ stripeconnectstatus ERROR", e)
+    logStripe("Erreur de communication avec Stripe ❌")
   } finally {
     loading.value = false
   }
 }
 
 
+
 // =====================================================
 // 🔎 CHECK STATUS
 // =====================================================
 const checkStatus = () => {
-  const profId = auth.user?.prof_id
-  if (!profId) return
+const userId = auth.user?.user_id
+if (!userId) return
 
-  // 1️⃣ cache immédiat
-  const cached = loadStripeFromCache(profId)
-  if (cached) {
-    applyStripeState(cached)
-    // 🔥 refresh arrière-plan
-    checkStatusNetwork()
-    return
-  }
-
-  // 2️⃣ pas de cache → réseau
+const cached = loadStripeFromCache(userId)
+if (cached) {
+  applyStripeState(cached)
   checkStatusNetwork()
+  return
+}
+
+checkStatusNetwork()
+
 }
 
 
@@ -190,7 +199,7 @@ const checkStatus = () => {
 // 🔗 GO TO STRIPE CONNECT
 // =====================================================
 const goToStripeConnect = async () => {
-  clearStripeCache(auth.user.prof_id)
+clearStripeCache(auth.user.user_id)
 
   onboardingStarted.value = true
   onboardingLoading.value = true
@@ -253,11 +262,12 @@ const goToStripeConnect = async () => {
     const resp = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "stripeconnectlink",
-        jwt,
-        prof_id: auth.user.prof_id
-      })
+     body: JSON.stringify({
+  route: "stripeconnectlink",
+  jwt,
+  user_id: auth.user.user_id
+})
+
     })
 
     const text = await resp.text()

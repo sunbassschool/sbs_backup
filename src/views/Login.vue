@@ -1,6 +1,6 @@
 <template>
   <Layout>
-    
+
 <!-- 🟡 Phase 2 : SUCCESS -->
 <div v-if="loginSuccess" class="login-status-box">
   <div class="login-status-title">Connexion réussie</div>
@@ -61,7 +61,6 @@
 import { Form, Field, ErrorMessage } from 'vee-validate'
 import { getDeviceId } from "@/utils/device.ts"
 import { getProxyPostURL } from "@/config/gas"
-
 import * as yup from 'yup'
 import { useToast } from 'vue-toastification'
 import { useAuthStore } from '@/stores/authStore.js'
@@ -81,6 +80,7 @@ import { useRouter } from 'vue-router'
 let loginStartTime = 0
 let hashStart = 0;
 let fetchStart = 0;
+const authStore = useAuthStore()
 
 const loginSuccess = ref(false)
 const loginProcessing = ref(false)
@@ -119,6 +119,8 @@ async function sha256(text) {
 async function onSubmit(values) {
   loginStartTime = performance.now();
   hashStart = performance.now();
+  authStore.isLoggingIn = true
+
   // 🔥 Reset pour que la reconnexion déclenche le watcher splash
 
   if (values.botField) {
@@ -142,7 +144,7 @@ async function onSubmit(values) {
     // -------------------------
 const deviceInfo = navigator.userAgent;
 const apiURL = getProxyPostURL();
-   
+
 fetchStart = performance.now();
 const controller = new AbortController();
 setTimeout(() => controller.abort(), 8000);
@@ -215,6 +217,8 @@ auth.setSessionData({
   }
 });
 console.log("💥 USER STORE (login):", JSON.parse(JSON.stringify(auth.user)))
+await auth.initAuth()
+
 
 
 
@@ -245,6 +249,8 @@ if (payload.role === "prof") {
 
   } finally {
     loading.value = false;
+    authStore.isLoggingIn = false
+
   }
 }
 

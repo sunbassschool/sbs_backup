@@ -45,7 +45,18 @@
     <p>
       <span @click="showModal = true" class="editable text-warning" style="cursor: pointer;">
         ✏️ Modifier mes infos
-      </span>
+      </span><br />
+<a
+  v-if="canEditProfProfile"
+  class="link-prof-profile"
+  @click="showProfModal = true"
+>
+  ✏️ Compléter ma fiche prof
+</a>
+
+
+
+
     </p>
   </div>
 
@@ -310,7 +321,20 @@
 
   </div>
 </div>
-
+ <teleport to="body">
+      <div
+        v-if="showProfModal"
+        class="modal-overlay"
+        @click.self="showProfModal = false"
+      >
+        <div class="modal-card">
+          <ProfProfileForm
+            @saved="onSaved"
+            @cancel="showProfModal = false"
+          />
+        </div>
+      </div>
+    </teleport>
   </Layout>
 </template>
 <script setup>
@@ -320,6 +344,7 @@ import { useRouter, onBeforeRouteLeave } from "vue-router";
 import VueCropper from "vue-cropperjs";
 import "@/assets/styles/cropper.css";
 import { getProxyPostURL, getProxyGetURL } from "@/config/gas"
+import ProfProfileForm from "@/components/Profs/ProfProfileForm.vue"
 
 
 
@@ -328,12 +353,17 @@ import { useAuthStore } from "@/stores/authStore.js";
 
 // === STORES ===
 const authStore = useAuthStore();
+const canEditProfProfile = computed(() => {
+  return authStore.user?.role === "prof" || authStore.user?.role === "admin"
+})
+
+const showProfModal = ref(false)
 
 
 // === ROUTER ===
 const router = useRouter();
 
-// telephone 
+// telephone
 const telephoneInput = ref(null);
 
 
@@ -353,9 +383,9 @@ watch(objectif, (v) => {
 
 
 // Email toujours disponible ici grâce au patch dans fetchUserData()
-const email = authStore.user?.email 
-           || localStorage.getItem("email") 
-           || sessionStorage.getItem("email") 
+const email = authStore.user?.email
+           || localStorage.getItem("email")
+           || sessionStorage.getItem("email")
            || "";
 
 const prenom = localStorage.getItem("prenom") || "";
@@ -409,7 +439,7 @@ watch(
   (val) => {
     if (!val) return;
 
-  
+
     editableObjectif.value = val;
 
     // sauvegarde
@@ -507,7 +537,9 @@ onBeforeRouteLeave((to, from, next) => {
 });
 
 
-
+function onSaved() {
+  showProfModal.value = false
+}
 function editField(field) {
   editingField.value[field] = true;
 
@@ -687,9 +719,9 @@ async function handleAvatarUpload(event) {
 
   reader.onload = async () => {
     const base64Data = reader.result.split(",")[1];
-  const email = authStore.user?.email 
-           || localStorage.getItem("email") 
-           || sessionStorage.getItem("email") 
+  const email = authStore.user?.email
+           || localStorage.getItem("email")
+           || sessionStorage.getItem("email")
            || "";
 
 
@@ -742,7 +774,7 @@ const proxyURL = getProxyPostURL();
       userData.value.avatar_url = data.url;
 
       triggerToast("🖼️ Avatar mis à jour !");
-    } 
+    }
     catch (err) {
       console.error("❌ Erreur fetch avatar :", err);
       triggerToast("❌ Problème réseau");
@@ -955,9 +987,9 @@ const proxyURL = getProxyGetURL(
 async function updateObjectifOnServer(prenomLocal, jwt, objectifValue) {
   // 🧠 1. Mise à jour immédiate du localStorage
   const userInfosKey = `userInfos_${prenomLocal}`;
-const email = authStore.user?.email 
-           || localStorage.getItem("email") 
-           || sessionStorage.getItem("email") 
+const email = authStore.user?.email
+           || localStorage.getItem("email")
+           || sessionStorage.getItem("email")
            || "";
 
 
@@ -1110,9 +1142,9 @@ authStore.user.objectif = newObjectif;
 
 
 onMounted(async () => {
-const email = authStore.user?.email 
-           || localStorage.getItem("email") 
-           || sessionStorage.getItem("email") 
+const email = authStore.user?.email
+           || localStorage.getItem("email")
+           || sessionStorage.getItem("email")
            || "";
 
 const prenom = authStore.user?.prenom || localStorage.getItem("prenom") || "";
@@ -1246,7 +1278,7 @@ async function safeSyncUserData() {
 await nextTick();
 
 
- 
+
 
 window.addEventListener('userDataUpdated', (event) => {
   if (event.detail.prenom === prenom) {
@@ -1590,9 +1622,54 @@ a:hover,
 
 /* ========================= */
 
+/* =====================
+   VALIDATION
+   ===================== */
 .is-invalid {
-  border-color: #ef4444;
-  box-shadow: 0 0 0 0.15rem rgba(239,68,68,0.35);
+  border-color: #ef4444 !important;
+  background: #120708;
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.25);
 }
+
+/* =====================
+   MODALE
+   ===================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-card {
+  background: #0b0b0c;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 16px;
+  border: 1px solid #1f1f22;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+}
+
+/* =====================
+   LIEN EDIT
+   ===================== */
+.edit-link {
+  cursor: pointer;
+  text-decoration: none;
+  color: #9ca3af;
+  font-size: 12px;
+  transition: color .15s ease, opacity .15s ease;
+}
+
+.edit-link:hover {
+  color: #f3f4f6;
+  opacity: 1;
+  text-decoration: underline;
+}
+
 
 </style>

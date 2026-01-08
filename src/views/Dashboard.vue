@@ -132,7 +132,7 @@ export default {
 
 data() {
   const auth = useAuthStore();
-  
+
   const email = localStorage.getItem("email") || "";
   const prenom = localStorage.getItem("prenom") || "";
 
@@ -254,19 +254,38 @@ async mounted() {
     (Array.isArray(cachedDashboard.planning) ||
       cachedDashboard.planning === undefined); // élève sans prof OK
 
-  const hasObjectif = auth.user?.objectif !== undefined;
+const hasObjectif = true;
 
   // --------------------------------------------------
   // 4️⃣ 🚀 RENDER IMMÉDIAT si cache exploitable
   // --------------------------------------------------
-  if (hasPlanningCache && hasObjectif) {
-    this.updateData(cachedDashboard || {});
-    this.dashboardReady = true;
+if (hasPlanningCache) {
 
-    // 🔄 refresh en arrière-plan (non bloquant)
-    this.fetchFromAPI(true);
-    return;
+  // 🌱 Seed visuel AVANT render
+  if (!this.auth.user?.objectif) {
+    try {
+      const email = this.email || localStorage.getItem("email")
+      if (email) {
+        const raw = localStorage.getItem(`userData_${email}`)
+        if (raw) {
+          const cached = JSON.parse(raw)
+          if (cached?.objectif) {
+            this.auth.user.objectif = cached.objectif
+          }
+        }
+      }
+    } catch {}
   }
+
+  // 🚀 render immédiat
+  this.updateData(cachedDashboard || {})
+  this.dashboardReady = true
+
+  // 🔄 refresh silencieux
+  this.fetchFromAPI(true)
+  return
+}
+
 
   // --------------------------------------------------
   // 5️⃣ FALLBACK — pas de cache exploitable
@@ -388,7 +407,7 @@ const url = getProxyPostURL();
       localStorage.setItem(key, "");
       this.updateNote();
     },
-// méthode pour redirection 
+// méthode pour redirection
 goToUploads() {
   this.$router.push("/eleve-uploads")
 }
@@ -424,7 +443,7 @@ const url = getProxyGetURL(
     const raw = await fetch(url).then(r => r.text())
     const data = JSON.parse(raw)
 
- 
+
     if (Array.isArray(data.planning)) {
       data.planning.forEach((c, i) => {
         const d = new Date(c.date)
@@ -578,7 +597,7 @@ this.cards = [
     // -------------------------
     isCacheValid(d) {
       if (!d) return false;
-      return Array.isArray(d.planning) || d.objectif;
+return Array.isArray(d.planning);
     },
 
 
@@ -671,9 +690,9 @@ this.cards = [
 .refresh-note-btn:hover {
   background-color: rgba(255, 255, 255, 0.15);
   color: #ffffff;
-  
+
   border:none;
- 
+
 }
 
 .refresh-note-btn:disabled {
@@ -684,7 +703,7 @@ this.cards = [
 .spinner-border {
   width: 1rem;
   height: 1rem;
-  
+
   color: #ff8c00;
 }
 
@@ -716,7 +735,7 @@ this.cards = [
 
 
 @media (max-width: 768px) {
-  
+
   .dashboard-card {
     padding: 7px !important; /* 📏 Réduction du padding général */
     min-height: auto !important; /* ✅ Évite un agrandissement inutile */
@@ -788,7 +807,7 @@ textarea.form-control {
   height: auto; /* ✅ Permet l'agrandissement */
   overflow-y: auto !important; /* ✅ Active le scroll si nécessaire */
   resize: vertical; /* ✅ L’utilisateur peut agrandir la zone */
-  
+
   font-family: 'Patrick Hand', cursive;
   font-size: 1.2rem;
   background: #ffffff;
@@ -799,7 +818,7 @@ textarea.form-control {
   color: #3d3d3d;
   border-radius: 5px;
   box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.1);
-  
+
   white-space: pre-wrap;
   animation: fadeInText 1s ease-out;
   caret-color: #3d3d3d; /* ✅ Affiche un vrai curseur */
@@ -819,7 +838,7 @@ textarea.form-control {
   color: #3d3d3d;
   border-radius: 5px;
   box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.1);
-  
+
   white-space: pre-wrap;
   animation: fadeInText 1s ease-out;
   caret-color: #3d3d3d; /* ✅ Affiche un vrai curseur */
@@ -1010,13 +1029,13 @@ textarea.form-control:focus {
 .dashboard-card p {
   font-size: 14px;
   color: #fff!important;
-  
+
   font-weight: 400; /* Poids de police normal */
    text-align: left; /* Alignement naturel */
   line-height: 1.5; /* Espacement optimal */
   letter-spacing: 0.3px; /* Espacement subtil pour la lisibilité */
   transition: color 0.3s ease-in-out;
-  
+
 }
 
 
@@ -1234,14 +1253,14 @@ button:hover {
   background-color: #ff3c00;
   color: white;
   font-size: 1rem;
-  
+
   border: none;
   border-radius: 15px;
   padding: 1px 10px;
   margin-bottom: 10px;
   cursor: pointer;
   transition: background-color 0.3s ease-in-out;
-  
+
 }
 .meet-button-wrapper {
   position: relative;
@@ -1254,7 +1273,7 @@ button:hover {
   font-weight: bold;
   border: 2px solid #ff0000;
   border-radius: 10px;
-  
+
 }
 
 .pulse-badge {
@@ -1292,7 +1311,7 @@ button:hover {
 }
 
 .logout-container {
-  
+
   pointer-events: auto;
   display: flex;
   align-items: center;

@@ -4,7 +4,7 @@
 
       <!-- HEADER -->
       <header class="header">
-    
+
 
         <button
           class="btn-primary"
@@ -14,6 +14,7 @@
           ➕ Ajouter une partition
         </button>
       </header>
+
 
       <!-- UPLOAD -->
       <UploadFileCore
@@ -28,70 +29,14 @@
   Chargement des partitions…
 </div>
 
-<div v-else-if="partitions.length" class="list">
-  <div class="list-header">
-    <span>Nom</span>
-    <span>Date</span>
-  </div>
-
-<div
-  v-for="p in partitions"
-  :key="p.upload_id"
-  class="row"
-  @click="preview(p)"
-  @contextmenu.prevent="openPartitionMenu($event, p)"
-  @touchstart.passive="startLongPress($event, p)"
-  @touchend="cancelLongPress"
->
-
-
-  <div class="name">
-      <button
-    class="edit-btn inline"
-    title="Éditer"
-    @click.stop="openEdit(p)"
-  >
-    ✏️
-  </button>
-    <span v-if="isIncomplete(p)" class="warn">⚠️</span>
-
-<span
-  v-if="!isRenaming(p)"
-  class="filename"
-  @dblclick.stop="startRename(p)"
->
-  {{ p.file_name }}
-</span>
-
-<input
-  v-else
-  class="rename-input"
-  v-model="renameValue"
-  @blur="confirmRename(p)"
-  @keyup.enter="confirmRename(p)"
-  @keyup.esc="cancelRename"
-  ref="renameInput"
+<PartitionsList
+  v-else-if="filteredPartitions.length"
+ :partitions="filteredPartitions"
+  :readonly="false"
+  @delete="softDeletePartition"
+  @edit="openEdit"
 />
 
-    <!-- META BADGES -->
-  <span v-if="hasVal(p.niveau)" class="badge badge-niveau">{{ p.niveau }}</span>
-<span v-if="hasVal(p.style)" class="badge badge-style">{{ p.style }}</span>
-
-  </div>
-
-<div class="actions">
-
-
-
-  <span class="date">
-    {{ formatDate(p.created_at) }}
-  </span>
-</div>
-
-</div>
-
-
-</div>
 
 <p v-else class="empty">
   Aucune partition
@@ -100,30 +45,7 @@
 
     </div>
 
-    <!-- PREVIEW -->
-    <div
-      v-if="showPreview"
-      class="preview-backdrop"
-      @click.self="showPreview=false"
-    >
- 
 
-      <div class="preview-panel">
-        <header class="preview-header">
-          <strong>{{ previewFile.file_name }}</strong>
-
-          <div class="actions">
-            <button @click="open(previewFile.file_url)">Ouvrir</button>
-            <button class="close" @click="showPreview=false">✖</button>
-          </div>
-        </header>
-
-        <iframe
-          :src="previewFile.file_url"
-          class="preview-frame"
-        />
-      </div>
-    </div>
 <!-- EDIT META MODAL -->
 <div
   v-if="showEdit"
@@ -233,15 +155,19 @@
 
 
 <script setup>
-import { ref, onMounted, watch } from "vue"
+import { ref, onMounted, watch, computed } from "vue"
 import Layout from "@/views/Layout.vue"
 import UploadFileCore from "@/components/UploadFileCore.vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getProxyPostURL } from "@/config/gas"
+import PartitionsList from "@/components/partitions/PartitionsList.vue"
 
 // =====================================================
 // SETUP
 // =====================================================
+
+const emit = defineEmits(["delete", "edit"])
+
 const auth = useAuthStore()
 const contextMenu = ref({
   visible: false,
@@ -249,6 +175,7 @@ const contextMenu = ref({
   y: 0,
   target: null
 })
+const search = ref("")
 
 const proxyUrl = getProxyPostURL()
 const openEdit = (p) => {
@@ -326,8 +253,6 @@ const cancelLongPress = () => {
 }
 
 const showUpload = ref(false)
-const showPreview = ref(false)
-const previewFile = ref(null)
 
 const loadingPartitions = ref(true)
 const meta = ref({
@@ -348,7 +273,7 @@ const isRenaming = (p) => renamingId.value === p.upload_id
 const startRename = (p) => {
   renamingId.value = p.upload_id
   renameValue.value = p.file_name
-// soft delete 
+// soft delete
 
   // focus input
   requestAnimationFrame(() => {
@@ -484,7 +409,7 @@ const initFolder = async () => {
   }
 }
 
-// ouverture modal meta 
+// ouverture modal meta
 
 // =====================================================
 // LOAD PARTITIONS
@@ -511,6 +436,12 @@ const loadPartitions = async () => {
 }
 
 const refreshPartitions = async () => {
+  console.group("📂 refreshPartitions DEBUG")
+
+  console.log("🔑 jwt :", auth.jwt)
+  console.log("👤 prof_id :", auth.user?.prof_id)
+  console.log("📁 partitionsFolderId :", partitionsFolderId.value)
+
   try {
     const res = await fetch(proxyUrl, {
       method: "POST",
@@ -520,52 +451,63 @@ const refreshPartitions = async () => {
         jwt: auth.jwt,
         prof_id: auth.user.prof_id
       })
-    }).then(r => r.json())
+    })
 
-    if (res.success) {
-   const fresh = res.uploads
-  .filter(u =>
-    u.folder_id === partitionsFolderId.value &&
-    !u.deleted_at // ou !u.is_deleted
-  )
+    const text = await res.text()
+    console.log("📥 réponse brute :", text)
 
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    const data = JSON.parse(text)
+    console.log("📦 data parsée :", data)
 
-      partitions.value = fresh
-
-      sessionStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({ ts: Date.now(), data: fresh })
-      )
+    if (!data.success) {
+      console.error("❌ backend success=false")
+      console.groupEnd()
+      return
     }
+
+    console.log("📄 uploads reçus :", data.uploads)
+    console.log("📄 count uploads :", data.uploads.length)
+
+const fresh = data.uploads.filter(u => {
+  const notDeleted = !u.deleted_at && !u.is_deleted
+
+  // legacy uploads → on les accepte
+  if (!u.folder_id) return notDeleted
+
+  // mauvais folder historique → on accepte quand même
+  if (u.folder_id !== partitionsFolderId.value) {
+    console.warn("⚠️ legacy folder", u.upload_id)
+    return notDeleted
+  }
+
+  return notDeleted
+})
+
+
+    console.log("✅ après filtre :", fresh)
+    console.log("✅ count final :", fresh.length)
+
+    const sorted = fresh.sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    )
+
+    partitions.value = sorted
+
+    sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ ts: Date.now(), data: sorted })
+    )
+
   } catch (e) {
-    console.error("❌ refreshPartitions", e)
+    console.error("🔥 refreshPartitions ERROR", e)
   } finally {
     loadingPartitions.value = false
+    console.groupEnd()
   }
 }
 
-// =====================================================
-// PREVIEW
-// =====================================================
-const preview = (p) => {
-  meta.value = {
-    style: p.style || "",
-    niveau: p.niveau || "",
-    compositeur: p.compositeur || "",
-    tags: p.tags || "",
-    visibility: p.visibility || "prof",
-    allowed_eleves: p.allowed_eleves || ""
-  }
 
-  if (!p.file_type?.includes("pdf")) {
-    open(p.file_url)
-    return
-  }
 
-  previewFile.value = p
-  showPreview.value = true
-}
 
 // save meta
 const saveMeta = () => {
@@ -642,7 +584,7 @@ const saveMeta = () => {
 
 
 
-// softdelete 
+// softdelete
 const softDeletePartition = async (p) => {
   console.group("🗑️ [softDeletePartition]")
   console.log("▶️ partition cible :", p)
@@ -716,6 +658,24 @@ const softDeletePartition = async (p) => {
 }
 
 
+// searh bar
+const filteredPartitions = computed(() => {
+  if (!search.value) return partitions.value
+
+  const q = search.value.toLowerCase()
+
+  return partitions.value.filter(p =>
+    [
+      p.file_name,
+      p.style,
+      p.niveau,
+      p.compositeur,
+      p.tags
+    ].some(v =>
+      String(v || "").toLowerCase().includes(q)
+    )
+  )
+})
 
 
 
@@ -1324,6 +1284,54 @@ window.addEventListener("beforeunload", () => {
   position: fixed;
   inset: 0;
   z-index: 9998;
+}
+/* search bar */
+.search-bar {
+  position: relative;
+  max-width: 420px;
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 36px 10px 38px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #111827;
+  color:#000;
+  box-shadow: 0 0 0 3px rgba(17,24,39,0.08);
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  font-size: 0.9rem;
+}
+
+.clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 0.9rem;
+}
+
+.clear-btn:hover {
+  opacity: 0.9;
 }
 
 </style>

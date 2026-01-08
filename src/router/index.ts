@@ -262,17 +262,8 @@ const router = createRouter({
     { path: "/partitions", name: "partitions", component: Partitions },
     { path: "/videos", name: "videos", component: Videos },
     { path: "/Metronome", name: "Metronome", component: Metronome },
-{
-  path: "/BassTuner",
-  component: () => import("@/views/Layout.vue"),
-  children: [
-    {
-      path: "",
-      name: "BassTuner",
-      component: () => import("@/views/BassTuner.vue")
-    }
-  ]
-},
+    { path: "/BassTuner", name: "BassTuner", component: BassTuner },
+
     { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
 
     { path: "/registerform", name: "registerform", component: RegisterForm },

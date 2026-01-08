@@ -20,9 +20,10 @@
 
      <!-- 🔄 Loading spinner -->
 <div v-if="isLoading" class="text-center my-5">
-  <div class="spinner-border text-primary" role="status">
-    <span class="visually-hidden">Chargement...</span>
-  </div>
+<div class="sbs-spinner-wrap">
+  <div class="sbs-spinner" aria-label="Chargement"></div>
+</div>
+
 </div>
 
 <!-- 🧾 Aucun replay -->
@@ -565,5 +566,26 @@ background: #111;
 .replay-thumbnail:hover {
   transform: scale(1.02);
 }
+.sbs-spinner-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.sbs-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top: 2px solid #7a0c0c;
+  border-right: 2px solid #7a0c0c;
+  animation: sbs-rotate 0.8s linear infinite;
+}
+
+@keyframes sbs-rotate {
+  to { transform: rotate(360deg); }
+}
+
+
 
 </style>

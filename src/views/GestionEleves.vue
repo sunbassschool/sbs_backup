@@ -1,18 +1,18 @@
 <template>
     <Layout>
       <div class="container mt-4">
-        
-  
+
+
         <!-- 🔄 Loading -->
        <div v-if="loading" class="sbs-loading">
   <div class="sbs-spinner"></div>
   <span class="sbs-loading-text">Chargement des élèves…</span>
 </div>
 
-  
+
         <!-- ❌ Erreur -->
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
-  
+
         <!-- ✅ Élèves -->
       <!-- ========================= -->
 <!-- 👥 LISTE LIGHT DES ÉLÈVES -->
@@ -23,7 +23,7 @@
 >
   <div
     v-for="eleve in eleves"
-    :key="eleve.email"
+:key="eleve.user_id"
     class="modern-card eleve-row"
     @click="selectEleve(eleve)"
   >
@@ -104,7 +104,7 @@
   </div>
 </div>
 
-  
+
         <!-- ℹ️ Aucun élève -->
         <div v-if="!eleves.length && !loading" class="text-center text-light">
           Aucun élève trouvé.
@@ -112,7 +112,7 @@
       </div>
     </Layout>
   </template>
-  
+
   <script>
   import Layout from "@/views/Layout.vue";
   import { getValidToken } from "@/utils/api.ts";
@@ -159,11 +159,9 @@ mounted() {
 ,
     methods: {
 sortEleves(list) {
-  return [...list].sort((a, b) => {
-    if (a.statut === b.statut) return 0
-    return a.statut === "inscrit" ? -1 : 1
-  })
+  return [...list]
 }
+
 ,
     selectEleve(eleve) {
   // clone → pas de rerender de toute la liste
@@ -294,7 +292,7 @@ this.store.elevesByProf[profId] = this.sortEleves(this.eleves)
 
 }
 ,
-    
+
 enableEdit(email, key) {
     this.editing = { ...this.editing, [email + key]: true };
 
@@ -311,25 +309,35 @@ async updateEleve(eleve) {
     return;
   }
 
-const url = getProxyPostURL();
- const payload = {
-  route: "updateelevecomplet",
-  jwt,
-  prof_id: this.auth.user.prof_id,   // ← obligatoire multi-prof
-  email: eleve.email,
-  nom: eleve.nom,
-  prenom: eleve.prenom,
-  telephone: eleve.telephone,
-  statut: eleve.statut,
-  objectif: eleve.objectif,
-  trimestre: eleve.trimestre,
-  cursus: eleve.cursus,
-  drive: eleve.drive,
-  youtube: eleve.youtube
-};
+  if (!eleve?.user_id) {
+    alert("Identifiant élève manquant.");
+    return;
+  }
 
+  const url = getProxyPostURL();
 
-  console.log("📤 Payload envoyé à updateelevecomplet :", payload);
+  const payload = {
+    route: "updateelevecomplet",
+    jwt,
+    prof_id: this.auth.user.prof_id,
+
+    // ✅ clé primaire
+    eleve_id: eleve.user_id,
+
+    // champs éditables
+    email: eleve.email,
+    nom: eleve.nom,
+    prenom: eleve.prenom,
+    telephone: eleve.telephone,
+    statut: eleve.statut,
+    objectif: eleve.objectif,
+    trimestre: eleve.trimestre,
+    cursus: eleve.cursus,
+    drive: eleve.drive,
+    youtube: eleve.youtube
+  };
+
+  console.log("📤 Payload updateEleveComplet :", payload);
   console.log("🌐 URL POST :", url);
 
   try {
@@ -340,29 +348,29 @@ const url = getProxyPostURL();
     });
 
     const result = await res.json();
-    console.log("📥 Réponse reçue :", result);
+    console.log("📥 Réponse API :", result);
 
-if (result.success) {
-  const profId = this.auth?.user?.prof_id
-  if (!profId) return
-
-  // 🔹 update liste locale
-  const i = this.eleves.findIndex(e => e.email === eleve.email)
-  if (i !== -1) {
-    this.eleves[i] = { ...eleve }
-  }
-
-  // 🔹 update cache Pinia
-  if (this.store.elevesByProf?.[profId]) {
-    this.store.elevesByProf[profId][i] = { ...eleve }
-    this.store.tsByProf[profId] = Date.now()
-  }
-}
-
-else {
-      console.warn("❌ Erreur de mise à jour :", result.message || "Aucun message retourné");
-      alert("Erreur : " + (result.message || "Aucun message retourné"));
+    if (!result.success) {
+      console.warn("❌ Erreur update élève :", result.message);
+      alert(result.message || "Erreur lors de la mise à jour.");
+      return;
     }
+
+    const profId = this.auth?.user?.prof_id;
+    if (!profId) return;
+
+    // 🔹 update liste locale (UUID)
+    const i = this.eleves.findIndex(e => e.user_id === eleve.user_id);
+    if (i !== -1) {
+      this.eleves[i] = { ...eleve };
+    }
+
+    // 🔹 update cache Pinia
+    if (this.store.elevesByProf?.[profId] && i !== -1) {
+      this.store.elevesByProf[profId][i] = { ...eleve };
+      this.store.tsByProf[profId] = Date.now();
+    }
+
   } catch (err) {
     console.error("❌ Erreur API updateEleve :", err);
     alert("Erreur de communication avec le serveur.");
@@ -370,246 +378,45 @@ else {
 }
 
 
+
     }
   };
   </script>
-  
-  <style scoped>
- /* ===================================================
-   🎛️ GLOBAL TUNING (compact SBS)
+
+<style>
+/* ===================================================
+   🎨 SBS ITUNES DARK PRO — DESIGN TOKENS
    =================================================== */
 
-.card {
-  transition: transform 0.15s ease;
-}
+:root {
+  --bg-main: #0b0d10;
+  --bg-card: rgba(255,255,255,0.03);
+  --bg-hover: rgba(255,255,255,0.055);
+  --bg-panel: rgba(255,255,255,0.045);
 
-.card:hover {
-  transform: scale(1.005);
+  --border-soft: rgba(255,255,255,0.08);
+  --border-focus: rgba(251,146,60,0.8);
+
+  --text-main: #e8e8e8;
+  --text-muted: #9aa0a6;
+  --text-soft: #7a7f86;
+
+  --accent: #fb923c;
+  --accent-soft: rgba(251,146,60,0.15);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
 }
 
 /* ===================================================
-   🧱 CARD ÉLÈVE (COMPACT)
+   🧱 LISTE ÉLÈVES — GRID DENSE
    =================================================== */
 
-.modern-card {
-  background: rgba(255, 255, 255, 0.025);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  box-shadow: none;
-  color: #e6e6e6;
-  backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: background-color 0.15s ease;
-}
-
-.modern-card:hover {
-  background: rgba(255, 255, 255, 0.045);
-  transform: none;
-}
-
-/* ===================================================
-   🧠 HEADER
-   =================================================== */
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.name {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-  line-height: 1.2;
-}
-
-/* ===================================================
-   🔘 TOGGLE
-   =================================================== */
-
-.toggle-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #bbb;
-  font-size: 0.85rem;
-  border-radius: 6px;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease;
-}
-
-.toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  cursor: pointer;
-}
-
-/* ===================================================
-   📦 CONTENU DÉPLIÉ
-   =================================================== */
-
-.card-details {
-  margin-top: 6px;
-}
-
-/* ===================================================
-   🏷️ FIELDS
-   =================================================== */
-
-.field {
-  margin-bottom: 4px;
-}
-
-
-.field label {
-  font-size: 0.8rem;
-  color: #8f8f8f;
-  margin-bottom: 1px;
-  letter-spacing: 0.03em;
-}
-
-
-.field-display,
-.editable-field {
-  padding: 2px 4px;      /* ⬅️ ULTRA COMPACT */
-  font-size: 0.9rem;
-  border-radius: 3px;
-  line-height: 1.2;
-}
-
-
-.field-display:hover,
-.editable-field:hover {
-  background-color: #2a2a2a;
-}
-
-/* ===================================================
-   ✏️ INPUTS (compact & SBS)
-   =================================================== */
-
-input,
-select {
-  padding: 2px 4px;
-  font-size: 0.75rem;
-  border-radius: 3px;
-}
-
-
-input:focus,
-select:focus {
-  border-color: #ff9800; /* accent SBS */
-  outline: none;
-}
-
-/* ===================================================
-   🧩 ÉTATS ÉLÈVES
-   =================================================== */
-
-.eleve-abandon {
-  opacity: 0.65;
-  background: rgba(255, 0, 0, 0.04);
-  border: 1px solid rgba(255, 77, 77, 0.4);
-}
-
-.eleve-inscrit {
-  background: rgba(0, 255, 0, 0.035);
-  border: 1px solid rgba(0, 170, 0, 0.5);
-}
-
-/* ===================================================
-   🔽 MODE MINIMAL (liste dense)
-   =================================================== */
-
-.modern-card.minimal {
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.015);
-  border-radius: 8px;
-  box-shadow: none;
-}
-
-.modern-card.minimal:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-/* ===================================================
-   🎞️ TRANSITIONS
-   =================================================== */
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.fade-slide-enter-from,
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-.card-details {
-  margin-top: 4px;
-}
-.modern-card {
-  padding: 8px 10px;
-}
-.modern-card.minimal {
-  padding: 4px 6px;
-}
-
-/* ===============================
-   🔄 SBS LOADING
-   =============================== */
-
-.sbs-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px 0;
-  color: #b5b5b5;
-  font-size: 0.8rem;
-}
-
-/* Spinner circulaire */
-.sbs-spinner {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #fb923c; /* 🔥 accent SBS */
-  animation: sbs-spin 0.7s linear infinite;
-}
-
-/* Animation */
-@keyframes sbs-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Texte */
-.sbs-loading-text {
-  line-height: 1;
-  color:#fb923c
-}
-.eleve-row {
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.eleve-row:hover {
-  background: rgba(255,255,255,0.05);
-}
 .eleves-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
 @media (max-width: 768px) {
@@ -618,23 +425,29 @@ select:focus {
   }
 }
 
-.eleve-badge {
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
+/* ===================================================
+   🧾 CARD ÉLÈVE (LISTE)
+   =================================================== */
+
+.modern-card.eleve-row {
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
 
-.eleve-badge.ok {
-  background: #198754; /* vert */
-  color: #fff;
+.modern-card.eleve-row:hover {
+  background: var(--bg-hover);
+  border-color: rgba(255,255,255,0.18);
 }
 
-.eleve-badge.ko {
-  background: #6c757d; /* gris */
-  color: #fff;
-}
+/* ===================================================
+   🧠 LIGNE ÉLÈVE
+   =================================================== */
+
 .eleve-line {
   display: flex;
   align-items: center;
@@ -643,19 +456,57 @@ select:focus {
 }
 
 .eleve-name {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.eleve-detail {
-  max-width: 640px;   /* 👈 largeur utile */
+/* ===================================================
+   🏷️ BADGE STATUT (FIN & PREMIUM)
+   =================================================== */
+
+.eleve-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.eleve-badge.ok {
+  background: rgba(40, 167, 69, 0.18);
+  color: #9be7b3;
+  border: 1px solid rgba(40,167,69,0.45);
+}
+
+.eleve-badge.ko {
+  background: rgba(108,117,125,0.25);
+  color: #cfd3d7;
+  border: 1px solid rgba(108,117,125,0.4);
+}
+
+/* ===================================================
+   👤 PANNEAU DÉTAIL ÉLÈVE
+   =================================================== */
+
+.eleve-detail,
+.modern-card:not(.eleve-row) {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  max-width: 640px;
   margin: 0 auto;
 }
 
 @media (min-width: 769px) {
-  .eleve-detail {
+  .eleve-detail,
+  .modern-card:not(.eleve-row) {
     position: fixed;
     right: 0;
     top: 0;
@@ -666,6 +517,142 @@ select:focus {
   }
 }
 
+/* ===================================================
+   🧠 HEADER DÉTAIL
+   =================================================== */
 
-  </style>
-  
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.card-header h5 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* ===================================================
+   🧾 FIELDS (ULTRA DENSE & CLEAN)
+   =================================================== */
+
+.card-details {
+  margin-top: 10px;
+}
+
+.field {
+  margin-bottom: 6px;
+}
+
+.field label {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin-bottom: 2px;
+}
+
+/* ===================================================
+   ✏️ INPUTS / SELECTS — iTunes-like
+   =================================================== */
+
+input,
+select {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  padding: 4px 6px;
+  font-size: 0.78rem;
+  color: var(--text-main);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+input:hover,
+select:hover {
+  background: rgba(255,255,255,0.07);
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  background: rgba(251,146,60,0.08);
+}
+
+/* ===================================================
+   🔄 LOADING — PREMIUM MINIMAL
+   =================================================== */
+
+.sbs-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.sbs-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: var(--accent);
+  animation: sbs-spin 0.7s linear infinite;
+}
+
+@keyframes sbs-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sbs-loading-text {
+  color: var(--accent);
+}
+
+/* ===================================================
+   🎞️ TRANSITIONS — SUBTILES
+   =================================================== */
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+/* ===================================================
+   🪟 MODALE DÉTAIL ÉLÈVE — CENTRÉE DESKTOP
+   =================================================== */
+
+@media (min-width: 769px) {
+  .modern-card:not(.eleve-row) {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+
+    width: 440px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 96px); /* header safe */
+
+    height: auto;
+    overflow-y: auto;
+
+    border-radius: 12px;
+  }
+}
+
+</style>

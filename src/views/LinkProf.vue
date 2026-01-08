@@ -35,6 +35,7 @@ import Layout from "@/views/Layout.vue";
 import { useAuthStore } from "@/stores/authStore.js";
 import router from "@/router/index.ts";
 import { getValidToken } from "@/utils/api.ts";
+import { getProxyPostURL } from "@/config/gas"
 
 export default {
   name: "LinkProf",
@@ -45,9 +46,7 @@ export default {
       loading: true,
       error: null,
 
-      routes: {
-        POST: "AKfycbw79WU9dbKFOuwfvxZ4JStUUbxFLoflCajeWY-NR3fB2qighdXWXrcnQrg0yzObaYGDbw/exec"
-      }
+     
     };
   },
 
@@ -78,18 +77,20 @@ export default {
       }
 
       // 3️⃣ Appel API
-      const url = this.getProxyPostURL(this.routes.POST);
-      const payload = {
-        route: "linkexistingusertoprof",
-        jwt,
-        invite
-      };
+  const url = getProxyPostURL()
 
-      const res = await fetch(url, {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" }
-      });
+const payload = {
+  route: "linkexistingusertoprof",
+  jwt,
+  invite
+}
+
+const res = await fetch(url, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload)
+})
+;
 
       const raw = await res.text();
       const json = JSON.parse(raw);
@@ -132,10 +133,7 @@ if (auth.user?.email) {
       router.push("/dashboard");
     },
 
-    getProxyPostURL(route) {
-      const base = `https://script.google.com/macros/s/${route}`;
-      return `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(base)}`;
-    }
+ 
   }
 };
 </script>

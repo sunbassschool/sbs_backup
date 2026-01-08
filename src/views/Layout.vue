@@ -21,7 +21,7 @@
 <!-- MENU : PUBLIC (non connecté) -->
 <!-- ======================== -->
 <template v-if="!isLoggedIn">
- 
+
 
   <router-link to="/videos" class="sidebar-link">
     <i class="bi bi-film"></i>
@@ -59,7 +59,9 @@
           <i class="bi bi-person-circle"></i>
           <span>Mon compte</span>
         </router-link>
-
+   <router-link v-if="isEleve" to="/mes-uploads" class="sidebar-link">
+        <i class="bi bi-calendar-check"></i><span>Drive</span>
+      </router-link>
     <router-link v-if="isLoggedIn && isEleve" to="/planning" class="sidebar-link">
           <i class="bi bi-calendar-check"></i>
           <span>Plannings</span>
@@ -122,7 +124,7 @@
   <i class="bi bi-wrench-adjustable"></i>
   <span>Gestion des cours</span>
 </router-link>
-   
+
 
       </nav>
     </aside>
@@ -192,7 +194,7 @@
           <router-link to="/moncompte" class="account-link">
             <i class="bi bi-person-gear"></i>
           </router-link>
-          
+
 
           <div v-if="user?.statut" class="subscription-badge mt-2">
             <template v-if="isSubscribed">
@@ -318,8 +320,8 @@
 <i class="bi bi-bag"></i><span>Ma boutique</span>
 </router-link>
 
-  
- 
+
+
 
     </div>
 
@@ -330,30 +332,8 @@
       <slot></slot>
     </main>
 
-    <!-- Refresh overlay / warnings -->
-    <div v-if="refreshFailed" class="error-message">
-      ⚠️ Session expirée, veuillez vous reconnecter.
-    </div>
 
-    <div v-if="tookTooLong" class="slow-warning">
-      ⏱️ Cela prend plus de temps que prévu…
-    </div>
-<!-- ========================================================= -->
-<!-- 🔁  MODE IMPERSONATION (ADMIN ↔ ÉLÈVE)                   -->
-<!-- ========================================================= -->
-<div v-if="isRealAdmin" class="impersonate-toggle">
-  <label class="switch-mode-toggle">
-    <input
-      type="checkbox"
-      :checked="authStore.impersonateStudent"
-      @change="authStore.toggleImpersonateStudent()"
-    />
-    <span class="slider"></span>
-    <span class="label-text">
-      {{ authStore.impersonateStudent ? '👤 Élève' : '👑 Admin' }}
-    </span>
-  </label>
-</div>
+
 
   </div>
 </template>
@@ -385,16 +365,6 @@ import {
 import MiniMetronome from "@/components/MiniMetronome.vue";
 import logo from "@/assets/logo.PNG";
 
-/* ============================================================================
-   🌐 SESSION EXPIRED GLOBAL FLAG
-   ============================================================================ */
-export const visible = ref(false);
-export function showSessionExpired() {
-  visible.value = true;
-}
-export function hideSessionExpired(delay = 3000) {
-  setTimeout(() => (visible.value = false), delay);
-}
 
 /* ============================================================================
    🎛️ LAYOUT COMPONENT
@@ -696,63 +666,6 @@ const isEleve = computed(() =>
 
 
 <style scoped>
-.impersonate-toggle {
-  position: fixed;
-  bottom: 10px;
-  right: 10px;
-  z-index: 10000;
-  background: rgba(255, 255, 255, 0.85); /* plus propre en foncé sur fond sombre */
-  border: none;
-  padding: 6px 10px;
-  border-radius: 8px;
-  box-shadow: 0 0 8px rgba(255,255,255,0.2);
-}
-
-.switch-mode-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.switch-mode-toggle input[type="checkbox"] {
-  display: none;
-}
-
-.switch-mode-toggle .slider {
-  width: 30px;
-  height: 20px;
-  background-color: #ccc;
-  border-radius: 10px;
-  position: relative;
-  transition: background 0.3s ease;
-}
-
-.switch-mode-toggle .slider::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  height: 16px;
-  width: 16px;
-  background: white;
-  border-radius: 50%;
-  transition: transform 0.3s ease;
-}
-
-.switch-mode-toggle input:checked + .slider {
-  background-color: #4caf50;
-}
-
-.switch-mode-toggle input:checked + .slider::before {
-  transform: translateX(20px);
-}
-
-.switch-mode-toggle .label-text {
-  font-weight: bold;
-  font-size: 0.9rem;
-}
-
 html, body {
   height: 100%;
   margin: 0;
@@ -762,8 +675,6 @@ html, body {
   flex: 1 1 auto;
   overflow-y: auto;
 }
-
-
 
 /* ✅ Style général du menu latéral */
 .sidebar {
@@ -791,23 +702,20 @@ html, body {
 .toggle-menu-btn {
   position: absolute;
   top: 50%;
-  left: 217px;
+  left: auto;
   transform: translateY(-50%);
   width: 28px;
   height: 56px;
-
   background: #0b0c0f;
+  margin-left:207px;
   border: 1px solid #1f2933;
   border-radius: 999px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   color: #fb923c; /* accent SBS */
   cursor: pointer;
   z-index: 1200;
-
   box-shadow: 0 6px 20px rgba(0,0,0,0.4);
   transition: background 0.15s ease, transform 0.15s ease;
 }
@@ -851,7 +759,6 @@ html, body {
     opacity: 95%; /* ✅ Améliorer la lisibilité */
     text-align: center;
     display: flex;
-    
     flex-direction: column;
     padding: 20px;
     box-shadow: 4px 0px 10px rgba(0, 0, 0, 0.2);
@@ -890,8 +797,7 @@ html, body {
   .mobile-menu a:not(:last-child),
   .mobile-menu .nav-link:not(:last-child) {
     border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-    padding-bottom: 8px;
-    margin-bottom: 8px;
+
   }
 }
 
@@ -932,7 +838,7 @@ html, body {
 }
 
 /* ✅ Affichage uniquement en mode Desktop */
-@media screen and (max-width: 1366px) {  
+@media screen and (max-width: 1366px) {
   .social-buttons {
     display: none !important; /* 🔥 Empêche toute réapparition */
   }
@@ -948,30 +854,11 @@ html, body {
   margin-top: 10px;
 }
 
-/* ✅ Style des icônes */
-.social-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 22px;
-  color: white;
-  transition: transform 0.3s ease-in-out, background 0.3s ease-in-out;
-}
 
-/* ✅ Couleurs spécifiques */
-.facebook { background: #3b5998; }
-.instagram { background: #e4405f; }
-.youtube { background: #ff0000; }
-.tiktok { background: #000000; }
 
-/* ✅ Effet hover */
-.social-link:hover {
-  transform: scale(1.1);
-  filter: brightness(1.2);
-}
+
+
+
 
 
 /* ✅ Boutons d'authentification sur desktop */
@@ -1003,7 +890,7 @@ html, body {
 }
 
 .trial-btn {
-  background: #f1c40f;
+  background: #f1750f;
   color: black;
 }
 
@@ -1014,9 +901,6 @@ html, body {
 
 
 /* ✅ S'assure qu'elle s'affiche UNIQUEMENT en mobile */
-
-
-
 
 @media screen and (min-width: 1024px) {
   .hero-banner .logo {
@@ -1046,7 +930,7 @@ html, body {
   overflow-y: auto; /* Active le scroll si besoin */
   transition: transform 0.4s ease-in-out; /* ✅ Animation fluide */
   transform: translateX(0);
-  
+
 }
 .sidebar::-webkit-scrollbar {
   width: 8px; /* ✅ Taille fine et élégante */
@@ -1057,7 +941,7 @@ html, body {
 }
 
 .sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3); /* ✅ Barre semi-transparente */
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 10px;
 }
 
@@ -1098,7 +982,6 @@ html, body {
 /* ✅ Logo en haut du menu */
 .sidebar-logo {
   text-align: center;
-  margin-bottom: 20px;
 }
 
 .sidebar-main-logo {
@@ -1173,7 +1056,7 @@ html, body {
   .sidebar {
     display: none; /* ❌ Cache la sidebar sur iPad */
   }
-  
+
   .menu-btn {
     display: flex !important; /* ✅ Affiche le bouton hamburger */
   }
@@ -1187,7 +1070,7 @@ html, body {
     align-items: center;
     justify-content: center;
   }
-  
+
   /* ✅ Corrige les styles spécifiques aux appareils Apple */
   .menu-btn:focus {
     outline: none !important; /* 🔄 Supprime le contour bleu sur iOS */
@@ -1195,11 +1078,7 @@ html, body {
 }
 }
 
-@media screen and (min-width: 768px) and (max-width: 1366px) { 
-  .navbar-container {
-    display: flex !important; /* ✅ Forcer l'affichage du menu */
-  }
-}
+
 
 @media screen and (min-width: 768px) and (max-width: 1024px) {
   .mobile-menu {
@@ -1210,7 +1089,7 @@ html, body {
     height: calc(100% - 80px); /* ✅ Prend tout l’espace sous le header */
     background: #000000;
     opacity: 88%;
-    
+
     flex-direction: column;
     padding: 15px;
     margin-top:3%;
@@ -1248,9 +1127,9 @@ html, body {
   font-size: 26px;
   cursor: pointer;
   position: absolute;
-  
+
   top: 20%;
- 
+
   transition: color 0.3s ease-in-out, transform 0.2s ease-in-out;
 }
 
@@ -1361,7 +1240,7 @@ html, body {
   text-align: center;
   margin-top: 10px;
   opacity: 0.9; /* Effet plus lisible */
-  
+
 }
 
 
@@ -1396,59 +1275,12 @@ html, body {
   margin: 0;
 }
 
-/* ✅ STYLE DES AUTRES BOUTONS */
-.nav-link {
-  display: flex;
-  flex-direction: column;
-  gap:-2px;
-  align-items: center;
-  color: white;
-  text-decoration: none;
-  font-size: 12px;
-  font-family: "Poppins", sans-serif; 
-  font-weight: 700 !important; /* Très gras */
 
-
-  padding: 15px;
-  transition: all 0.3s ease-in-out;
-}
-
-.nav-link i {
-  font-size: 22px;
-    font-family: "Poppins", sans-serif; 
-  font-weight: 700 !important; /* Très gras */
-  transition: transform 0.2s ease-in-out, color 0.3s ease-in-out, text-shadow 0.3s ease-in-out;
-}
-
-.nav-link:hover,
-.nav-link.router-link-exact-active {
-  color:rgb(250, 9, 9); /* Vert Spotify */
-    font-family: "Poppins", sans-serif; 
-  font-weight: 700 !important; /* Très gras */
-  text-shadow: 0px 0px 10px rgba(243, 14, 14, 0.8); /* Glow vert subtil */
-}
-.nav-link.logout {
-  background-color: transparent;
-  border: none;
-  cursor: pointer;
-}
-.nav-link:hover i,
-.nav-link.router-link-exact-active i {
-  transform: scale(1.1);
-}
-.nav-link:active {
-  transform: translateY(2px); /* Effet d'enfoncement */
-}
-
-.nav-link.logout:hover {
-  color: #ff4d4d;
-  text-shadow: 0px 0px 10px rgba(255, 77, 77, 0.8);
-}
 
 /* ✅ CONTENU PRINCIPAL */
 .page-content {
   flex-grow: 1;
- 
+
   overflow-y: auto;
   width: 100%;
   max-width: 100vw;
@@ -1460,53 +1292,19 @@ html, body {
   box-sizing: border-box;
 }
 
-
-.navbar-nav .nav-link {
-
-   /* ✅ Taille fixe pour éviter les micro-ajustements */
-
-  
-}
-.navbar-nav .nav-link:active {
-  transform: none !important;
-}
-.navbar-nav .nav-link:hover,
-.navbar-nav .nav-link.router-link-exact-active {
-  transform: none !important; /* 🔥 Empêche tout redimensionnement */
-  text-shadow: none !important; /* 🔥 Évite l'effet de tremblement */
-}
-@media screen and (min-width: 1024px) {
-  .navbar-container {
-    height: 0px; /* Ajuste la hauteur pour Desktop */
-  }
-
-  .navbar-nav .nav-link {
-  
-  
-  text-transform: uppercase;
-  font-family: "Poppins", sans-serif;
-}
-
-
- 
-}
-
 @media screen and (min-width: 1024px) {
   .logo {
     height: 100px;
     max-width: 220px;
     transition: transform 0.3s ease-in-out, filter 0.3s ease-in-out;
   }
-   
-
-
 
   .logo:hover {
     transform: scale(1.1); /* Zoom léger */
     filter: brightness(1.2); /* Légère mise en valeur */
   }
   .btn-cours {
-  background-color: #f1c40f;
+  background-color: #d44b0b;
   color: black !important;
   font-weight: bold;
   padding: 8px 15px;
@@ -1518,69 +1316,15 @@ html, body {
 }
 
 
-/* ✅ MENU FIXE EN BAS */
-/* ✅ Footer toujours visible, même sur desktop */
-.navbar-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 80px; /* Ajuste selon ta maquette */
-  background: linear-gradient(to top, #101010, #181818); 
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1100;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
 
 
-.loading {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 15px 20px;
-  border-radius: 5px;
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.loading-container {
-  position: fixed;  /* Rend le loader toujours visible */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);  /* Centre parfaitement */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.8); /* Fond légèrement opaque pour la visibilité */
-  z-index: 1000; /* Assure que le loader passe au-dessus */
-}
-
-.spinner-border {
-  width: 2rem;
-  height: 2rem;
-  color: red !important;
-}
 
 
-.navbar-nav {
- 
-  
-  flex-direction: row;
-  
 
-}
+
 
 .nav-item {
-  
+
   text-align: center;
 }
 
@@ -1636,8 +1380,6 @@ html, body {
 .mobile-menu a:not(:last-child),
 .mobile-menu .nav-link:not(:last-child) {
   border-bottom: 1px solid rgba(255, 255, 255, 0.3); /* Ligne séparatrice */
-  padding-bottom: 8px; /* Espacement */
-  margin-bottom: 8px;
 }
 
 /* ✅ Quand le menu est actif, il glisse à gauche */
@@ -1654,7 +1396,7 @@ html, body {
   align-items: center;
   justify-content: center;
   color: white;
-    font-family: "Poppins", sans-serif; 
+    font-family: "Poppins", sans-serif;
   font-weight: 700 !important; /* Très gras */
   font-size: 15px;
   text-decoration: none;
@@ -1664,7 +1406,7 @@ html, body {
 
 .mobile-menu .nav-link i {
   font-size: 13x; /* ✅ Taille des icônes */
-    font-family: "Poppins", sans-serif; 
+    font-family: "Poppins", sans-serif;
   font-weight: 700 !important; /* Très gras */
   margin-right: 0px; /* ✅ Ajout d'espace entre l'icône et le texte */
 }
@@ -1700,23 +1442,7 @@ html, body {
 .fullscreen footer {
   display: none;
 }
-/* ✅ Spécifique iOS Safari : sécurise l'espace en bas */
-@supports (-webkit-touch-callout: none) {
 
-
-.navbar-container {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 70px;
-  background: #181818;
-  padding-bottom: env(safe-area-inset-bottom); /* espace iPhone X+ */
-}
-
-}
-.navbar-container {
-  z-index: 9999; /* au-dessus de tout */
-}
 
 @media screen and (max-width: 768px) {
 .hero-banner {
@@ -1759,7 +1485,7 @@ html, body {
   text-transform: uppercase;
 }
 
-  
+
   .logo {
     margin-left:0%;
   }
@@ -1782,7 +1508,7 @@ html, body {
     max-width: 100vw !important; /* ✅ Empêcher toute limitation */
     padding: 0 !important; /* ✅ Supprimer les marges internes */
 margin-top:80px;
- 
+
   }
 }
 
@@ -1794,7 +1520,7 @@ margin-top:80px;
 }
 
 .hero-text {
-  flex-grow: 1;  
+  flex-grow: 1;
   display: flex;
   flex-direction: column;
   align-items: center; /* ✅ Centre horizontalement */
@@ -1861,32 +1587,8 @@ margin-top:80px;
     display: none !important;
   }
 
-  /* ✅ Correction : FORCER LE MENU BAS À RESTER VISIBLE */
-.navbar-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 80px;
-  background: linear-gradient(to top, #101010, #181818); /* Dégradé subtil */
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4); /* Ombre adoucie */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1100;
-
-}
 
 
-
-
-  .navbar-nav {
-    display: flex !important;
-    justify-content: space-around;
-    font-size:17px;
-    align-items: center;
-    width: 100%;
-  }
 }
 @media screen and (max-width: 1024px) {
   .page-content {
@@ -1894,38 +1596,10 @@ margin-top:80px;
     width: 100%; /* Pleine largeur */
 
   }
-  .navbar-container {
-    height: 70px; /* Augmenté pour plus de confort */
-  }
-
-  /* ✅ Taille des icônes et du texte */
-  .navbar-nav .nav-link {
-    font-size: 11px; /* 🔺 Augmente la taille du texte */
-    font-weight: 500; /* 🔺 Texte plus épais */
-    text-transform: uppercase;
-    font-family: "Poppins", sans-serif;
-    margin-top:-10px;
-  }
-
-  .navbar-nav .nav-link i {
-    font-size: 30px; /* 🔺 Icônes plus grandes */
-    margin-bottom: -10px; /* 🔺 Ajoute un peu d’espace */
-  }
-
-  /* ✅ Ajustement du padding pour améliorer l'accessibilité */
-  .navbar-nav .nav-link {
-    padding: 15px 10px; /* 🔺 Augmente la zone cliquable */
-  }
-
- 
 
 }
-.mobile-menu {
-  padding-bottom: calc(20px + env(safe-area-inset-bottom)); /* espace pour iPhone X+ */
-}
-.mobile-menu {
-  z-index: 1200; /* plus haut que le footer */
-}
+
+
 @media screen and (max-width: 768px) {
   .mobile-menu .nav-link {
     padding: 6px 8px;
@@ -1946,46 +1620,10 @@ margin-top:80px;
 }
 
 
-.loading-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background-color: rgba(0,0,0,0.9);
-  color: white;
-  z-index: 99999;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  font-size: 1.5rem;
-}
-.session-expired-banner {
-  background-color: #ffcccc;
-  color: #a00;
-  text-align: center;
-  padding: 12px;
-  font-weight: bold;
-  border-bottom: 2px solid #a00;
-}
-
 body.loading-active {
   overflow: hidden;
 }
-.refresh-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 9999999;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.2rem;
-  font-weight: bold;
-}
+
 </style>
 <style>
 .logout-toast {
@@ -2017,20 +1655,9 @@ body.loading-active {
   font-size: 1.2rem;
 }
 
-.spinner {
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-top: 4px solid white;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 15px;
-}
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
+
+
 .overlay .slow-warning {
   margin-top: 20px;
   color: #ffb3b3;
@@ -2042,42 +1669,7 @@ body.loading-active {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
-.session-expired {
-  position: fixed;
-  top: 0;
-  width: 100%;
-  background: #ff4d4d;
-  color: white;
-  padding: 12px;
-  text-align: center;
-  z-index: 999999;
-  font-weight: bold;
-}
-.session-expired {
-  position: fixed;
-  bottom: 10%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #ff4d4f;
-  color: white;
-  padding: 12px 20px;
-  border-radius: 6px;
-  z-index: 999999;
-  font-weight: bold;
-  box-shadow: 0 0 10px #ff4d4f;
-}
-.session-expired-overlay {
-  background: rgba(0, 0, 0, 0.85); /* Plus foncé */
-  z-index: 999999; /* Au-dessus de tout */
-}
 
-.session-expired-overlay .message {
-  font-size: 1.3rem;
-  color: #f52121;
-  font-weight: bold;
-  text-align: center;
-  margin-top: 15px;
-}
 .mobile-account-actions {
   position: absolute;
   top: 5px;
@@ -2177,6 +1769,12 @@ body.loading-active {
 }
 .subscription-badge-link:hover {
   background: #bb2d3b;
+}
+
+@media (max-width: 1024px) {
+  html, body, #app {
+    overflow-x: hidden !important;
+  }
 }
 
 </style>

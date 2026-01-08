@@ -2,10 +2,6 @@
   <Layout>
     <div class="page">
 
-      <header class="header">
-        <h2>Partitions</h2>
-      </header>
-
       <div v-if="loading" class="loading">
         Chargement des partitions…
       </div>
@@ -74,9 +70,17 @@ const saveToCache = (list) => {
 // 🌐 FETCH
 // ===============================
 const fetchPartitions = async ({ silent = false } = {}) => {
-  if (!silent) loading.value = true
+  console.group("📥 fetchPartitionsForEleve")
+
+  if (!silent) {
+    loading.value = true
+    console.log("⏳ loading = true")
+  }
 
   try {
+    console.log("➡️ appel API getpartitionsforeleve")
+    console.log("🔑 jwt :", auth.jwt)
+
     const res = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -84,18 +88,49 @@ const fetchPartitions = async ({ silent = false } = {}) => {
         route: "getpartitionsforeleve",
         jwt: auth.jwt
       })
-    }).then(r => r.json())
+    })
 
-    if (res.success) {
-      partitions.value = res.partitions || []
-      saveToCache(partitions.value)
+    const text = await res.text()
+    console.log("📥 réponse brute :", text)
+
+    const data = JSON.parse(text)
+    console.log("📦 data parsée :", data)
+
+    if (!data.success) {
+      console.error("❌ backend success=false", data.error)
+      console.groupEnd()
+      return
     }
+
+    console.log("📄 partitions reçues :", data.partitions)
+    console.log("📄 count :", data.partitions?.length || 0)
+
+    // DEBUG : structure
+    data.partitions?.forEach((p, i) => {
+      console.log(`🧩 [${i}]`, {
+        upload_id: p.upload_id,
+        folder_id: p.folder_id,
+        file_name: p.file_name,
+        visibility: p.visibility
+      })
+    })
+
+    partitions.value = data.partitions || []
+    saveToCache(partitions.value)
+
+    console.log("✅ partitions mises à jour + cache ok")
+
   } catch (e) {
-    console.error("❌ fetch partitions eleve", e)
+    console.error("🔥 fetchPartitionsForEleve ERROR", e)
   } finally {
-    if (!silent) loading.value = false
+    if (!silent) {
+      loading.value = false
+      console.log("⏹️ loading = false")
+    }
+    console.groupEnd()
   }
 }
+
 
 // ===============================
 // 🚀 INIT
@@ -110,6 +145,7 @@ onMounted(async () => {
 <style scoped>
 .page {
   padding: 16px;
+  margin-top:20px;
 }
 
 .header h2 {

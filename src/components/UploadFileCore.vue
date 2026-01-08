@@ -28,14 +28,18 @@
 </small>      </div>
     </label>
 
-    <!-- PROGRESS -->
-    <div v-if="progress > 0" class="progress-bar-wrapper">
-      <p v-if="currentFile">
-  {{ totalFiles }} fichier(s) en cours…
-</p>
+ <!-- PROGRESS GLOBAL -->
+<div v-if="globalProgress > 0" class="progress-bar-wrapper">
+  <p>
+    {{ totalFiles }} fichier(s) en cours… — {{ globalProgress }} %
+  </p>
 
-      <div class="progress-bar" :style="{ width: progress + '%' }"></div>
-    </div>
+  <div
+    class="progress-bar"
+    :style="{ width: globalProgress + '%' }"
+  ></div>
+</div>
+
 
     <!-- ACTIONS -->
     <button
@@ -59,17 +63,29 @@
 
 
 
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue"
-import { useAuthStore } from "@/stores/authStore"
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getValidToken } from "@/utils/api.ts"
 import { getProxyPostURL } from "@/config/gas.ts"
 
 const auth = useAuthStore()
-const emit = defineEmits(["uploaded", "done"])
+const emit = defineEmits([
+  "uploaded",
+  "done",
+  "queued",
+  "files-selected",
+    "error", // 👈 AJOUTE ÇA
+  "progress"
+])
 const uploadSessionId = ref(null)
 
 const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent)
 const MAX_MOBILE_SIZE = 50 * 1024 * 1024 // 50 Mo
+let batchJwt = null
+const MAX_PARALLEL = 3
+const uploadedBatch = ref([])
+const activeProgress = ref({}) // { optimistic_id: percent }
+const globalProgress = ref(0)
 
 
 
@@ -106,144 +122,249 @@ const isEleveContext = computed(() => {
 
   return folder?.owner_type === "eleve"
 })
+const uploadsOptimistic = ref([])
 
-const onFileSelect = e => {
-  // ⛔ si un upload est déjà en cours via drop
-  if (filesQueue.value.length || uploading.value) return
+function handleFiles(files) {
+  if (uploading.value) return
+  if (!files || !files.length) return
 
-const files = Array.from(e.target.files)
-
-if (isMobile) {
-  const tooBig = files.find(f => f.size > MAX_MOBILE_SIZE)
-  if (tooBig) {
-    error.value = "⚠️ Fichier trop volumineux. Upload recommandé sur ordinateur."
-    return
+  // garde-fou mobile
+  if (isMobile) {
+    const tooBig = files.find(f => f.size > MAX_MOBILE_SIZE)
+    if (tooBig) {
+      error.value = "⚠️ Fichier trop volumineux. Upload recommandé sur ordinateur."
+      return
+    }
   }
+
+  // 🔒 figer dossier + session
+  lockedFolderId.value = props.folderId
+  uploadSessionId.value = crypto.randomUUID()
+
+  const wrappers = files.map(file => ({
+    file,
+    optimistic_id: crypto.randomUUID()
+  }))
+
+  // 👉 optimistic parent
+emit("queued", wrappers.map(w => ({
+  upload_id: null,
+  optimistic_id: w.optimistic_id,
+  name: w.file.name,          // ✅ AJOUT
+  file_name: w.file.name,
+  file_size: w.file.size,
+  folder_id: lockedFolderId.value,
+  _optimistic: true,
+  status: "uploading",
+  progress: 0
+})))
+
+
+  filesQueue.value = wrappers
+  error.value = ""
+
+  emit("files-selected") // fermer la modale
+  startNextUpload()
 }
 
-filesQueue.value = files.map(file => ({
-  file,
-  optimistic_id: crypto.randomUUID()
-}))
+defineExpose({
+  handleFiles
+})
+const onFileSelect = e => {
+  if (uploading.value) return
 
-error.value = ""
-lockedFolderId.value = props.folderId
-uploadSessionId.value = crypto.randomUUID()
+  const files = Array.from(e.target.files || [])
+  if (!files.length) return
 
-console.log("📁 lockedFolderId (button) =", lockedFolderId.value)
+  // 🔥 fermer la modale immédiatement
+  emit("files-selected")
 
-startNextUpload()
+  // 📱 garde-fou mobile
+  if (isMobile) {
+    const tooBig = files.find(f => f.size > MAX_MOBILE_SIZE)
+    if (tooBig) {
+      error.value = "⚠️ Fichier trop volumineux. Upload recommandé sur ordinateur."
+      return
+    }
+  }
 
+  // 🔒 figer le dossier + session pour tout le batch
+  lockedFolderId.value = props.folderId
+  uploadSessionId.value = crypto.randomUUID()
+
+  // 📦 créer wrappers + optimistic côté parent
+  const wrappers = files.map(file => {
+    const optimisticId = crypto.randomUUID()
+
+    return {
+      file,
+      optimistic_id: optimisticId
+    }
+  })
+
+  // 👉 optimistic UI (parent)
+emit("queued", wrappers.map(w => ({
+  upload_id: null,                  // 🔑 PAS DE BACKEND ENCORE
+  optimistic_id: w.optimistic_id,   // 🔑 SEULE CLÉ
+  file_name: w.file.name,
+  file_size: w.file.size,
+  folder_id: lockedFolderId.value,
+  _optimistic: true,
+  status: "uploading",
+  progress: 0
+})))
+
+
+  // 📥 queue interne
+  filesQueue.value = wrappers
+
+  error.value = ""
+
+  // 🚀 lancer l’upload réel
+  startNextUpload()
 }
 
 
-const uploadSingleFile = (fileWrapper) => {
-  const file = fileWrapper.file       // 🔥 LE VRAI FILE
-  const optimisticId = fileWrapper.optimistic_id
 
-  console.group("📤 uploadSingleFile")
-  console.log("file =", file.name)
-  console.log("optimistic_id =", optimisticId)
+
+const uploadSingleFile = (wrapper) => {
+  const file = wrapper.file
+  const optimisticId = wrapper.optimistic_id
 
   return new Promise(async (resolve, reject) => {
     try {
-      const jwt = await getValidToken()
-      const proxyUrl = getProxyPostURL()
+      // ==================================================
+      // 🔐 JWT
+      // ==================================================
+    const jwt = batchJwt
+if (!jwt) throw new Error("jwt-missing")
 
-      // 1️⃣ TOKEN
-      const tokenRes = await fetch(proxyUrl, {
+
+      const proxyUrl = getProxyPostURL()
+      const fileSizeMb = Math.ceil(file.size / 1024 / 1024)
+
+      // ==================================================
+      // 1️⃣ UPLOAD TOKEN
+      // ==================================================
+      const tokenPayload = {
+        route: "getuploadtoken",
+        jwt,
+        prof_id: auth.user.prof_id,
+        file_size_mb: fileSizeMb
+      }
+
+      if (props.eleveId) tokenPayload.eleve_id = props.eleveId
+      if (props.coursId) tokenPayload.cours_id = props.coursId
+
+      const rawRes = await fetch(proxyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          route: "getuploadtoken",
-          jwt,
-          prof_id: auth.user.prof_id,
-          ...(props.eleveId ? { eleve_id: props.eleveId } : {}),
-          ...(props.coursId ? { cours_id: props.coursId } : {})
-        })
-      }).then(r => r.json())
+        body: JSON.stringify(tokenPayload)
+      })
 
-      if (!tokenRes.success) throw tokenRes.error
+      const text = await rawRes.text()
 
-      // 2️⃣ UPLOAD PHP
+      if (text.includes("quota_exceeded")) {
+        throw new Error("quota_exceeded")
+      }
+
+      const tokenRes = JSON.parse(text)
+      if (!tokenRes?.success || !tokenRes.token) {
+        throw new Error("upload-token-failed")
+      }
+
+      // ==================================================
+      // 2️⃣ PHP UPLOAD
+      // ==================================================
       const formData = new FormData()
       formData.append("token", tokenRes.token)
-      formData.append("file", file) // ✅ vrai File
+      formData.append("file", file)
 
       const xhr = new XMLHttpRequest()
       xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
 
-      xhr.upload.onprogress = e => {
-        if (e.lengthComputable) {
-          progress.value = Math.round((e.loaded / e.total) * 100)
-        }
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return
+
+     const p = Math.round((e.loaded / e.total) * 100)
+emit("progress", { optimistic_id: optimisticId, progress: p })
+activeProgress.value[optimisticId] = p
+
       }
 
-      xhr.onload = async () => {
+      xhr.onerror = () =>
+        reject(new Error("xhr-upload-failed"))
+
+      xhr.onload = () => {
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error("upload-http-error"))
+          return
+        }
+
+        let res
         try {
-          const res = JSON.parse(xhr.responseText)
-          if (!res.success) throw res.error
-
-          // 3️⃣ ATTACH SHEET
-          const effectiveFolderId = lockedFolderId.value || props.folderId
-
-console.log("🧷 EFFECTIVE folder_id =", effectiveFolderId)
-
-if (!effectiveFolderId) {
-  throw new Error("folder_id manquant – upload refusé")
-}
-
-          const attachRes = await fetch(proxyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-  route: "attachfiletocours",
-  jwt,
-  prof_id: auth.user.prof_id,
-  cours_id: props.coursId || "PARTITION",
-  file_url: res.url,
-  file_name: res.name,
-  file_size: res.size,
-  file_type: file.type,
-  folder_id: effectiveFolderId,
-  ...(props.eleveId ? { eleve_id: props.eleveId } : {})
-})
-
-
-          }).then(r => r.json())
-
-          if (!attachRes.success) throw "attach failed"
-
-          // 🔥 EMIT AVEC optimistic_id
-    emit("uploaded", {
-  upload_id: attachRes.upload_id,
-  optimistic_id: optimisticId,
-  file_name: res.name,
-  file_url: res.url,
-  file_size: res.size,
-  file_type: file.type,
-  folder_id: effectiveFolderId, // ✅
-  created_at: new Date().toISOString(),
-  session_id: uploadSessionId.value
-})
-
-
-          resolve()
-        } catch (err) {
-          reject(err)
+          res = JSON.parse(xhr.responseText || "{}")
+        } catch {
+          reject(new Error("invalid-upload-json"))
+          return
         }
+
+        if (!res?.success || !res.url) {
+          reject(new Error("php-upload-failed"))
+          return
+        }
+
+        const effectiveFolderId =
+          lockedFolderId.value || props.folderId
+
+        if (!effectiveFolderId) {
+          reject(new Error("folder-id-missing"))
+          return
+        }
+
+        // ==================================================
+        // ✅ RESOLVE POUR BATCH FINAL
+        // ==================================================
+        resolve({
+          optimistic_id: optimisticId,
+          file_url: res.url,
+          file_name: res.name,
+          file_size: res.size,
+          file_type: file.type,
+          folder_id: effectiveFolderId
+        })
       }
 
-      xhr.onerror = err => reject(err)
       xhr.send(formData)
 
-    } catch (e) {
-      reject(e)
+    } catch (err) {
+      if (err.message === "quota_exceeded") {
+        emit("error", {
+          type: "quota",
+          optimistic_id: optimisticId,
+          message: "❌ Quota dépassé. Supprime des fichiers ou augmente ton espace."
+        })
+        return
+      }
+
+      reject(err)
     }
   })
 }
 
 
+
+const updateGlobalProgress = () => {
+  const values = Object.values(activeProgress.value)
+  if (!values.length) {
+    globalProgress.value = 0
+    return
+  }
+
+  globalProgress.value = Math.round(
+    values.reduce((a, b) => a + b, 0) / values.length
+  )
+}
 
 
 
@@ -298,59 +419,135 @@ filesQueue.value = detail.files
   startNextUpload()
 }
 
+const resolveFolderId = (folderId) => {
+  if (!folderId?.startsWith("TMP_")) return folderId
+
+  const real = auth.folders?.find(
+    f => f.tmp_id === folderId
+  )
+
+  return real?.folder_id || folderId
+}
+
 
 
 const startNextUpload = async () => {
   if (!lockedFolderId.value) {
-  lockedFolderId.value = props.folderId
-}
-
-  console.group("🚀 startNextUpload")
-
-  if (uploading.value) {
-    console.warn("⛔ déjà en upload")
-    console.groupEnd()
-    return
+    lockedFolderId.value = props.folderId
   }
+
+  if (uploading.value) return
 
   uploading.value = true
-  console.log("🔒 uploading = true")
+  error.value = ""
 
-  while (filesQueue.value.length) {
-const wrapper = filesQueue.value.shift()
+  // 🔐 JWT UNE FOIS
+  batchJwt = await getValidToken()
 
-console.log("file =", wrapper.file.name)
+  const active = new Set()
 
-currentFile.value = wrapper.file
+const launchNext = async () => {
+  if (!filesQueue.value.length) return
+  if (active.size >= MAX_PARALLEL) return
 
-progress.value = 0
+  const wrapper = filesQueue.value.shift()
 
-try {
-await uploadSingleFile(wrapper)
-console.log("✅ upload terminé :", wrapper.file.name)
+  const p = uploadSingleFile(wrapper)
+    .then(res => {
+      // 🔑 RÉSOLUTION DU FOLDER ID ICI (POINT CRITIQUE)
+      const finalFolderId = resolveFolderId(res.folder_id)
 
-  // 🔥 force flush parent
-  await nextTick()
-} catch (e) {
+      // 🛑 sécurité hard (dev)
+      if (finalFolderId?.startsWith("TMP_")) {
+        console.error("❌ TMP folder_id non résolu", finalFolderId)
+        throw new Error("tmp-folder-not-resolved")
+      }
 
-      console.error("❌ upload failed :", file.name, e)
-    }
+      // 📦 batch backend (ID FINAL)
+      uploadedBatch.value.push({
+        cours_id: props.coursId || "PARTITION",
+        prof_id: auth.user.prof_id,
+        eleve_id: props.eleveId || null,
+        folder_id: finalFolderId,
+        file_url: res.file_url,
+        file_name: res.file_name,
+        file_size: res.file_size,
+        file_type: res.file_type
+      })
 
-    console.groupEnd()
+      // 🖥️ UI optimistic (ID FINAL AUSSI)
+      emit("uploaded", {
+        optimistic_id: res.optimistic_id,
+        file_name: res.file_name,
+        file_url: res.file_url,
+        file_size: res.file_size,
+        file_type: res.file_type,
+        folder_id: finalFolderId,
+        created_at: new Date().toISOString(),
+        session_id: uploadSessionId.value
+      })
+        // 🧹 NETTOYAGE PROGRESS ICI
+  delete activeProgress.value[res.optimistic_id]
+    })
+    .catch(e => {
+      error.value = e?.message || "Erreur upload"
+    })
+    .finally(() => {
+      active.delete(p)
+    })
+
+  active.add(p)
+  launchNext()
+}
+
+
+  // 🚀 kickstart
+  for (let i = 0; i < MAX_PARALLEL; i++) {
+    launchNext()
   }
 
-  console.log("🏁 FIN BATCH")
+  // ⏳ attendre fin complète
+  while (active.size) {
+    await Promise.race(active)
+    launchNext()
+  }
 
+  // ==================================================
+  // 🚀 BATCH GAS FINAL (1 SEUL APPEL)
+  // ==================================================
+  if (uploadedBatch.value.length) {
+    await fetch(getProxyPostURL(), {
+     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      route: "attachfilestocoursbatch",
+      jwt: batchJwt,
+      files: uploadedBatch.value
+    })
+  })
+}
+
+try {
+  await sendBatch()
+} catch (e) {
+  console.warn("🔁 retry batch GAS")
+  await new Promise(r => setTimeout(r, 800))
+  await sendBatch()
+}
+
+  // 🧹 reset
+  uploadedBatch.value = []
+  batchJwt = null
   uploading.value = false
   dropLock.value = false
   currentFile.value = null
   progress.value = 0
-uploadSessionId.value = null
+  uploadSessionId.value = null
 
   emit("done")
-
-  console.groupEnd()
 }
+
+
 
 
 
@@ -362,6 +559,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("sbs-drop-files", onDroppedFiles)
 })
+
+watch(activeProgress, updateGlobalProgress, { deep: true })
 
 </script>
 
@@ -464,4 +663,20 @@ onUnmounted(() => {
   color: #f44336;
   font-size: 0.9rem;
 }
+.upload-progress {
+  height: 3px;
+  width: 100%;
+  background: rgba(255,255,255,.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.upload-progress > span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #f5c16c, #facc15);
+  transition: width .2s linear;
+}
+
 </style>

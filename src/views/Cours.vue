@@ -2,11 +2,10 @@
 
   <Layout>
     <div class="container-xxl mt-4">
-      <h2 class="text-white text-center">📚 Gestion des Cours</h2>
 
       <!-- ✅ Sélecteur de prénom -->
       <div class="mb-3 text-center">
-  <label for="studentSelect" class="text-white">Sélectionner un élève :</label>
+  <label for="studentSelect">Sélectionner un élève :</label>
 <select v-model="selectedStudent" class="form-select mt-2" id="studentSelect">
   <option value="">Tous les élèves</option>
 <option v-for="eleve in elevesInscrits" :key="eleve.email" :value="eleve.prenom">
@@ -47,7 +46,7 @@
 </div>
 <!-- ✅ Sélecteur de semaine -->
 <div class="mb-3 text-center">
-  <label for="weekSelect" class="text-white">Sélectionner une semaine :</label>
+  <label for="weekSelect">Sélectionner une semaine :</label>
   <select v-model="selectedWeek" class="form-select mt-2" id="weekSelect">
     <option value="">Toutes les semaines</option>
     <option v-for="week in weeks" :key="week.start" :value="week">
@@ -59,7 +58,7 @@
   {{ successMessage }}
 </div>
 <div class="d-flex justify-content-center align-items-center gap-2 mt-2">
-  <button class="btn btn-outline-light" @click="goToPreviousWeek">⬅️</button>
+  <button class="btn btn-outline-light" @click="goToPreviousWeek">⬅</button>
 <div class="d-flex justify-content-center mt-2">
   <button class="btn btn-primary" @click="selectNextWeekFromNow">📅 Prochaine semaine </button>
 </div>
@@ -665,237 +664,407 @@ onMounted(async () => {
 };
 </script>
 
+<style>
+/* ==================================================
+   🎨 SBS DESIGN TOKENS — COURS PROF
+   ================================================== */
 
-<style scoped>
+:root {
+  /* Brand */
+  --brand-accent: #292929;
+  --brand-accent-strong: #303030;
 
-/* ✅ Permet à la table de s'adapter au contenu */
-.table {
-  table-layout: auto; /* Ajuste automatiquement la largeur */
-  width: 100%;
+  /* Backgrounds */
+  --bg-panel: #ffffff;
+  --bg-soft: #2a6aaa;
+  --bg-hover: #f3f4f6;
+  --bg-glass: rgba(255,255,255,0.95);
+
+  /* Text */
+  --text-main: #1f2937;
+  --text-strong: #0f172a;
+  --text-muted: #475569;
+
+  /* Borders */
+  --border-soft: #e5e7eb;
+  --border-focus: var(--brand-accent);
+--btn-border-width: 0px;
+  --btn-border-color: transparent;
+  /* States */
+  --success-bg: #ecfdf5;
+  --success-border: #34d399;
+  --danger-bg: #fef2f2;
+  --danger-border: #f87171;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  /* Shadows */
+  --shadow-soft: 0 8px 22px rgba(0,0,0,0.08);
+  --shadow-panel: 0 24px 70px rgba(0,0,0,0.18);
 }
 
-/* ✅ Empêche le lien Meet d'être trop large */
-.table td:nth-child(3), 
-.table th:nth-child(3) {
-  width: 1%; /* Laisse le navigateur ajuster en fonction du contenu */
-  white-space: nowrap; /* Empêche le texte de passer à la ligne */
+/* ==================================================
+   PANEL LIGHT
+   ================================================== */
+
+.container-xxl {
+  background: var(--bg-panel);
+  color: var(--text-main);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  box-shadow: var(--shadow-panel);
 }
 
-/* ✅ Empêche d'autres colonnes d'être trop larges */
-.table td, 
-.table th {
-  max-width: 200px; /* Limite la largeur max pour éviter des colonnes trop grandes */
-  overflow: hidden;
-  text-overflow: ellipsis; /* Coupe le texte trop long */
-  white-space: nowrap; /* Empêche le retour à la ligne */
+/* neutralise bootstrap dark */
+.container-xxl .text-white {
+  color: var(--text-main) !important;
 }
 
-/* ✅ Forcer les couleurs des cours passés et futurs */
-.past-course td, .past-course th {
-  background-color: #f8d7da !important; /* Rouge clair */
-  color: #721c24 !important;
+.container-xxl .table-dark {
+  background: transparent !important;
+  color: var(--text-main) !important;
 }
 
-.future-course td, .future-course th {
-  background-color: #d4edda !important; /* Vert clair */
-  color: #155724 !important;
+/* ==================================================
+   TITRES / LABELS
+   ================================================== */
+
+.container-xxl h2 {
+  color: var(--text-strong);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
-
-/* ✅ Ajuste la largeur et hauteur de la modale pour qu'elle soit bien centrée */
-.modal-dialog {
-  max-width: 50vw; /* Réduit la largeur pour éviter un effet trop grand sur desktop */
-  width: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh; /* Centre verticalement */
-}
-/* ✅ Cours passés (gris clair) */
-/* ✅ Cours passés (rouge clair) */
-.past-course {
-  background-color: #f8d7da !important; /* Rouge clair */
-  color: #721c24 !important;
+.container-xxl label,
+.container-xxl .form-check-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
-/* ✅ Cours futurs (vert clair) */
-.future-course {
-  background-color: #d4edda !important; /* Vert clair */
-  color: #155724 !important;
+/* ==================================================
+   INPUTS / SELECTS / TEXTAREA
+   ================================================== */
+
+.form-select,
+.form-control,
+textarea {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-glass);
+  color: var(--text-main);
+  transition: all 0.25s ease;
 }
 
-/* ✅ Ajouter une bordure pour plus de visibilité */
-.past-course, .future-course {
-  border-left: 5px solid;
+.form-select:hover,
+.form-control:hover,
+textarea:hover {
+  border-color: var(--border-focus);
 }
 
-/* ✅ Couleurs pour la bordure */
-.past-course {
-  border-color: #f5c6cb; /* Rouge */
+.form-select:focus,
+.form-control:focus,
+textarea:focus {
+  outline: none;
+  background: var(--bg-panel);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(250,204,21,0.25);
 }
 
-.future-course {
-  border-color: #c3e6cb; /* Vert */
+/* select minimal */
+.container-xxl select.form-select {
+  appearance: none;
+  padding: 6px 36px 6px 14px;
+  height: 36px;
+  font-size: 0.85rem;
+  font-weight: 500;
+
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 52%,
+    calc(100% - 12px) 52%;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
 }
 
-/* ✅ Effet de surbrillance pour la ligne active */
-.selected-row {
-  background-color: #ffc107 !important; /* Jaune clair */
-  color: #212529 !important; /* Texte foncé pour lisibilité */
-}
+/* ==================================================
+   CHECKBOX
+   ================================================== */
 
-
-/* ✅ Contrôle la hauteur pour éviter d'être rogné */
-.modal-content {
-  max-height: 85vh; /* Ajuste pour éviter le rognage */
-  overflow-y: auto; /* Active le défilement si besoin */
-}
-
-.modal-body {
-  max-height: 60vh; /* Permet le défilement interne si nécessaire */
-  overflow-y: auto;
-}
-
-
-/* ✅ Meilleur affichage sur mobile */
-@media (max-width: 768px) {
-  .modal-dialog {
-    max-width: 90vw; /* Largeur plus grande pour mobiles */
-    margin: 10px;
-  }
-
-  .modal-content {
-    max-height: 85vh; /* Ajuste la hauteur pour éviter le rognage */
-  }
-}
-/* ✅ Effet visuel sur la ligne sélectionnée */
-.selected-row {
-  background-color: #ffc107 !important; /* Jaune clair */
-  color: #212529; /* Texte foncé pour lisibilité */
-}
-
-/* ✅ Fixe le problème de rognage en bas */
-.modal-body {
-  max-height: 60vh; /* Permet le défilement interne */
-  overflow-y: auto;
-  padding-bottom: 20px;
-}
-
-/* ✅ Fixe les boutons pour qu'ils restent visibles */
-.modal-footer {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-  border-top: 1px solid #ddd;
-}
-
-
-/* ✅ Style du filtre "Afficher uniquement les cours à venir" */
-#filterUpcoming {
-  accent-color: #ffcc00; /* ✅ Changer la couleur de la case à cocher */
-}
-
-label[for="filterUpcoming"] {
-  color: #ffffff; /* ✅ Assurer une bonne lisibilité sur fond sombre */
-  font-weight: bold;
-}
-/* ✅ Améliorer la visibilité du filtre */
-.filter-container {
-  background-color: rgba(255, 255, 255, 0.1); /* ✅ Légère transparence */
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ffffff50; /* ✅ Bordure discrète */
-}
-
-.loading-container {
-  position: fixed;  /* Rend le loader toujours visible */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);  /* Centre parfaitement */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.8); /* Fond légèrement opaque pour la visibilité */
-  z-index: 1000; /* Assure que le loader passe au-dessus */
-}
-
-.spinner-border {
-  width: 2rem;
-  height: 2rem;
-  color: red !important;
-}
-
-h2 {
-  font-weight: bold;
-  color: #ffffff;
-}
-
-/* ✅ Amélioration du style du tableau */
-.table-responsive {
-  max-height: calc(100vh - 220px); /* 120px de header + 80px de footer + 20px de marge */
-  overflow-y: auto;
-}
-
-
-.table {
-  border-radius: 10px;
-  overflow: hidden;
-  font-size: 1rem;
-}
-
-.table th, .table td {
-  padding: 12px;
-  text-align: center;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.table th {
-  background-color: #212529;
-  color: #ffffff;
-}
-
-.table-hover tbody tr:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+.container-xxl input[type="checkbox"],
+.container-xxl .form-check-input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brand-accent);
   cursor: pointer;
 }
 
-/* ✅ Ajustements pour mobile */
+/* ==================================================
+   FILTER BAR
+   ================================================== */
+
+.filter-container {
+  background: var(--bg-soft);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+}
+
+/* ==================================================
+   TABLE → CARD LIST
+   ================================================== */
+
+.table-responsive {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0 14px;
+}
+
+
+
+.table tbody tr {
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  transition: all 0.25s ease;
+}
+
+.table tbody tr:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+  cursor: pointer;
+}
+
+.table td {
+  padding: 14px 16px;
+  border: none;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-main);
+}
+
+.table td:first-child {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.table td:nth-child(2) {
+  font-weight: 700;
+}
+
+/* ==================================================
+   STATES
+   ================================================== */
+
+.past-course {
+  background: var(--danger-bg) !important;
+}
+
+.past-course td:first-child {
+  border-left: 5px solid var(--danger-border);
+}
+
+.future-course {
+  background: var(--success-bg) !important;
+}
+
+.future-course td:first-child {
+  border-left: 5px solid var(--success-border);
+}
+
+/* ==================================================
+   SELECTED ROW
+   ================================================== */
+.selected-row {
+  outline: none;
+}
+
+.selected-row td:first-child {
+  box-shadow: inset 4px 0 0 var(--brand-accent);
+}
+
+
+
+/* ==================================================
+   BUTTONS
+   ================================================== */
+
+.btn {
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition: all 0.25s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(
+    135deg,
+    var(--brand-accent),
+    var(--brand-accent-strong)
+  );
+  border: none;
+  color: var(--text-main);
+  padding: 6px 16px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(250,204,21,0.45);
+}
+
+.btn-danger {
+  border-radius: var(--radius-md);
+}
+
+/* week navigation */
+.container-xxl .btn-outline-light {
+  width: 38px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 0;
+}
+
+.container-xxl .btn-outline-light::before {
+  content: "←";
+  font-size: 16px;
+  color: var(--text-main);
+}
+
+.container-xxl .btn-outline-light:last-child::before {
+  content: "→";
+}
+
+.container-xxl .btn-outline-light:hover {
+  background: var(--bg-hover);
+}
+
+.container-xxl .btn-primary {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background-clip: padding-box;
+}
+
+
+/* ==================================================
+   MODAL
+   ================================================== */
+
+.modal-dialog {
+  max-width: 560px;
+}
+
+.modal-content {
+  border-radius: var(--radius-xl);
+  border: none;
+  box-shadow: var(--shadow-hover);
+}
+
+.modal-header,
+.modal-footer {
+  border-color: var(--border-soft);
+}
+
+.modal-title {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.modal-body {
+  padding: 22px;
+}
+
+.modal-footer {
+  background: var(--bg-panel);
+  position: sticky;
+  bottom: 0;
+}
+
+/* ==================================================
+   ALERTS / LOADER
+   ================================================== */
+
+.alert {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  border: none;
+}
+
+.spinner-border {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+/* ==================================================
+   MOBILE
+   ================================================== */
+
 @media (max-width: 768px) {
-  .table th, .table td {
-    padding: 8px;
-    font-size: 0.9rem;
-  }
-  .table-responsive {
-    max-height: calc(100vh - 170px); /* ex: 80 header + 70 footer + 20px de marge */
-  }
-}
-
-@media (max-width: 576px) {
   .container-xxl {
-    padding-left: 5px;
-    padding-right: 5px;
-  }
-}
-.container-xxl {
-  padding-bottom: 50px; /* Ajoute un espace en bas pour éviter le rognage */
-}
-@media (max-width: 1024px) {
-  .container-xxl {
-    height: calc(100vh - 150px); /* Header 80px + Footer 70px */
-    overflow-y: auto;
-    padding-bottom: 0px; /* espace de respiration pour scroll */
+    padding: 16px;
   }
 
-  .table-responsive {
-    max-height: none !important; /* Laisse le container gérer le scroll */
-    overflow-y: visible !important;
+  .table td {
+    padding: 12px;
+    font-size: 0.85rem;
+  }
+
+  .modal-dialog {
+    max-width: 92vw;
+  }
+}
+.container-xxl select.form-select {
+  text-align: center;
+  text-align-last: center; /* 🔑 pour l’option sélectionnée */
+}
+
+/* ==================================================
+   RESPONSIVE — GARDER 3 COLONNES (MOBILE)
+   ================================================== */
+@media (max-width: 768px) {
+
+  /* cache colonnes 4, 5, 6 */
+  .table th:nth-child(4),
+  .table td:nth-child(4),
+  .table th:nth-child(5),
+  .table td:nth-child(5),
+  .table th:nth-child(6),
+  .table td:nth-child(6) {
+    display: none;
+  }
+
+  /* optimise l’espace */
+  .table td {
+    max-width: none;
+    white-space: normal;
+    font-size: 0.85rem;
+  }
+
+  /* bouton "ouvrir" plus compact */
+  .table .btn-sm {
+    padding: 4px 10px;
+    font-size: 0.75rem;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore.js";
 
 // 🔧 Options de cookie personnalisables si besoin
 const cookieOptions = "Secure; SameSite=Strict; path=/";
@@ -23,8 +23,7 @@ export function setRefreshTokenEverywhere(refreshToken: string) {
     localStorage.setItem("refreshToken", refreshToken);
     sessionStorage.setItem("refreshToken", refreshToken);
     document.cookie = `refreshToken=${refreshToken}; ${cookieOptions}`;
-  
+
     const authStore = useAuthStore();
     authStore.refreshToken = refreshToken;
   }
-  

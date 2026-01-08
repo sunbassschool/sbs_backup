@@ -42,7 +42,7 @@
               :disabled="payingPriceId === price.price_id"
               @click="pay(price, price.product)"
             >
-              Continuer
+              S'inscrire
             </button>
           </div>
         </div>
@@ -116,18 +116,42 @@ const saveToCache = (profId, data) => {
 }
 
 const fetchOffersNetwork = async (profId) => {
+  console.group("🌐 fetchOffersNetwork")
+  console.log("🎯 profId =", profId)
+
   try {
     loading.value = products.value.length === 0
 
-    // 1️⃣ PRODUITS (en mémoire uniquement)
-    const prodRes = await fetch(proxyUrl, {
+    // =========================
+    // 1️⃣ FETCH PRODUITS
+    // =========================
+    console.group("📦 listproductsbyprof")
+
+    const prodPayload = {
+      route: "listproductsbyprof",
+      prof_id: profId
+    }
+    console.log("➡️ payload", prodPayload)
+
+    const prodResRaw = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "listproductsbyprof",
-        prof_id: profId
-      })
-    }).then(r => r.json())
+      body: JSON.stringify(prodPayload)
+    })
+
+    const prodText = await prodResRaw.text()
+    console.log("⬅️ raw response", prodText)
+
+    let prodRes
+    try {
+      prodRes = JSON.parse(prodText)
+    } catch (e) {
+      console.error("❌ JSON produits invalide")
+      throw e
+    }
+
+    console.log("⬅️ parsed", prodRes)
+    console.groupEnd()
 
     const tmpProducts = (prodRes.products || [])
       .filter(p => p.active === true)
@@ -136,28 +160,50 @@ const fetchOffersNetwork = async (profId) => {
         prices: []
       }))
 
-    // 2️⃣ PRICES (toujours en mémoire)
+    console.log("✅ produits actifs =", tmpProducts)
+
+    // =========================
+    // 2️⃣ FETCH PRICES
+    // =========================
     await Promise.all(
-      tmpProducts.map(product =>
-        fetch(proxyUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            route: "listpricesbyproduct",
-            product_id: product.product_id
+      tmpProducts.map(async (product) => {
+        console.group(`💰 listpricesbyproduct | ${product.product_id}`)
+
+        const pricePayload = {
+          route: "listpricesbyproduct",
+          product_id: product.product_id
+        }
+        console.log("➡️ payload", pricePayload)
+
+        try {
+          const resRaw = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pricePayload)
           })
-        })
-          .then(r => r.json())
-          .then(res => {
-            product.prices = (res.prices || []).filter(p => p.active === true)
-          })
-          .catch(() => {
-            product.prices = []
-          })
-      )
+
+          const text = await resRaw.text()
+          console.log("⬅️ raw response", text)
+
+          const res = JSON.parse(text)
+          console.log("⬅️ parsed", res)
+
+          product.prices = (res.prices || []).filter(p => p.active === true)
+          console.log("✅ prices actives", product.prices)
+        } catch (e) {
+          console.error("❌ erreur prices", e)
+          product.prices = []
+        }
+
+        console.groupEnd()
+      })
     )
 
-    // 3️⃣ COMMIT FINAL (1 seule fois)
+    // =========================
+    // 3️⃣ COMMIT FINAL
+    // =========================
+    console.log("🧩 TMP PRODUCTS FINAL =", tmpProducts)
+
     products.value = tmpProducts
     saveToCache(profId, tmpProducts)
 
@@ -165,8 +211,10 @@ const fetchOffersNetwork = async (profId) => {
     console.error("❌ fetchOffersNetwork error", e)
   } finally {
     loading.value = false
+    console.groupEnd()
   }
 }
+
 
 
 // =====================================================

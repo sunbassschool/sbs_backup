@@ -10,92 +10,94 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
     >
 
-    <style>
+   <style>
+/* ===============================
+   BASE
+   =============================== */
 html, body {
   margin: 0;
   padding: 0;
   background: #000 !important;
-  min-height: 100%;
-  height: auto;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  height: 100%;
+  overflow: hidden; /* ✅ UNE SEULE SOURCE DE VÉRITÉ */
 }
 
+/* ===============================
+   APP (⚠️ CRITIQUE)
+   =============================== */
 #app {
-  min-height: 100dvh; /* ✅ iOS safe */
+  display: block !important;          /* 🔥 NE JAMAIS SUPPRIMER */
+  min-height: 100dvh;                 /* iOS safe */
+  background-color: black;
+    height: 100dvh;
   overflow-y: auto;
+opacity: 0;
+    -webkit-overflow-scrolling: touch;
+
+}
+* {
+  box-sizing: border-box;
 }
 
+img, video, canvas {
+  max-width: 100%;
+}
+.app-visible { opacity: 1; transition: opacity .15s ease; }
 
-      #loading-screen {
-        position: fixed;
-        inset: 0;
-        background: black;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-      }
+/* ===============================
+   SPLASH SCREEN
+   =============================== */
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 
-      #loading-logo {
-        width: 90px;
-        opacity: 0;
-        transform: scale(0.9);
-        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-      }
+  opacity: 1;                         /* visible par défaut */
+  pointer-events: auto;
+  transition: opacity 0.3s ease;
+}
 
-      #loading-logo.logo-visible {
-        opacity: 1;
-        transform: scale(1);
-      }
+/* splash masqué (piloté UNIQUEMENT en JS) */
+#loading-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
 
-      #loading-logo.spin {
-        animation: spin 1.4s linear infinite;
-      }
+/* ===============================
+   LOGO
+   =============================== */
+#loading-logo {
+  width: 80px;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
 
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
+#loading-logo.logo-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+/* ===============================
+   FIX LARGEUR LAYOUT
+   =============================== */
+html, body, #app {
+  width: 100%;
+}
 
-      /* 🔥 Refresh indicator */
-      #refresh-indicator {
-        width: 140px;
-        height: 4px;
-        margin-top: 25px;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        overflow: hidden;
-      }
+/* le layout racine doit occuper tout l'écran */
+.app-container,
+.layout,
+.layout-root {
+  width: 100%;
+  min-width: 100%;
+}
 
-      .refresh-bar {
-        width: 0%;
-        height: 4px;
-        background: linear-gradient(to right, #ff3300, #ff7b00);
-        animation: refresh-loading 1.2s infinite ease-in-out;
-      }
+</style>
 
-      @keyframes refresh-loading {
-        0% { width: 0%; }
-        50% { width: 80%; }
-        100% { width: 0%; }
-      }
-
-      .refresh-active {
-        opacity: 1;
-      }
-
-      #app {
-        opacity: 0;
-        transition: opacity 0.5s ease-in-out;
-      }
-
-      #app.app-visible {
-        opacity: 1;
-      }
-    </style>
   </head>
 
   <body>
@@ -113,297 +115,22 @@ html, body {
     <script type="module" src="/src/init/mainLoader.ts"></script>
 
     <script>
-      // Logo fade-in + spin
-      const logo = document.getElementById("loading-logo");
-      if (logo) {
-        logo.classList.add("logo-visible");
-        logo.classList.add("spin");
-      }
+const splash = document.getElementById("loading-screen");
+const logo = document.getElementById("loading-logo");
+
+requestAnimationFrame(() => {
+  splash.classList.add("visible");
+  logo.classList.add("logo-visible");
+});
+
+window.__HIDE_SPLASH__ = () => {
+  splash.classList.remove("visible");
+  setTimeout(() => splash.remove(), 300);
+};
+
     </script>
   </body>
 </html>
 
-<style>
-#app {
-  opacity: 0;
-  background-color: black;
-  transition: opacity 0.8s ease-in-out;
-  display: block !important; /* ← assure qu’il est toujours présent dans le flux */
-}
-
-#app.app-visible {
-  opacity: 1;
-}
-  .fade-out {
-    animation: fadeOut 1.5s ease-out forwards;
-  }
-  @keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-  }
-
-  /* Cacher le bouton sans provoquer de décalage visuel */
-  .hidden {
-    visibility: hidden;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .loader {
-  border: 4px solid rgba(0, 0, 0, 0.788);
-  border-top: 4px solid #610000;
-  border-radius: 50%;
-  width: 22px;
-  margin-top:-5%;
-  height: 22px;
-  animation: spin 1s linear infinite;
-  margin: 16px auto; /* ✅ Centre horizontalement et ajoute de l’espace vertical */
-}
-
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-  /* Style du bouton GO */
-  .go-button {
-    margin-top: 2px;
-    padding: 1px 24px;
-    font-size: 15px;
-    font-weight: bold;
-    background: linear-gradient(135deg, #000000, #000000);
-    color: white;
-    cursor: pointer;
-    transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.5s ease;
-    border: 1px solid;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    visibility: visible;
-    opacity: 1;
-  }
-
-  /* Animation fade-in lorsque le bouton devient visible */
-  .go-button.fade-in {
-    animation: fadeInAnimation 1s forwards;
-  }
-
-  /* Animation de fade-in */
-  @keyframes fadeInAnimation {
-    0% {
-      opacity: 0;
-      visibility: visible;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-
-  /* Survol du bouton GO */
-  .go-button:hover {
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-    background: #333;
-  }
-
-  /* Bouton GO au clic */
-  .go-button:active {
-    transform: scale(0.98);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  }
-
-  /* Enlève le contour de focus */
-  .go-button:focus {
-    outline: none;
-  }
-
-  .quote {
-    color: white;
-    font-size: 14px;
-    font-style: italic;
-    margin-top: 20px;
-    text-align: center;
-    font-family: 'Poppins', sans-serif;
-    max-width: 240px;
-    animation: fadeIn 1.5s ease-out forwards;
-    opacity: 0;
-  }
-
-  /* ✅ Fond noir et centrage */
-  #loading-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    background: black;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    flex-direction: column;
-  }
-
-  .loading-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-  }
-
-#loading-logo {
-  width: 80px;
-  height: auto;
-  opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 0.9s ease-out, transform 0.9s ease-out;
-  visibility: hidden; /* ← important ! */
-}
-
-
-#loading-logo.logo-visible.spin {
-  opacity: 1;
-  transform: scale(1);
-  visibility: visible;
-  animation: spin 1.8s linear infinite; /* spin continu */
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-
-
- 
- 
-
-  .loading-container {
-    width: 180px;
-    height: 8px;
-    border: 2px solid rgba(27, 27, 27, 0.829);
-    border-radius: 5px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .loading-bar {
-    height: 100%;
-    width: 0%;
-    background: rgb(255, 38, 0);
-    animation: fill-progress 5s ease-out forwards;
-  }
-
-  @keyframes fill-progress {
-    0% { width: 0%; }
-    100% { width: 100%; }
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.8); }
-    to { opacity: 1; transform: scale(1); }
-  }
-
-#sw-update-toast {
-  display: none;
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: #292929;
-  color: #fff;
-  padding: 14px 18px;
-  border-radius: 8px;
-  z-index: 20000;
-  box-shadow: 0 6px 12px rgba(0,0,0,0.3);
-  font-family: 'Poppins', sans-serif;
-  animation: fadeIn 0.8s ease-out forwards;
-}
-
-#sw-update-toast.show {
-  display: block;
-}
-
-#sw-reload-btn {
-  background: #f1c40f;
-  color: #000;
-  border: none;
-  padding: 6px 12px;
-  margin-left: 12px;
-  font-weight: bold;
-  border-radius: 4px;
-  cursor: pointer;
-}
-#refresh-bar-container {
-  width: 120px;
-  height: 6px;
-  border-radius: 6px;
-  margin-top: 18px;
-  background: rgba(255, 255, 255, 0.2);
-  overflow: hidden;
-}
-
-#refresh-bar {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(to right, #ff3300, #ff7b00);
-  animation: fill-refresh-bar 2.2s ease-out forwards;
-}
-
-@keyframes fill-refresh-bar {
-  0% { width: 0%; }
-  100% { width: 100%; }
-}
-#loading-hint {
-  font-weight: 600; /* au lieu de bold ou défaut */
-  font-size: 13px;
-  opacity: 0.5;
-  letter-spacing: 0.5px; /* optionnel : plus aérien */
-}
-
-
-/* Animation fade-in fade-out */
-@keyframes fade-blink {
-  0% { opacity: 0.2; }
-  50% { opacity: 0.65; }
-  100% { opacity: 0.2; }
-}
-@keyframes slow-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-
-  #refresh-indicator {
-    width: 100%;
-    height: 4px;
-    margin-top: 20px;
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-      position: relative;
-  z-index: 10000;
-  }
-
-  .refresh-bar {
-    width: 0%;
-    height: 4px;
-    background: #ff7a00;
-    animation: refresh-loading 1.2s infinite ease-in-out;
-  }
-
-  @keyframes refresh-loading {
-    0% { width: 0%; }
-    50% { width: 80%; }
-    100% { width: 0%; }
-  }
-
-  .refresh-active {
-    opacity: 1;
-  }
-
-  .refresh-hidden {
-    opacity: 0;
-  }
-</style>
 
 

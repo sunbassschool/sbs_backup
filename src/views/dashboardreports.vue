@@ -1,10 +1,12 @@
 <template>
   <Layout>
+
+    <div class="reports-page">
     <div class="container-xxl mt-4">
       <div ref="scrollContainer" class="refreshable-area">
 
         <!-- 🔄 Loader -->
-        <div 
+        <div
           v-if="loading"
           class="d-flex justify-content-center align-items-center mt-5"
         >
@@ -30,7 +32,7 @@
 
 
         <!-- ⚠️ Aucun report -->
-        <div 
+        <div
           v-if="!loading && reportsPending.length === 0"
           class="alert alert-warning text-center mt-4"
         >
@@ -40,7 +42,7 @@
         <!-- 📋 Liste des reports -->
         <div v-if="!loading && reportsPending.length > 0" class="reports-grid">
 
-          <div 
+          <div
             v-for="rep in reportsPending"
             :key="rep.id"
             class="card report-card shadow-sm text-light"
@@ -67,14 +69,14 @@
 
             <!-- 🔘 Boutons actions -->
             <div class="d-flex gap-2 mt-3">
-              <button 
+              <button
                 class="btn btn-success flex-fill"
                 @click="openApproveModal(rep)"
               >
                 ✔ Accepter
               </button>
 
-              <button 
+              <button
                 class="btn btn-danger flex-fill"
                 @click="openRejectModal(rep)"
               >
@@ -86,11 +88,11 @@
         </div>
 
         <!-- ========== HISTORIQUE ========== -->
-        <h4 
+        <h4
   class="section-title mt-4 history-toggle"
   @click="historyOpen = !historyOpen"
 >
-  📚 Historique des reports 
+  📚 Historique des reports
   <span class="count">({{ reportsHistory.length }})</span>
 
   <span class="arrow">
@@ -99,7 +101,7 @@
 </h4>
 
 
-   <div 
+   <div
   v-if="historyOpen && !loading && reportsHistory.length === 0"
   class="alert alert-dark text-center mt-3"
 >
@@ -110,7 +112,7 @@
    <!-- Timeline seulement si ouvert -->
 <div v-if="historyOpen && !loading && reportsHistory.length > 0" class="timeline">
 
- <div 
+ <div
   v-for="rep in reportsHistory"
   :key="rep.id"
   class="timeline-item"
@@ -129,10 +131,10 @@
        HEADER (toujours visible)
        =========================== -->
   <div class="timeline-header" @click="toggleOpen(rep)">
-    
+
     <div class="header-left">
       <strong>{{ rep.prenom }}</strong>
-      <span 
+      <span
         class="mini-status"
         :class="{
           accepted: rep.status === 'ACCEPTE',
@@ -200,7 +202,7 @@
     <!-- ========================== -->
     <!-- 🟧 MODALE ACCEPT REPORT -->
     <!-- ========================== -->
-    <div 
+    <div
       v-if="showApproveModal"
       class="sbs-modal"
       @click.self="closeModals"
@@ -217,7 +219,7 @@
         </p>
 
         <label class="form-label fw-bold">Nouvelle date & heure</label>
-        <input 
+        <input
           type="datetime-local"
           v-model="approveNewDate"
           class="form-control mb-3"
@@ -231,7 +233,7 @@
           placeholder="Ajouter un message au report…"
         ></textarea>
 
-        <button 
+        <button
           class="btn btn-warning w-100 mb-2"
           @click="confirmApprove"
           :disabled="approveLoading"
@@ -250,7 +252,7 @@
     <!-- ========================== -->
     <!-- 🟥 MODALE REJECT REPORT -->
     <!-- ========================== -->
-    <div 
+    <div
       v-if="showRejectModal"
       class="sbs-modal"
       @click.self="closeModals"
@@ -274,7 +276,7 @@
           placeholder="Expliquer brièvement…"
         ></textarea>
 
-        <button 
+        <button
           class="btn btn-danger w-100 mb-2"
           @click="confirmReject"
           :disabled="rejectLoading"
@@ -291,7 +293,7 @@
     </div>
 
     <!-- 🍞 Toast -->
-    <div 
+    <div
       v-if="toast.show"
       :class="[
         'sbs-toast',
@@ -301,7 +303,7 @@
       {{ toast.message }}
     </div>
 
-  </Layout>
+ </div> </Layout>
 </template>
 
 
@@ -443,7 +445,7 @@ console.log("📡 URL :", url);
 
     const res = await axios.post(url, payload, {
       headers: { "Content-Type": "application/json" }
-      
+
     });
 console.log("📨 Réponse brute :", res.data);
 
@@ -455,8 +457,8 @@ reports.value = [...reports.value];
 
       showToast("Report accepté ✔", "success");
       closeModals();
-    } 
-    
+    }
+
     else {
       showToast(res.data.message || "Erreur lors de la validation", "error");
     }
@@ -565,471 +567,214 @@ function formatDateBackend(v) {
 }
 </script>
 
-<style scoped>
-
-/* =========================
-   TITRES DE SECTIONS
-   ========================= */
-.section-title {
-  color: #fff;
-  font-weight: 600;
-  margin-bottom: 10px;
+<style>
+/* =====================================================
+   🎧 iTUNES DARK – ROOT
+   ===================================================== */
+.reports-page {
+  min-height: 100vh;
+  background: #0e0e0f;        /* noir profond */
+  color: #f2f2f2;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* =========================
-   GRILLE DES CARDS (MOBILE)
-   ========================= */
-.reports-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
+/* neutralise bootstrap blanc */
+.reports-page .container,
+.reports-page .container-xxl {
+  background: transparent !important;
 }
 
-/* =========================
-   GRILLE RESPONSIVE - TABLETTE
-   ========================= */
-@media (min-width: 600px) {
-  .reports-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* =========================
-   GRILLE RESPONSIVE - DESKTOP
-   ========================= */
-@media (min-width: 1000px) {
-  .reports-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* =========================
-   CARTE DE REPORT (STYLE PRINCIPAL)
-   ========================= */
-.report-card {
-  background-color: #1c1c1e;
+/* =====================================================
+   🔎 SEARCH
+   ===================================================== */
+.reports-page .form-control,
+.reports-page .search-input {
+  background: #1c1c1e !important;
+  color: #f2f2f2 !important;
   border: 1px solid #2c2c2e;
-  padding: 1rem;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
-/* =========================
-   HOVER SUR LES CARTES
-   ========================= */
-.report-card:hover {
-  border-color: #ff6a00;
-  transform: translateY(-2px);
-  transition: 0.2s;
+.reports-page .form-control::placeholder {
+  color: #8e8e93;
 }
 
-/* =========================
-   CARTE D'HISTORIQUE (OPACITÉ)
-   ========================= */
-.history-card {
-  opacity: 0.9;
-}
-
-/* =========================
-   BADGES D'ÉTAT (HISTORIQUE)
-   ========================= */
-.history-badge {
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-weight: bold;
-  color: white;
-}
-
-/* =========================
-   LOADER CENTRÉ
-   ========================= */
-.loader-center {
-  padding: 2rem 0;
-}
-
-/* =========================
-   INPUT DE RECHERCHE
-   ========================= */
-/* BARRE DE RECHERCHE REWORK */
-.search-input {
+/* =====================================================
+   📢 ALERTS
+   ===================================================== */
+.reports-page .alert {
   background: #1c1c1e;
   border: 1px solid #2c2c2e;
-  color: white;
-  padding: 8px 14px;
-  font-size: 0.9rem;
-  transition: 0.2s;
+  color: #f2f2f2;
 }
 
-/* Icône placée au début */
-.search-input::placeholder {
-  color: #888;
-  opacity: 0.8;
-}
-
-/* Hover + focus minimaliste */
-.search-input:hover {
-  border-color: #3a3a3c;
-}
-
-.search-input:focus {
-  border-color: #ff6a00;
-  background: #2a2a2c;
-  box-shadow: 0 0 0 2px rgba(255, 106, 0, 0.2);
-  outline: none;
-  color:white;
-}
-
-/* Conteneur pour affiner le spacing */
-.search-wrapper {
-  margin-bottom: 1rem;
-}
-
-/* =========================
-   TOGGLE AFFICHAGE HISTORIQUE
-   ========================= */
-.history-toggle {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Compteur dans le toggle */
-.history-toggle .count {
-  color: #ff6a00;
-  font-weight: 600;
-}
-
-/* Flèche dans le toggle */
-.history-toggle .arrow {
-  margin-left: auto;
-  color: #aaa;
-  font-size: 0.9rem;
-}
-
-/* Hover sur le toggle */
-.history-toggle:hover {
-  color: #ff6a00;
-}
-
-
-
-
-/* Timeline container */
-.timeline {
-  border-left: 2px solid #333;
-  margin-left: 12px;
-  padding-left: 20px;
-  color:#fff;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Dot at each event */
-.timeline-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid #555;
-  background: #222;
-  position: absolute;
-  left: -28px;
-  top: 5px;
-}
-
-.timeline-dot.accepted {
-  background: #28a745;
-  border-color: #28a745;
-}
-
-.timeline-dot.refused {
-  background: #dc3545;
-  border-color: #dc3545;
-}
-
-.timeline-dot.pending {
-  background: #ff8800;
-  border-color: #ff8800;
-}
-
-/* Timeline items */
-.timeline-item {
-  position: relative;
-  padding: 10px 15px;
-  background: #1c1c1e;
-  border: 1px solid #2c2c2e;
-  border-radius: 8px;
-}
-
-/* Badges */
-.badge-status {
-  padding: 3px 7px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: bold;
-  margin-bottom: 5px;
-  display: inline-block;
-}
-
-.status-accepted {
-  background: #28a745;
-  color: white;
-}
-
-.status-refused {
-  background: #dc3545;
-  color: white;
-}
-
-
-
-/* ===========================
-   HEADER (nom + statut)
-   =========================== */
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.history-header .name {
-  color: #fff;
-  font-weight: 600;
-  margin: 0;
-}
-
-.status-tag {
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-weight: bold;
-}
-
-.status-tag.accepted {
-  background: #1e8f4c; /* vert sombre premium */
-  color: white;
-}
-
-.status-tag.refused {
-  background: #b83232; /* rouge sombre premium */
-  color: white;
-}
-
-/* ===========================
-   DATES
-   =========================== */
-.history-dates {
-  margin: 6px 0 10px;
-  padding-left: 4px;
-  border-left: 2px solid #333;
-}
-
-.date-row {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 3px;
-}
-
-.date-row .label {
-  color: #888;
-  font-size: 0.85rem;
-}
-
-.date-row .value {
-  color: #ddd;
-  font-size: 0.85rem;
-}
-
-/* ===========================
-   SECTIONS (élève / prof)
-   =========================== */
-.history-section {
-  margin-top: 10px;
-  padding: 8px 10px;
-  background: #161616;
-  border-radius: 6px;
-  border: 1px solid #252525;
-}
-
-.section-title {
-  color: #ff6a00;
-  
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.section-line {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #ccc;
-}
-
-.section-line .label {
-  color: #888;
-}
+/* =====================================================
+   🧱 SECTIONS
+   ===================================================== */
 .section-header {
   display: flex;
   align-items: center;
-  
-  gap: 8px;
-  margin: 20px 0 10px 0;
+  gap: 10px;
+  margin: 28px 0 14px;
 }
 
 .section-dot {
-  width: 10px;
-  height: 10px;
-  background: #ff6a00;
+  width: 8px;
+  height: 8px;
+  background: #ff9f0a; /* accent Apple */
   border-radius: 50%;
 }
 
 .section-title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 600;
-  color: #fff;
+  letter-spacing: .2px;
+  color: #f2f2f2;
 }
 
 .section-count {
-  background: #ff6a00;
-  color: #000;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: bold;
   margin-left: auto;
-}
-/* ============================
-   🔥 OVERLAY MODALE (blur + foncé)
-   ============================ */
-.sbs-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-
-  background: rgba(0, 0, 0, 0.55); /* assombri */
-  backdrop-filter: blur(6px);      /* flou */
-  -webkit-backdrop-filter: blur(6px);
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  z-index: 9999; /* Toujours au-dessus */
-  padding: 20px; /* pour éviter que ça colle aux bords en mobile */
+  background: #2c2c2e;
+  color: #ff9f0a;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-/* ============================
-   🧩 CONTENU DE LA MODALE
-   ============================ */
-.sbs-modal-content {
+/* =====================================================
+   📦 CARDS
+   ===================================================== */
+.reports-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 720px) {
+  .reports-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1100px) {
+  .reports-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.report-card {
   background: #1c1c1e;
-  border-radius: 12px;
-  padding: 20px;
-  width: 100%;
-  max-width: 420px;
-color:white;
   border: 1px solid #2c2c2e;
-  animation: modalPop 0.25s ease-out;
+  border-radius: 14px;
+  padding: 16px;
+  color: #f2f2f2;
+  transition: background .2s ease, transform .2s ease;
 }
 
-/* Animation d'apparition */
-@keyframes modalPop {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.report-card:hover {
+  background: #2a2a2c;
+  transform: translateY(-2px);
 }
 
-/* ============================
-   Champs input dans la modale
-   ============================ */
-.sbs-modal-content input,
-.sbs-modal-content textarea {
-  background: #111;
-  border: 1px solid #333;
-  color: white;
+.report-card .text-secondary {
+  color: #8e8e93 !important;
 }
 
-.sbs-modal-content input:focus,
-.sbs-modal-content textarea:focus {
-  border-color: #ff6a00;
-  box-shadow: 0 0 0 2px rgba(255,106,0,0.3);
-    color: #f1f1f1 !important;   /* Texte principal clair */
-
+/* =====================================================
+   📜 TIMELINE
+   ===================================================== */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-left: 14px;
+  padding-left: 18px;
+  border-left: 1px solid #2c2c2e;
 }
 
-/* Bouton "Annuler" */
-.sbs-modal-content .btn-secondary {
-  background: #333;
-  border: none;
-    color: #f1f1f1 !important;   /* Texte principal clair */
-
+.timeline-item {
+  position: relative;
+  background: #1c1c1e;
+  border: 1px solid #2c2c2e;
+  border-radius: 14px;
+  padding: 14px;
 }
 
-.sbs-modal-content .btn-secondary:hover {
-  background: #444;
-    color: #f1f1f1 !important;   /* Texte principal clair */
-
+.timeline-dot {
+  position: absolute;
+  left: -26px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
+
+.timeline-dot.accepted { background: #30d158; }
+.timeline-dot.refused  { background: #ff453a; }
+.timeline-dot.pending  { background: #ff9f0a; }
+
 .timeline-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  padding: 8px 4px;
-  margin-bottom: 8px;
-}
-
-.timeline-header:hover {
-  background: rgba(255,255,255,0.04);
-  border-radius: 6px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #fff;
-}
-
-.mini-status {
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.mini-status.accepted {
-  background: #1e8f4c;
-}
-
-.mini-status.refused {
-  background: #b83232;
-}
-
-.mini-date {
-  font-size: 0.75rem;
-  color: #aaa;
-}
-
-.arrow {
-  color: #ccc;
-  font-size: 0.9rem;
 }
 
 .timeline-content-expanded {
-  padding: 10px 0 0 4px;
-  border-top: 1px solid #333;
-  margin-top: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #2c2c2e;
+  color: #d1d1d6;
+}
+
+/* =====================================================
+   🪟 MODALES
+   ===================================================== */
+.sbs-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.sbs-modal-content {
+  background: #1c1c1e;
+  color: #f2f2f2;
+  border: 1px solid #2c2c2e;
+  border-radius: 16px;
+  padding: 22px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.sbs-modal-content input,
+.sbs-modal-content textarea {
+  background: #2c2c2e;
+  color: #f2f2f2;
+  border: 1px solid #3a3a3c;
+}
+
+/* =====================================================
+   🔘 BOUTONS
+   ===================================================== */
+.reports-page .btn-secondary {
+  background: #2c2c2e;
+  border: none;
+  color: #f2f2f2;
+}
+
+.reports-page .btn-success {
+  background: #30d158;
+  border: none;
+  color: #000;
+}
+
+.reports-page .btn-danger {
+  background: #ff453a;
+  border: none;
+  color: #fff;
 }
 
 </style>

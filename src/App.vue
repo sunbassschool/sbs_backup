@@ -1,101 +1,28 @@
-
 <template>
-  
   <div class="app-container">
 
-    <!-- 🔐 Message + loader lors de la déconnexion -->
+    <!-- 🔐 Logout loader -->
     <div v-if="showLogoutMessage" class="logout-container">
       <div class="logout-spinner"></div>
       <p class="logout-text">Déconnexion en cours...</p>
     </div>
 
-    <!-- 🌍 Application -->
     <router-view v-else />
-
   </div>
 </template>
 
-
-
-
 <script setup>
-/* ============================================================================
-   IMPORTS
-   ============================================================================ */
-import { ref, watch, onMounted, computed } from "vue";
+import { ref, onMounted } from "vue";
 import { useAuthStore } from "@/stores/authStore.js";
-import { storeToRefs } from "pinia";
 import { registerSW } from "virtual:pwa-register";
 import { useMetronomeStore } from "@/stores/useMetronomeStore";
-import router from "@/router";
-import { useRoute } from "vue-router";
 
-// login détecté
-const route = useRoute();
-
-const isLoginPage = computed(() => route.name === "login");
-/* ============================================================================
-   STATE LOCAL
-   ============================================================================ */
-const showLogoutMessage = ref(false);       // Affichage du loader de logout
-const isUserNavigating = ref(false);        // Flag pour détecter les navigations utilisateur
-
-/* ============================================================================
-   AUTH STORE
-   ============================================================================ */
 const auth = useAuthStore();
-const authStore = auth;
+const showLogoutMessage = ref(false);
 
-// Récupération des states réactifs du store
-
-/* ============================================================================
-   WATCHERS
-   ============================================================================ */
-
-/* 🟦 1. Quand jwtReady passe à true → on retire le splash */
-watch(
-  () => auth.jwtReady,
-  (ready) => {
-    if (!ready) return
-
-    const app = document.getElementById("app")
-    if (app) app.classList.add("app-visible")
-
-    const splash = document.getElementById("loading-screen")
-    if (splash) {
-      splash.classList.add("fade-out")
-      setTimeout(() => splash.remove(), 600)
-    }
-  }
-)
-;
-
-
-
-/* ============================================================================
-   ROUTER HOOKS
-   ============================================================================ */
-
-// Avant chaque navigation → on indique que l'utilisateur navigue
-router.beforeEach((to, from, next) => {
-  isUserNavigating.value = true;
-  next();
-});
-
-// Après chaque navigation → petit délai avant réactivation
-router.afterEach(() => {
-  setTimeout(() => {
-    isUserNavigating.value = false;
-  }, 500);
-});
-
-/* ============================================================================
-   MOUNT LOGIC (événements globaux)
-   ============================================================================ */
-onMounted(async () => {
+onMounted(() => {
   console.log("⏱️ UI affichée à", performance.now());
 
-  /* 📌 Affichage du message de déconnexion */
   window.addEventListener("show-logout-message", () => {
     showLogoutMessage.value = true;
     setTimeout(() => {
@@ -103,11 +30,9 @@ onMounted(async () => {
     }, 1500);
   });
 
-  /* 📌 Déconnexion déclenchée globalement */
   window.addEventListener(
     "logout",
     async () => {
-      console.log("📣 logout event reçu dans App.vue");
       if (!auth.isLoggingOut) {
         await auth.logout();
       }
@@ -115,21 +40,15 @@ onMounted(async () => {
     { once: true }
   );
 
-  /* 📌 Gestion PWA (MAJ service worker) */
   registerSW({
     onNeedRefresh() {
       console.log("🔁 MAJ dispo");
     }
   });
 
-  /* 📌 Réactivation audio pour le métronome après retour focus mobile */
   useMetronomeStore().initVisibilityRecovery();
-
-  // 🚫 Ne pas lancer initAuth() ici → géré automatiquement par le router
 });
 </script>
-
-
 
 
 
@@ -137,12 +56,12 @@ onMounted(async () => {
 /* ============================================================================
    TRANSITIONS PAGE
    ============================================================================ */
-.fade-enter-active, 
+.fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.18s ease;
 }
 
-.fade-enter-from, 
+.fade-enter-from,
 .fade-leave-to {
   opacity: 0;
 }

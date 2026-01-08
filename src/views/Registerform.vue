@@ -353,28 +353,11 @@ const response = await fetch(url, { method: "GET" });
 
     console.log("Résultat de l'inscription :", result);
 
-    if (result.success) {
-      this.message = "Inscription réussie !";
-      this.errorMessage = "";
-
-      localStorage.setItem("user", JSON.stringify({
-        email: this.email,
-        prenom: this.prenom,
-        id: result.id
-      }));
-
-  // 🔁 Redirection Stripe si formule sélectionnée
-  if (this.formule && stripeLinks[this.formule]) {
-    const redirectUrl = stripeLinks[this.formule](this.email);
-window.open(redirectUrl, "_blank", "width=800,height=800");
-this.$router.push('/mon-espace');
-
-
-    return; // on stoppe ici
-  }
-
-    setTimeout(() => this.$router.push('/mon-espace'), 1500);
-    } else {
+  if (result.success) {
+  this.$router.push("/login")
+  return
+}
+ else {
       this.errorMessage = result.message || "Erreur lors de l'inscription.";
       this.message = "";
       // Réinitialise le formulaire

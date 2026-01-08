@@ -24,52 +24,69 @@
   >
     🔗 Partagé avec moi
   </button>
+  <button
+    ref="addBtn"
+    class="add-btn"
+    v-if="!isReadOnlyShared"
+    :class="{ active: addMenu.visible }"
+    @click.stop="openAddMenuFromButton"
+  >
+    <span class="icon">＋</span>
+    Ajouter
+  </button>
 </div>
 
           <p class="subtitle">Fichiers liés à tes cours</p>
-          <input
-  v-model="searchQuery"
-  class="search-input"
-  placeholder="🔍 Rechercher un fichier ou dossier…"
-  @keydown.esc="searchQuery = ''"
-/>
+<div class="search-wrapper">
+  <input
+    v-model="searchQuery"
+    class="search-input"
+    placeholder="🔍 Rechercher un fichier ou dossier…"
+    @keydown.esc="searchQuery = ''"
+  />
 
-        </div>
-<div
-  v-if="uploadSession"
-  class="upload-badge"
-  :class="{ done: uploadFinished }"
-  @click="!uploadFinished && (currentFolderId = uploadSession.folderId)"
+ <button
+  v-if="searchQuery"
+  class="search-clear"
+  @click="searchQuery = ''"
+  aria-label="Effacer la recherche"
 >
-  <template v-if="uploadFinished">
-    ✔️ Uploads terminés
-  </template>
-  <template v-else>
-    ⬆️ {{ uploadsInProgress }}
-    upload{{ uploadsInProgress > 1 ? 's' : '' }} en cours
-  </template>
+  <svg viewBox="0 0 12 12" width="10" height="10">
+    <path
+      d="M1 1L11 11M11 1L1 11"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+    />
+  </svg>
+</button>
+
 </div>
 
 
+        </div>
+<div class="header-actions">
+  <div
+    v-if="uploadSession"
+    class="upload-badge"
+    :class="{ done: uploadFinished }"
+    @click="!uploadFinished && (currentFolderId = uploadSession.folderId)"
+  >
+    <template v-if="uploadFinished">✔️ Uploads terminés</template>
+    <template v-else>
+      ⬆️ {{ uploadsInProgress }} upload{{ uploadsInProgress > 1 ? 's' : '' }} en cours
+    </template>
+  </div>
 
-        <button
-          ref="addBtn"
-          class="add-btn"
-            v-if="!isReadOnlyShared"
 
-          :class="{ active: addMenu.visible }"
-          @click.stop="openAddMenuFromButton"
-        >
-          <span class="icon">＋</span>
-          Ajouter
-        </button>
-      </div>
+</div></div>
+
 
       <!-- ===================================================== -->
       <!-- ➕ MENU AJOUT -->
       <!-- ===================================================== -->
       <div
-        v-if="addMenu.visible && !isDragging"
+v-if="addMenu.visible && !isDragging && !showUpload"
         class="context-backdrop"
         @click="closeAddMenu"
       >
@@ -78,7 +95,7 @@
           :style="{ top: addMenu.y + 'px', left: addMenu.x + 'px' }"
           @click.stop
         >
-          <div class="context-item" @click="addFile">📄 Ajouter un fichier</div>
+          <div class="context-item" @click="openUpload">📄 Ajouter un fichier</div>
           <div
             class="context-item"
             @click="() => { closeAddMenu(); createFolder() }"
@@ -86,7 +103,7 @@
             📁 Nouveau dossier
           </div>
 
-   
+
         </div>
       </div>
 
@@ -95,13 +112,8 @@
       <!-- ===================================================== -->
 <UploadModal
   v-if="showUpload"
-  :cours-id="effectiveCoursId"
-  :folder-id="effectiveFolderId || undefined"
-  :eleve-id="effectiveEleveId || undefined"
-  @uploaded="onUploadSuccess"
-  @done="onCloseUpload"
-  @close="onCloseUpload"
-  @cancel="onCloseUpload"
+  @close="showUpload = false"
+  @files-selected="onFilesSelected"
 />
 
 
@@ -110,7 +122,7 @@
       <!-- 🧱 BREADCRUMB -->
       <!-- ===================================================== -->
       <div class="breadcrumb finder-breadcrumb">
-    
+
 
 
   <span
@@ -227,7 +239,15 @@
   '_optimistic_revoke': folder._optimistic_revoke
 }"
 
+  @pointerdown="onPressStart(folder, $event)"
+  @pointerup="onPressEnd"
+  @pointerleave="onPressEnd"
 
+  @dragover.prevent
+  @drop.prevent="handleDropOnFolder($event, folder.folder_id)"
+
+  @click.stop="onFolderTap(folder, $event)"
+  @contextmenu.prevent.stop="openFolderMenu($event, folder)"
   draggable="true"
   @dragstart="onFolderDragStart($event, folder)"
   @dragend="onDragEnd"
@@ -258,7 +278,7 @@
           <!-- ================================================= -->
           <transition-group name="fade-slide" tag="div">
             <div
-v-for="file in searchedFiles"             :key="file.upload_id"
+v-for="file in searchedFiles"             :key="file.upload_id || file.optimistic_id"
               class="upload-item"
               :class="{
                 optimistic: file._optimistic,
@@ -273,15 +293,23 @@ v-for="file in searchedFiles"             :key="file.upload_id"
 
 
             >
-              <div class="file-main">
-                <span class="file-icon">📄</span>
+              <div class="file-main"
+   @pointerdown="onPressStart(file, $event, 'file')"
+    @pointerup="onPressEnd"
+    @pointerleave="onPressEnd"
+
+
+              >
+<span class="file-icon">
+  {{ getFileIcon(file) }}
+</span>
 
                 <div class="file-info">
                   <strong v-if="editingId !== file.upload_id">
                     {{ file.file_name }}
   <span v-if="file._optimistic" class="upload-spinner"></span>
                   </strong>
- 
+
                   <input
                     v-else
                     :ref="el => setFileRenameRef(el, file.upload_id)"
@@ -297,14 +325,20 @@ v-for="file in searchedFiles"             :key="file.upload_id"
   >
     {{ getFilePathLabel(file) }}
   </div>
-             
-               
-               
+
+
+
                 </div>
-              
-               
-              
+
+
+
               </div>
+              <!-- 🔄 PROGRESS BAR OPTIMISTIC -->
+<div v-if="file._optimistic" class="upload-progress">
+  <span :style="{ width: file.progress + '%' }" />
+</div>
+
+
             </div>
           </transition-group>
 
@@ -320,13 +354,18 @@ v-for="file in searchedFiles"             :key="file.upload_id"
   "
   class="empty-state"
 >
-  <UploadFileCore
-    :eleve-id="effectiveEleveId"
-    :cours-id="effectiveCoursId"
-    :folder-id="currentFolderId"
-    @uploaded="onUploadSuccess"
-    @done="onUploadDone"
-  />
+<UploadFileCore
+  ref="uploader"
+  :eleve-id="effectiveEleveId"
+  :cours-id="effectiveCoursId"
+  :folder-id="currentFolderId"
+  @queued="onQueued"
+  @progress="onProgress"
+  @uploaded="onUploadSuccess"
+    @error="onUploadError"
+  @done="onUploadDone"
+/>
+
 </div>
 
 
@@ -337,8 +376,9 @@ v-for="file in searchedFiles"             :key="file.upload_id"
       <!-- ===================================================== -->
       <!-- 📋 CONTEXT MENU -->
       <!-- ===================================================== -->
+
       <div
-        v-if="contextMenu.visible && !isDragging"
+v-if="contextMenu.visible && !isDragging"
         class="context-backdrop"
         @click="closeContextMenu"
       >
@@ -438,7 +478,7 @@ v-for="file in searchedFiles"             :key="file.upload_id"
     <h4 style="padding:8px 12px">🔗 Partager le dossier</h4>
 
     <div class="context-item">
-     
+
     </div>
 
     <div class="context-item" @click="confirmShareFolder">
@@ -472,19 +512,86 @@ import { useAuthStore } from "@/stores/authStore"
 import UploadModal from "@/components/UploadModal.vue"
 import { useRoute } from "vue-router"
 import UploadFileCore from "@/components/UploadFileCore.vue"
+import { useToast } from "vue-toastification"
 
 
 // ============================================================================
 // 🔐 AUTH + ROUTE
 // ============================================================================
 const auth = useAuthStore()
+const toast = useToast()
+
 const sharedWithMeIds = ref(new Set())
 const sharedByMeIds  = ref(new Set())
+const uploader = ref(null)
+const showUpload = ref(false)
+const openUpload = () => {
+    console.log("🟢 openUpload")
+  closeAddMenu()        // ✅ ferme le menu contextuel
+
+  showUpload.value = true
+}
+const onUploadError = (e) => {
+  if (e.type === "quota") {
+    toast.error(e.message)
+
+    if (e.optimistic_id) {
+      removeOptimisticUpload(e.optimistic_id)
+    }
+  }
+}
+
+
+const onFilesSelected = (files) => {
+  console.log("🚀 EleveUploads reçoit files", files)
+
+  if (!uploader.value) {
+    console.error("⛔ uploader ref NULL")
+    return
+  }
+
+  uploader.value.handleFiles(files)
+}
+
+const currentCoursId = null
+
 const onCloseUpload = () => {
   showUpload.value = false
   uploadSession.value = null
   uploadFinished.value = false
+  addMenu.visible = false   // 🔥 LIGNE CLÉ
 }
+
+let pressTimer = null
+let longPressTriggered = false
+
+const onPressStart = (item, e, type = "folder") => {
+  if (e.pointerType === "mouse") return
+  e.preventDefault() // 🔥 IMPORTANT iOS
+
+  longPressTriggered = false
+
+  pressTimer = setTimeout(() => {
+    longPressTriggered = true
+    navigator.vibrate?.(20)
+
+    if (type === "file") {
+      openFileMenu(e, item)
+    } else {
+      openFolderMenu(e, item)
+    }
+  }, 500)
+}
+
+
+
+
+const onPressEnd = () => {
+  clearTimeout(pressTimer)
+  pressTimer = null
+}
+
+const isAutoOpening = ref(false)
 
 const route = useRoute()
 const sharedPrefetched = ref(false)
@@ -651,7 +758,15 @@ const isProfLike = computed(() =>
 
 const eleveBlocked = ref(false)
 const onFolderTap = (folder, e) => {
-  // 🔍 si recherche active → on sort du mode recherche
+  // 🔥 si multi-sélection → jamais ouvrir
+  if (
+    selectedFolders.value.length > 1 ||
+    selectedFiles.value.length > 1
+  ) {
+    selectFolder(folder, e)
+    return
+  }
+
   if (searchQuery.value) {
     searchQuery.value = ""
   }
@@ -662,11 +777,19 @@ const onFolderTap = (folder, e) => {
     openFolder(folder)
     return
   }
-
-
-  if (e.detail === 2) openFolder(folder)
-  else selectFolder(folder, e)
+if (longPressTriggered) {
+  longPressTriggered = false
+  return
 }
+
+  if (e.detail === 2) {
+    openFolder(folder)
+  } else {
+    selectFolder(folder, e)
+  }
+}
+
+
 
 
 // =====================================================
@@ -716,14 +839,14 @@ const getEventPosition = (e) => {
   }
 }
 
-// Générer le lien 
+// Générer le lien
 
 // =====================================================
 // 🔗 MODE FINDER
 // =====================================================
 const finderMode = ref("normal") // normal | shared
 
-const sharedFolders = ref([]) 
+const sharedFolders = ref([])
 // [{ folder_id, permission, prof_id, share_id }]
 
 const sharedPermissionsByFolder = computed(() => {
@@ -778,6 +901,10 @@ const onFileTap = (file, e) => {
     openFile(file)
     return
   }
+if (longPressTriggered) {
+  longPressTriggered = false
+  return
+}
 
   if (e.detail === 2) {
     openFile(file)
@@ -876,7 +1003,7 @@ const cacheStart = ref(performance.now())
 // ⚠️ Doit être IDENTIQUE à tes autres vues (Planning.vue etc.)
 // ============================================================================
 const routes = {
-  POST: "AKfycbzlwwgOxBdbd_AbBrWjxkPD2WQ26Fa8Cah6mFA7N30UYhLNdEemNxgTHhfK0qt1vMfMTw/exec"
+  POST: "AKfycbzo0ooaiNkY6yyc9MmXfwVDxJmVwklyeoKOpPklgWotIsKRhNw9kim1rKcPPwsOj8wWGg/exec"
 }
 const loaderStep = ref("init")
 const filteredFolders = computed(() => {
@@ -1148,7 +1275,6 @@ const draggedFiles = ref([])
          // liste brute des fichiers (API)
 
 // Upload modal
-const showUpload = ref(false)
 const effectiveCoursId = ref(null) // utilisé par UploadModal
 const generateCoursId = () => `GEN_${Date.now()}`
 
@@ -1175,7 +1301,7 @@ const previewFile = ref(null)
 
 
 // ref
-const folders = ref([]) 
+const folders = ref([])
 
 
 
@@ -1241,24 +1367,25 @@ const addFile = () => {
     f => f.folder_id === currentFolderId.value
   )
 
+  // 🔒 TOUJOURS fermer le menu AVANT
+  addMenu.visible = false
+
   // 👨‍🎓 élève → toujours OK
   if (!isProfLike.value) {
     uploadFolderId.value = currentFolderId.value
     uploadSession.value = {
-  id: crypto.randomUUID(),
-  folderId: currentFolderId.value,
-  total: 1,
-  done: 0
-}
+      id: crypto.randomUUID(),
+      folderId: currentFolderId.value,
+      total: 1,
+      done: 0
+    }
 
     showUpload.value = true
-    closeAddMenu()
     return
   }
 
   // 👨‍🏫 prof
-  const isEleveFolder =
-    folder?.owner_type === "eleve"
+  const isEleveFolder = folder?.owner_type === "eleve"
 
   // ❌ dossier élève sans élève sélectionné
   if (isEleveFolder && !currentEleveId.value) {
@@ -1268,9 +1395,16 @@ const addFile = () => {
 
   // ✅ dossier prof OU dossier élève valide
   uploadFolderId.value = currentFolderId.value
+  uploadSession.value = {
+    id: crypto.randomUUID(),
+    folderId: currentFolderId.value,
+    total: 1,
+    done: 0
+  }
+
   showUpload.value = true
-  closeAddMenu()
 }
+
 
 const effectiveEleveIdForUploads = computed(() => {
   if (!isProfLike.value) return userId.value
@@ -1326,6 +1460,13 @@ const foldersCacheKey = computed(() =>
 )
 const onBreadcrumbClick = (folder) => {
   if (folder.folder_id === "__search__") return
+
+  // 🔥 sortir du mode recherche
+  if (searchQuery.value) {
+    searchQuery.value = ""
+  }
+
+  clearSelection()
 
   if (folder.name === "🏠 Home") {
     currentFolderId.value = profRootFolder.value?.folder_id || null
@@ -1612,9 +1753,14 @@ if (e.key === "Escape") {
 }
 
 if (e.key === "Delete") {
-  if (selectedFiles.value.length) deleteSelectedUploads()
-  else if (selectedFolders.value.length) deleteSelectedFolders()
+  if (selectedFiles.value.length || selectedFolders.value.length) {
+    closeContextMenu()
+
+    if (selectedFiles.value.length) deleteSelectedUploads()
+    if (selectedFolders.value.length) deleteSelectedFolders()
+  }
 }
+
 
 
 
@@ -1691,6 +1837,39 @@ last.uploads.forEach(u => {
 
 }
 // FUNCTIONS
+const getFileIcon = (file) => {
+  // Dossier (au cas où)
+  if (file.type === "folder") return "📁"
+
+  const name = file.file_name || ""
+  const ext = name.split(".").pop()?.toLowerCase()
+
+  if (["pdf"].includes(ext)) return "📄"
+  if (["mp3", "wav", "aac", "flac"].includes(ext)) return "🎵"
+  if (["mp4", "mov", "webm", "mkv"].includes(ext)) return "🎬"
+  if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return "🖼️"
+  if (["txt", "md"].includes(ext)) return "📝"
+  if (["zip", "rar", "7z"].includes(ext)) return "🗜️"
+
+  return "📦"
+}
+
+const onProgress = ({ optimistic_id, progress }) => {
+  Object.values(uploadsByFolder.value).forEach(list => {
+    list.forEach(item => {
+      if (item._optimistic && item.optimistic_id === optimistic_id) {
+        item.progress = progress
+      }
+    })
+  })
+
+  // force refresh
+  uploadsByFolder.value = { ...uploadsByFolder.value }
+}
+
+
+
+
 const prefetchSharedData = async () => {
   const now = Date.now()
 
@@ -1832,44 +2011,133 @@ const startFileLongPress = (file, e) => {
     openFileMenu(e, file)
   }, 500)
 }
-const addOptimisticUploads = (wrappedFiles, folderId, sessionId) => {
-  const fid = folderId ?? null
-  if (!uploadsByFolder.value[fid]) uploadsByFolder.value[fid] = []
+const addOptimisticUploads = (items, folderId, sessionId) => {
+  if (!Array.isArray(items)) {
+    console.error("⛔ addOptimisticUploads → items invalides", items)
+    return
+  }
 
-  wrappedFiles.forEach(({ file, optimistic_id }) => {
-    uploadsByFolder.value[fid].push({
-      upload_id: `TMP_${optimistic_id}`,   // 👈 utile pour debug
-      optimistic_id,
-      session_id: sessionId,
-      file_name: file.name,                // 🔥 FIX
-      file_size: file.size,
-      file_type: file.type,
-      folder_id: fid,
-      created_at: new Date().toISOString(),
-      _optimistic: true
-    })
+  const fid = folderId ?? null
+  if (!uploadsByFolder.value[fid]) {
+    uploadsByFolder.value[fid] = []
+  }
+
+  items.forEach(item => {
+    // ===============================
+    // 🅰️ CAS File natif (input / drag)
+    // ===============================
+    if (item?.file instanceof File) {
+      uploadsByFolder.value[fid].push({
+        upload_id: `TMP_${item.optimistic_id}`,
+        optimistic_id: item.optimistic_id,
+        session_id: sessionId,
+
+        name: item.file.name,
+        file_name: item.file.name,
+
+        file_size: item.file.size,
+        file_type: item.file.type,
+        folder_id: fid,
+        created_at: new Date().toISOString(),
+        _optimistic: true,
+        progress: 0
+      })
+      return
+    }
+
+    // ===============================
+    // 🅱️ CAS normalisé (UploadFileCore)
+    // ===============================
+    if (item?.file_name) {
+      uploadsByFolder.value[fid].push({
+        upload_id: `TMP_${item.optimistic_id}`,
+        optimistic_id: item.optimistic_id,
+        session_id: sessionId,
+
+        name: item.file_name,
+        file_name: item.file_name,
+
+        file_size: item.file_size ?? null,
+        file_type: item.file_type ?? null,
+        folder_id: fid,
+        created_at: new Date().toISOString(),
+        _optimistic: true,
+        progress: item.progress ?? 0
+      })
+      return
+    }
+
+    // ===============================
+    // ❌ CAS INVALIDE
+    // ===============================
+    console.error("⛔ optimistic item invalide", item)
   })
 
-  // 🔥 force Vue
+  // 🔁 force re-render Vue
   uploadsByFolder.value = { ...uploadsByFolder.value }
+
+  // 🧪 debug court
+  console.log(
+    "🧪 optimistic injecté =",
+    uploadsByFolder.value[fid].map(f => ({
+      name: f.name,
+      optimistic: f._optimistic
+    }))
+  )
 }
 
+
+const removeOptimisticUpload = (optimisticId) => {
+  Object.keys(uploadsByFolder.value).forEach(fid => {
+    uploadsByFolder.value[fid] = uploadsByFolder.value[fid].filter(
+      f => f.optimistic_id !== optimisticId
+    )
+  })
+
+  // force re-render
+  uploadsByFolder.value = { ...uploadsByFolder.value }
+
+  console.log("🧹 optimistic supprimé =", optimisticId)
+}
 
 
 const openExplorerContextMenu = (e) => {
   e.preventDefault()
   e.stopPropagation()
 
-  const { x, y } = getEventPosition(e)
+  const MENU_WIDTH = 220
+  const MENU_HEIGHT = 260
+  const MARGIN = 8
+
+  const { x: rawX, y: rawY } = getEventPosition(e)
+
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  let x = rawX
+  let y = rawY + 8 // offset doigt
+
+  // clamp X
+  if (x + MENU_WIDTH > vw) {
+    x = vw - MENU_WIDTH - MARGIN
+  }
+  if (x < MARGIN) x = MARGIN
+
+  // clamp Y
+  if (y + MENU_HEIGHT > vh) {
+    y = vh - MENU_HEIGHT - MARGIN
+  }
+  if (y < MARGIN) y = MARGIN
 
   contextMenu.value = {
     visible: true,
     x,
-    y: y + 8, // petit offset doigt
+    y,
     type: "explorer",
     target: null
   }
 }
+
 
 
 const copyFolderFromContext = () => {
@@ -1937,24 +2205,31 @@ const deleteAndClose = (target) => {
 
 const selectedFolders = ref([]) // array de folder_id
 const selectFolder = (folder, e) => {
+  const id = folder.folder_id
+
+  // Ctrl / Cmd → toggle dans la sélection
   if (e.ctrlKey || e.metaKey) {
-    if (selectedFolders.value.includes(folder.folder_id)) {
-      selectedFolders.value = selectedFolders.value.filter(
-        id => id !== folder.folder_id
-      )
+    const index = selectedFolders.value.indexOf(id)
+
+    if (index !== -1) {
+      selectedFolders.value.splice(index, 1) // retire
     } else {
-      selectedFolders.value.push(folder.folder_id)
+      selectedFolders.value.push(id)          // ajoute
     }
-  } else {
-    selectedFolders.value = [folder.folder_id]
+    return
   }
+
+  // clic simple → sélection unique
+  selectedFolders.value = [id]
 }
+
 
 const allowedSharedRootIds = computed(() =>
   sharedFolders.value.map(s => s.folder_id)
 )
 
 const openFolder = (folder) => {
+  if (!folder || folder.folder_id === currentFolderId.value) return
   if (finderMode.value === "shared") {
     currentFolderId.value = folder.folder_id
     return
@@ -1970,77 +2245,139 @@ const openFolder = (folder) => {
 
 
 
+
 const onUploadSuccess = (upload) => {
-const fid =
-  upload.folder_id ??
-  uploadSession.value?.folderId ??
-  currentFolderId.value ??
-  null
-if (!fid) {
-  console.warn("⛔ onUploadSuccess sans folder_id", upload)
-  return
-}
+  console.log(
+  "🧪 searchedFiles contains optimistic ?",
+  searchedFiles.value.some(
+    f => f.optimistic_id === upload.optimistic_id
+  )
+)
 
-if (uploadSession.value) {
-  uploadSession.value.done++
+  console.group("✅ [ELEVE] onUploadSuccess")
 
-  if (uploadSession.value.done >= uploadSession.value.total) {
-    uploadFinished.value = true
-  vibrate(15) // 📳 micro vibration
+  console.log("📥 upload reçu =", upload)
+  console.log("📦 uploadSession BEFORE =", uploadSession.value)
+  console.log("📁 currentFolderId =", currentFolderId.value)
 
-    setTimeout(() => {
-      uploadSession.value = null
-      uploadFinished.value = false
-    }, 1200)
+  const fid =
+    upload.folder_id ??
+    uploadSession.value?.folderId ??
+    currentFolderId.value ??
+    null
+
+  console.log("🧭 fid calculé =", fid)
+
+  if (!fid) {
+    console.warn("⛔ onUploadSuccess ABORT → folder_id introuvable", upload)
+    console.groupEnd()
+    return
   }
-}
 
+  // ===============================
+  // 📊 session upload (badge / UX)
+  // ===============================
+  if (uploadSession.value) {
+    uploadSession.value.done++
+    console.log(
+      "📈 session progress =",
+      uploadSession.value.done,
+      "/",
+      uploadSession.value.total
+    )
 
-  if (!fid) return
+    if (uploadSession.value.done >= uploadSession.value.total) {
+      uploadFinished.value = true
+      vibrate(15)
 
-if (!uploadsByFolder.value[fid]) {
-  uploadsByFolder.value[fid] = []
-}
-const list = uploadsByFolder.value[fid]
+      setTimeout(() => {
+        uploadSession.value = null
+        uploadFinished.value = false
+      }, 1200)
+    }
+  }
 
-  // 🔥 trouver LE fantôme correspondant
-  const idx = list.findIndex(
-    f =>
-      f._optimistic &&
-      f.optimistic_id === upload.optimistic_id
+  // ===============================
+  // 📁 sécurité dossier
+  // ===============================
+  if (!uploadsByFolder.value[fid]) {
+    console.warn("📂 dossier absent → création", fid)
+    uploadsByFolder.value[fid] = []
+  }
+
+  // ===============================
+  // 🔍 recherche du fantôme
+  // ===============================
+  let realFid = fid
+  let list = uploadsByFolder.value[realFid] || []
+  let idx = list.findIndex(
+    f => f._optimistic && f.optimistic_id === upload.optimistic_id
   )
 
-  if (idx !== -1) {
-    // 🔁 REMPLACE le fantôme
-    list.splice(idx, 1, {
-      ...upload,
-      _optimistic: false
-    })
-  } else {
-    // fallback sécurité
-    list.push({
-      ...upload,
-      _optimistic: false
-    })
+  console.log("🧪 recherche fantôme dans fid =", fid, "→", idx)
+
+  if (idx === -1) {
+    console.warn("🔎 fantôme non trouvé dans fid, scan global…")
+
+    for (const [k, arr] of Object.entries(uploadsByFolder.value)) {
+      const j = (arr || []).findIndex(
+        f => f._optimistic && f.optimistic_id === upload.optimistic_id
+      )
+      if (j !== -1) {
+        realFid = k
+        list = arr
+        idx = j
+        console.log("🎯 fantôme trouvé dans dossier =", k, "index =", j)
+        break
+      }
+    }
   }
 
-  // 🔥 force rerender
+  // ===============================
+  // 🔁 remplacement fantôme → réel
+  // ===============================
+  if (idx !== -1) {
+    console.log("♻️ suppression fantôme", {
+      realFid,
+      idx,
+      optimistic_id: upload.optimistic_id
+    })
+
+    list.splice(idx, 1)
+  } else {
+    console.warn("⚠️ aucun fantôme trouvé → insertion directe")
+  }
+
+  uploadsByFolder.value[fid].push({
+    ...upload,
+    _optimistic: false,
+    progress: 100
+  })
+
+  // ===============================
+  // 🔄 force re-render
+  // ===============================
   uploadsByFolder.value = { ...uploadsByFolder.value }
 
-
-
-
-
   console.log(
-    "📂 fichiers dossier =",
-    uploadsByFolder.value[fid].map(f => f.file_name)
+    "📂 fichiers finaux du dossier",
+    fid,
+    uploadsByFolder.value[fid].map(f => ({
+      name: f.file_name,
+      optimistic: f._optimistic
+    }))
   )
 
-  // sélection douce (ne pas écraser multi sélection)
+  // ===============================
+  // 🖱️ sélection douce
+  // ===============================
   if (!selectedFiles.value.includes(upload.upload_id)) {
     selectedFiles.value.push(upload.upload_id)
   }
 
+  // ===============================
+  // 💾 cache
+  // ===============================
   writeUploadsCache(
     effectiveOwnerType.value,
     effectiveOwnerId.value,
@@ -2051,6 +2388,7 @@ const list = uploadsByFolder.value[fid]
 }
 
 
+
 const uploadsInProgress = computed(() =>
   uploadSession.value
     ? uploadSession.value.total - uploadSession.value.done
@@ -2059,6 +2397,9 @@ const uploadsInProgress = computed(() =>
 
 
 const onUploadDone = () => {
+  console.group("🏁 [ELEVE] onUploadDone")
+  console.log("uploadSession =", uploadSession.value)
+  console.groupEnd()
   if (!uploadSession.value) return
 
   uploadSession.value.done = uploadSession.value.total
@@ -2072,77 +2413,195 @@ const onUploadDone = () => {
 
 
 
+const isDescendant = (folderId, potentialParentId) => {
+  let current = folders.value.find(f => f.folder_id === folderId)
+  if (!current) return false
+
+  // 🔒 sécurité : même owner
+  const parentFolder = folders.value.find(f => f.folder_id === potentialParentId)
+  if (!parentFolder) return false
+
+  if (
+    current.owner_type !== parentFolder.owner_type ||
+    current.owner_id !== parentFolder.owner_id
+  ) {
+    return false
+  }
+
+  while (current.parent_id) {
+    if (current.parent_id === potentialParentId) return true
+    current = folders.value.find(f => f.folder_id === current.parent_id)
+  }
+
+  return false
+}
 
 
+const getTopLevelFolderIds = (ids) => {
+  return ids.filter(id =>
+    !ids.some(otherId =>
+      otherId !== id && isDescendant(id, otherId)
+    )
+  )
+}
 
 
-const deleteSelectedFolders = async () => {
-  const ids = [...selectedFolders.value]
+const deleteFolderAction = async (folder = null) => {
+  closeContextMenu()
+
+  let ids = []
+
+  if (selectedFolders.value.length > 1) {
+    ids = [...selectedFolders.value]
+  } else if (folder) {
+    ids = [folder.folder_id]
+  } else if (selectedFolders.value.length) {
+    ids = [...selectedFolders.value]
+  }
+
   if (!ids.length) return
 
-  if (!confirm(`Supprimer ${ids.length} dossier(s) et leur contenu ?`)) return
-closeContextMenu() // ✅ ICI
-  pushUndo()
+  await deleteSelectedFolders(ids)
+}
 
-  const foldersSnapshot = [...folders.value]
+const deleteSelectedFolders = async (ids) => {
+  console.group("🧨 DELETE SELECTED FOLDERS")
+
+  console.log("▶️ input ids", ids)
+  console.log("▶️ ids length", ids?.length)
+
+  if (!Array.isArray(ids) || !ids.length) {
+    console.warn("⛔ abort: ids invalid")
+    console.groupEnd()
+    return
+  }
+
+  console.log("👤 auth.jwt", auth?.jwt?.slice(0, 20) + "…")
+  console.log("👤 prof_id", profId.value)
+  console.log("📁 currentFolderId BEFORE", currentFolderId.value)
+  console.log("📁 folders BEFORE", folders.value.map(f => f.folder_id))
+
+  pushUndo()
+  console.log("↩️ undo snapshot pushed")
+
+  const foldersSnapshot = JSON.parse(JSON.stringify(folders.value))
+  const uploadsSnapshot = JSON.parse(JSON.stringify(uploadsByFolder.value))
   const prevFolder = currentFolderId.value
 
-
-
-  // ⚡ UI instant
+  // ===============================
+  // ⚡ UI OPTIMISTE
+  // ===============================
   folders.value = folders.value.filter(
     f => !ids.includes(f.folder_id)
   )
 
-ids.forEach(fid => {
-  delete uploadsByFolder.value[fid]
-})
-
+  ids.forEach(fid => {
+    if (uploadsByFolder.value[fid]) {
+      console.log("🧹 remove uploads for folder", fid)
+      delete uploadsByFolder.value[fid]
+    }
+  })
 
   if (ids.includes(currentFolderId.value)) {
+    console.warn("📁 current folder deleted → reset")
     currentFolderId.value = ""
   }
 
   selectedFolders.value = []
 
+  console.log("📁 folders AFTER optimistic", folders.value.map(f => f.folder_id))
+  console.log("📁 currentFolderId AFTER", currentFolderId.value)
+
+  // ===============================
+  // 📤 PAYLOAD
+  // ===============================
+  const payload = {
+    route: "softdeletefolders",
+    jwt: auth.jwt,
+    prof_id: profId.value,
+    folder_ids: ids
+  }
+
+  console.log("📤 payload", JSON.stringify(payload, null, 2))
+
   try {
     const url = getProxyPostURL(routes.POST)
+    console.log("🌍 POST URL", url)
 
-    await Promise.all(
-      ids.map(folder_id =>
-        axios.post(url, {
-          route: "softdeletefolder",
-          jwt: auth.jwt,
-          prof_id: profId.value,
-          folder_id
-        })
-      )
+    const t0 = performance.now()
+    const res = await axios.post(url, payload)
+    const t1 = performance.now()
+
+    console.log(`⏱ API duration ${(t1 - t0).toFixed(1)}ms`)
+    console.log("📥 response status", res.status)
+    console.log("📥 response headers", res.headers)
+    console.log("📥 response data", JSON.stringify(res.data, null, 2))
+
+    // ===============================
+    // 🔎 SANITY CHECK BACKEND
+    // ===============================
+    if (!res.data) {
+      console.error("❌ empty backend response")
+      throw new Error("empty_response")
+    }
+
+    if (res.data.success === false) {
+      console.error("❌ backend reported failure")
+      throw new Error("backend_failure")
+    }
+
+    if (res.data.updatedCount !== undefined) {
+      console.log("🧮 backend updatedCount", res.data.updatedCount)
+      if (res.data.updatedCount === 0) {
+        console.warn("⚠️ 0 row updated → WHERE mismatch probable")
+      }
+    }
+
+    // ===============================
+    // 💾 CACHE
+    // ===============================
+    console.log("💾 write uploads cache")
+    writeUploadsCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      Object.values(uploadsByFolder.value).flat()
     )
-writeUploadsCache(
-  effectiveOwnerType.value,
-  effectiveOwnerId.value,
-  Object.values(uploadsByFolder.value).flat()
-)
-      writeFoldersCache(
-  effectiveOwnerType.value,
-  effectiveOwnerId.value,
-  folders.value
-)
+
+    console.log("💾 write folders cache")
+    writeFoldersCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      folders.value
+    )
+
+    console.log("✅ DELETE COMPLETED OK")
+    console.groupEnd()
 
   } catch (e) {
+    console.error("🔥 DELETE FAILED", e)
+
+    console.warn("↩️ rollback state")
     folders.value = foldersSnapshot
-    uploads.value = uploadsSnapshot
+    uploadsByFolder.value = uploadsSnapshot
     currentFolderId.value = prevFolder
+
+    console.log("📁 folders AFTER rollback", folders.value.map(f => f.folder_id))
+    console.log("📁 currentFolderId AFTER rollback", currentFolderId.value)
+
     alert("Erreur suppression dossiers")
+
+    console.groupEnd()
   }
 }
-const deleteFolderAction = (folder = null) => {
-  if (selectedFolders.value.length) {
-    deleteSelectedFolders()
-  } else if (folder) {
-    deleteFolder(folder)
-  }
-}
+
+
+
+
+
+
+
+
+
 
 const deleteAction = (file = null) => {
   if (selectedFiles.value.length) {
@@ -2637,6 +3096,42 @@ async function fetchSharedFolders() {
 
   sharedFolders.value = data.folders || []
 }
+function onQueued(payload) {
+  console.group("🟡 [ELEVE] onQueued")
+  console.log("payload =", payload)
+
+  let files, folderId, sessionId
+
+  // 🔥 CAS ACTUEL (ARRAY)
+  if (Array.isArray(payload)) {
+    files = payload
+    folderId = currentFolderId.value
+    sessionId = uploadSession.value?.id || crypto.randomUUID()
+  }
+  // 🔥 CAS FUTUR (OBJET)
+  else if (payload && Array.isArray(payload.files)) {
+    files = payload.files
+    folderId = payload.folderId ?? currentFolderId.value
+    sessionId = payload.sessionId ?? uploadSession.value?.id
+  } else {
+    console.error("⛔ onQueued payload invalide", payload)
+    console.groupEnd()
+    return
+  }
+
+  console.log("🧩 parsed", {
+    filesCount: files.length,
+    folderId,
+    sessionId
+  })
+
+  addOptimisticUploads(files, folderId, sessionId)
+  console.groupEnd()
+}
+
+
+
+
 
 // recup dossier
 async function fetchFolders() {
@@ -2679,7 +3174,7 @@ async function fetchFolders() {
       return
     }
 
- 
+
 
     // =====================================================
     // 🧼 NORMALIZE + MERGE SHARE STATE
@@ -3022,7 +3517,7 @@ writeUploadsCache(
 
 
 
-// const delete dossiers 
+// const delete dossiers
 const deleteFolder = async (folder) => {
 
   if (!confirm("Supprimer ce dossier et tout son contenu ?")) return
@@ -3042,7 +3537,7 @@ const deleteFolder = async (folder) => {
   folders.value = folders.value.filter(f => f.folder_id !== folder.folder_id)
 
   // supprimer les fichiers du dossier
-  
+
 
 
 delete uploadsByFolder.value[folder.folder_id]
@@ -3057,6 +3552,10 @@ delete uploadsByFolder.value[folder.folder_id]
   // =============================
   // 🌍 BACKEND
   // =============================
+  console.log("📤 DELETE PAYLOAD", {
+  prof_id: profId.value,
+  folder_ids: ids
+})
   try {
     const url = getProxyPostURL(routes.POST)
 
@@ -3297,7 +3796,7 @@ const openFileMenu = (e, file) => {
 
 
 
-// action dossier 
+// action dossier
 
 const isDragging = ref(false)
 
@@ -3497,7 +3996,7 @@ const filesCountByFolder = computed(() => {
 // 📁 Move upload -> folder_path (simple prompt pour l’instant)
 // ============================================================================
 
-// fenetre copy paste renamme 
+// fenetre copy paste renamme
 const clipboard = ref({
   mode: null,        // copy | cut
   uploads: [],
@@ -3778,6 +4277,9 @@ const pushUndo = () => {
 
 
 const goHome = () => {
+  // 🔥 reset recherche
+  searchQuery.value = ""
+
   // reset sélection
   selectedFiles.value = []
   selectedFolders.value = []
@@ -3794,8 +4296,7 @@ const goHome = () => {
   }
 
   // prof → racine prof
-const root = profRootFolder.value
-currentFolderId.value = root?.folder_id || null
+  const root = profRootFolder.value
   currentFolderId.value = root?.folder_id || null
 }
 
@@ -3827,8 +4328,15 @@ watch(currentFolderId, async () => {
 
   el.scrollTop = y
 })
+watch(currentFolderId, () => {
+  if (isSearching.value) {
+    searchQuery.value = ""
+  }
+})
 
 watch(currentFolderId, (id) => {
+    if (isAutoOpening.value) return
+
   if (finderMode.value !== "shared") return
   if (!id || id === SHARED_ROOT_ID) return
 
@@ -3853,6 +4361,8 @@ watch(currentFolderId, (id) => {
 
 
 watch(currentFolderId, (id) => {
+    if (isAutoOpening.value) return
+if (!isProfLike.value) return   // 🔥 FIX ABSOLU
     if (finderMode.value === "shared") return   // 🔥 FIX
 
   if (role.value === "admin") return
@@ -3877,6 +4387,8 @@ watch(currentFolderId, (id) => {
 })
 
 watch(currentFolderId, (id) => {
+    if (isAutoOpening.value) return
+
   if (finderMode.value === "shared") return   // ✅ FIX CRITIQUE
   if (searchQuery.value) return
 
@@ -3915,7 +4427,7 @@ watch(showLoader, v =>
 watch(currentFolderId, () => {
 
 
- 
+
 
   closeAddMenu()
   itemEls.value.clear()
@@ -4030,7 +4542,7 @@ fetchAllUploadsOnce().then(() => {
   // =====================================================
   // 👨‍🎓 MODE ÉLÈVE
   // =====================================================
-  
+
 if (!isProfLike.value) {
   if (finderMode.value === "shared") {
     console.log("🔗 MODE ÉLÈVE SHARED — skip normal mount")
@@ -4104,14 +4616,30 @@ if (!currentFolderId.value) {
     console.log("🚀 trigger global uploads fetch (élève)")
     await fetchAllUploadsOnce()
 // 🔥 AUTO-OPEN dossier contenant des uploads (élève)
+// 🔥 AUTO-OPEN SAFE (ÉLÈVE ONLY)
 if (!isProfLike.value) {
   const foldersWithFiles = Object.keys(uploadsByFolder.value)
-    .filter(fid => fid && uploadsByFolder.value[fid]?.length)
+    .filter(fid => {
+      const f = foldersById.value[fid]
+      return (
+        f &&
+        f.owner_type === "eleve" &&
+        f.owner_id === userId.value &&
+        uploadsByFolder.value[fid]?.length
+      )
+    })
 
   if (foldersWithFiles.length) {
-    console.log("🎯 auto-open folder with uploads =", foldersWithFiles[0])
+    isAutoOpening.value = true
+    console.log("🎯 auto-open folder (SAFE) =", foldersWithFiles[0])
+
+    currentFolderId.value = foldersWithFiles[0]
+
+    await nextTick()
+    isAutoOpening.value = false
   }
 }
+
 
     console.log("📁 folders élève =", folders.value.length)
     console.log("📦 uploadsByFolder =", Object.keys(uploadsByFolder.value).length)
@@ -4238,7 +4766,7 @@ if (!hydratedFromCache.value) {
 
 
 
-  
+
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeyDown)
@@ -4295,16 +4823,25 @@ onUnmounted(() => {
 
 .uploads-header {
   display: flex;
-  align-items: flex-start; /* 🔥 clé */
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
+
 .uploads-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ✅ colonne d’actions à droite */
+.header-actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 2px; /* micro align optique avec le h3 */
+  flex-shrink: 0;
 }
 
 /* force les actions à être bien alignées */
@@ -4312,6 +4849,7 @@ onUnmounted(() => {
 .add-btn {
   align-self: flex-start;
 }
+
 
 
 .subtitle {
@@ -4414,7 +4952,6 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top:50px;
   padding: 6px 14px;
   border-radius: 999px;
   background: rgba(255,140,0,0.15);
@@ -4448,7 +4985,6 @@ onUnmounted(() => {
   .add-btn {
     padding: 4px 10px;
     font-size: 0.7rem;
-    margin-top:45px;
     gap: 4px;
   }
 
@@ -4549,22 +5085,30 @@ onUnmounted(() => {
 .upload-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #1b1b1b, #141414);
-  border: 1px solid var(--border);
-  transition: background .15s, border-color .15s, box-shadow .15s;
+  gap: 8px;
+
+  margin-bottom: 4px;        /* 🔥 gros gain visuel */
+  padding: 4px 8px;          /* plus dense */
+  min-height: 36px;          /* toujours confortable */
+
+  border-radius: 10px;       /* moins “card” */
+  background: #151515;       /* flat = plus compact */
+  border: 1px solid rgba(255,255,255,.06);
+
+  transition: background .12s, border-color .12s;
 }
+
 .upload-item:hover {
-  border-color: rgba(255,140,0,.55);
-  background: rgba(255,140,0,.06);
+  border-color: rgba(255,140,0,.45);
+  background: rgba(255,140,0,.05);
 }
+
 .upload-item.selected {
-  border-color: rgba(255,140,0,.85);
-  background: rgba(255,140,0,.14);
-  box-shadow: 0 0 0 3px rgba(255,140,0,.12);
+  border-color: rgba(255,140,0,.8);
+  background: rgba(255,140,0,.12);
+
+  /* 🔥 moins épais → carte plus dense */
+  box-shadow: 0 0 0 2px rgba(255,140,0,.12);
 }
 .upload-item[draggable="true"] { cursor: grab; }
 .upload-item[draggable="true"]:active { cursor: grabbing; opacity: .6; }
@@ -4625,6 +5169,10 @@ onUnmounted(() => {
   flex: 1;
 }
 .file-icon {
+    width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: .9;
   font-size: 1.25rem;
 }
 .file-info {
@@ -4733,6 +5281,181 @@ onUnmounted(() => {
   min-height: 0; /* 🔥 CRITIQUE */
 }
 
+/* ================================
+   🧱 LOADER OVERLAY
+================================ */
+.loader-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+/* ================================
+   ⏳ WORKFLOW LOADER
+================================ */
+.workflow-loader {
+  background: rgba(20, 20, 20, 0.9);
+  padding: 22px 26px;
+  border-radius: 14px;
+  min-width: 220px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+}
+
+.workflow-loader strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f1f1f1;
+}
+
+.workflow-loader .sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+/* ================================
+   🔴 DOTS ANIMATION
+================================ */
+.workflow-loader .dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.workflow-loader .dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7c2d12; /* rouge foncé */
+  opacity: 0.3;
+  animation: dotsPulse 1.4s infinite ease-in-out;
+}
+
+.workflow-loader .dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.workflow-loader .dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dotsPulse {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ================================
+   🔗 SHARED LOADING MESSAGE
+================================ */
+.shared-loading {
+  padding: 14px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  opacity: 0.85;
+}
+
+/* ================================
+   🚫 ÉLÈVE BLOQUÉ
+================================ */
+.eleve-blocked {
+  margin: 40px auto;
+  max-width: 420px;
+  text-align: center;
+  background: rgba(30,30,30,0.85);
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+}
+
+.eleve-blocked h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: #facc15;
+}
+
+.eleve-blocked p {
+  font-size: 0.8rem;
+  color: #d1d5db;
+  line-height: 1.4;
+}
+.upload-progress {
+  margin-top: 6px;
+  height: 3px;
+  width: 100%;
+  background: rgba(255,255,255,.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.upload-progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f5c16c, #facc15);
+  transition: width .2s linear;
+}
+.search-wrapper {
+  position: relative;
+}
+
+.search-input {
+  padding-right: 34px; /* place pour la croix */
+}
+
+.search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(255,255,255,.18);
+  color: #fff;
+margin-top:4px;
+  border: none;
+  cursor: pointer;
+  z-index: 2;
+
+  padding: 0; /* 🔥 important */
+}
+
+
+.search-clear:hover {
+  background: rgba(255,255,255,.25);
+  color: #fff;
+  transform: translateY(-50%) scale(1.05);
+}
+.file-main,
+.folder-main {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.file-info,
+.folder-info {
+  pointer-events: none;
+}
 
 </style>
 

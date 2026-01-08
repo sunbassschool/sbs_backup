@@ -14,6 +14,7 @@
 
         <!-- DASHBOARD PROF -->
         <div v-else class="fade-in">
+           <OnboardingProfCard />
 <div class="prof-dashboard">
   <div class="dashboard-grid">
 
@@ -97,14 +98,15 @@
 
 
   <!-- INVITE LINK BOX -->
-<div class="invite-box mt-3 fade-in">
+<div   id="invite-link"
+class="invite-box mt-3 fade-in">
   <h4 class="invite-title mb-2">🔗 Lien d’invitation</h4>
   <p class="invite-description">Partage ce lien pour que tes élèves se rattachent à toi.</p>
 
   <!-- Champ + bouton copier -->
   <div class="invite-row">
-    <input 
-      type="text" 
+    <input
+      type="text"
       class="invite-input"
       :value="inviteLink"
       readonly
@@ -117,7 +119,7 @@
   </div>
 
   <!-- Générer un nouveau lien -->
-<button 
+<button
   class="regen-btn mt-2 d-flex align-items-center justify-content-center"
   @click="regenInviteLink"
   :disabled="regenLoading"
@@ -126,13 +128,14 @@
   <span v-if="regenLoading">Génération...</span>
   <span v-else>🔄 Générer un nouveau lien</span>
 </button>
+<div class="miseenpage">
 <StripeConnectCard />
-
+</div>
 </div>
 
 </div>
 
-          
+
         </div>
       </div>
     </div>
@@ -148,6 +151,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useDashboardStore } from "@/stores/dashboardStore";
 import StripeConnectCard from "@/components/stripe/StripeConnectCard.vue"
 import { getProxyGetURL, getProxyPostURL } from "@/config/gas"
+import OnboardingProfCard from "@/components/onboarding/OnboardingProfCard.vue"
 
 // === STORES ===
 const auth = useAuthStore();
@@ -175,7 +179,26 @@ const goToRevenus = () => {
 }
 
 // === ROUTES ===
+onMounted(() => {
+  console.group("🧪 [DASHBOARD] onboarding hydration")
 
+  console.log("auth.user =", auth.user)
+  console.log("typeof fetchHasOffer =", typeof auth.fetchHasOffer)
+
+  if (auth.user?.prof_id && typeof auth.fetchHasOffer === "function") {
+    console.log("➡️ dashboard → call fetchHasOffer")
+    auth.fetchHasOffer()
+    auth.fetchHasSale()
+
+  } else {
+    console.warn("⛔ dashboard → fetchHasOffer NOT called", {
+      prof_id: auth.user?.prof_id,
+      fn: typeof auth.fetchHasOffer
+    })
+  }
+
+  console.groupEnd()
+})
 // === HELPERS API ===
 
 
@@ -226,7 +249,7 @@ async function fetchPartitionsCount() {
         u.folder_id === PARTITIONS_FOLDER_ID
     )
 
-   
+
 
     partitionsCount.value = partitions.length
     console.log("✅ partitionsCount =", partitionsCount.value)
@@ -350,6 +373,7 @@ async function fetchEleves() {
 
     totalEleves.value =
       data?.eleves?.filter(e => e.statut === "inscrit").length || 0
+auth.dashboardElevesCount = totalEleves.value
 
   } catch (err) {
     console.error("❌ fetchEleves ERROR:", err)
@@ -754,5 +778,33 @@ p {
   50% { opacity: .9 }
 }
 
+.container-xxl
+{
+  background-color: #141414;
+}
+
+.miseenpage
+{
+margin-top:10px;
+}
+
+.highlight-invite {
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.6);
+  background: rgba(250, 204, 21, 0.08);
+  transition: box-shadow 0.3s ease, background 0.3s ease;
+}
+
+
+
+
+@keyframes pulseInvite {
+  0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(250, 204, 21, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+}
+
+.highlight-invite {
+  animation: pulseInvite 1.2s ease-out;
+}
 
 </style>

@@ -96,15 +96,6 @@
     </button>
 
 
-<!-- bouton d'envoi pour l'upload -->
-<button
-  class="btn btn-primary w-100 mb-2"
-  @click="openUploadModal"
->
-  📎 Envoyer un fichier
-</button>
-
-
     <button class="btn btn-secondary w-100" @click="closeCourseMenu">
       Annuler
     </button>
@@ -799,6 +790,7 @@ h2 {
 /* ✅ Conteneur principal en pleine largeur */
 .container-xxl {
   width: 100% !important;
+  background-color: #080808;
   max-width: 100% !important;
   padding-left: 15px;
   padding-right: 15px;

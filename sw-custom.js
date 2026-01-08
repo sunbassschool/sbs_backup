@@ -1,25 +1,33 @@
-import { precacheAndRoute } from 'workbox-precaching';
+import { precacheAndRoute } from "workbox-precaching";
 
 precacheAndRoute(self.__WB_MANIFEST);
 
-// Envoi d'un message aux clients
-function sendMessageToClients(message) {
-  self.clients.matchAll({ type: "window" }).then(clients => {
-    clients.forEach(client => {
-      client.postMessage({ type: message });
+function broadcast(type) {
+  self.clients.matchAll({ type: "window", includeUncontrolled: true })
+    .then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type });
+      });
     });
-  });
 }
 
 self.addEventListener("install", (event) => {
   console.log("[SW] install");
-  sendMessageToClients("sw-installing");
+  event.waitUntil(
+    (async () => {
+      broadcast("sw-installing");
+    })()
+  );
 });
+
 
 self.addEventListener("activate", (event) => {
   console.log("[SW] activate");
-  sendMessageToClients("sw-activated");
-  self.clients.claim();
+  event.waitUntil(
+    self.clients.claim().then(() => {
+      broadcast("sw-activated");
+    })
+  );
 });
 
 self.addEventListener("message", (event) => {
@@ -28,5 +36,6 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
 });
-// Envoi d'un message aux clients
-// Envoi d'un message aux clients modif du  06/12/2025 à 22:10:25:5456////
+console.log("SW VERSION", Date.now())
+
+// 07/01/2026

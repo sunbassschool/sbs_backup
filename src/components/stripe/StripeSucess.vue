@@ -42,7 +42,7 @@
 <script setup>
 import { ref } from "vue"
 import { useRouter } from "vue-router"
-import { useAuthStore } from "@/stores/authStore"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getValidToken } from "@/utils/api"
 import { getProxyPostURL } from "@/config/gas"
   import Layout from "@/views/Layout.vue";

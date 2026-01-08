@@ -105,7 +105,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from "vue"
-import { useAuthStore } from "@/stores/authStore"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getValidToken } from "@/utils/api"
 import { getProxyPostURL } from "@/config/gas"
 import ProductDrawer from "@/components/stripe/ProductDrawer.vue"

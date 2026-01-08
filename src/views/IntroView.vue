@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore.js";
 import { ref, onMounted, computed, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { registerSW } from "virtual:pwa-register";

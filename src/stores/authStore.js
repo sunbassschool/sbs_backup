@@ -3,8 +3,9 @@
 // Gère : JWT, RefreshToken, SessionID, User, Cache, Auto-Refresh Silent
 // Compatibilité totale avec Apps Script (refresh, recupinfosmembres, logout).
 // ============================================================================
-import { getProxyGetURL } from "@/config/gas"
+import { getProxyGetURL,getProxyPostURL,gasPost   } from "@/config/gas"
 import { getDeviceId } from "@/utils/device"
+import router from "@/router/index.ts"
 
 import { defineStore } from "pinia";
 import { readKV, saveSessionData, getSessionIdFromDB } from "@/utils/AuthDBManager.ts";
@@ -34,6 +35,9 @@ let _refreshPromise = null;
 // ============================================================================
 // 🏛️ STORE
 // ============================================================================
+
+
+//store generique a clean
 export const useAuthStore = defineStore("auth", {
 
   // --------------------------------------------------------------------------
@@ -43,6 +47,16 @@ export const useAuthStore = defineStore("auth", {
       stripe_ready: null,
   elevesByProf: {},
   tsByProf: {},
+  hasActiveOfferByProf: {},
+dashboardElevesCount: 0,
+isLoggingIn: false,
+
+hasSaleByProf: {},
+ stripe: {
+    status: "unknown", // unknown | off | pending | ready
+    accountId: null,
+    lastCheck: 0
+  },
     menuOpen: false,
  jwtReady: false,
     jwt: localStorage.getItem("jwt") || null,
@@ -107,7 +121,93 @@ authReady(state) {
 
   return true
 },
+onboardingSnapshot: (state) => {
+  const profId = state.user?.prof_id
 
+  const stripeOk =
+    state.stripe?.status === "ready" &&
+    !!state.stripe?.accountId
+
+  const hasStudent =
+    (state.dashboardElevesCount || 0) > 0
+
+  const hasOffer =
+    state.hasActiveOfferByProf?.[profId]
+
+  const hasSale =
+    state.hasSaleByProf?.[profId] === true
+
+  const isReady =
+    typeof hasOffer === "boolean"
+
+  const completed =
+    [stripeOk, hasStudent, hasOffer, hasSale].filter(Boolean).length
+
+  return {
+    stripeOk,
+    hasStudent,
+    hasOffer,
+    hasSale,
+    completed,
+    isDone: hasSale === true,
+    isReady
+  }
+}
+
+
+,
+onboardingNextAction(state) {
+  const profId = state.user?.prof_id
+  if (!profId) return null
+
+  const stripeOk = state.stripe?.status === "connected"
+  const hasStudent = (state.dashboardElevesCount || 0) > 0
+  const hasOffer = !!state.hasActiveOfferByProf?.[profId]
+  const hasSale = !!state.hasSaleByProf?.[profId]
+
+  if (!stripeOk) {
+    return {
+      key: "stripe",
+      label: "Connecter les paiements",
+      cta: "Connecter Stripe",
+      action: "stripe"
+    }
+  }
+
+  if (!hasStudent) {
+    return {
+      key: "student",
+      label: "Inviter ton premier élève",
+      cta: "Inviter",
+      action: "invite"
+    }
+  }
+
+  if (!hasOffer) {
+    return {
+      key: "offer",
+      label: "Créer ta première offre",
+      cta: "Créer une offre",
+      action: "offer"
+    }
+  }
+
+  if (!hasSale) {
+    return {
+      key: "sale",
+      label: "Obtenir ta première vente",
+      cta: "Voir comment vendre",
+      action: "sale"
+    }
+  }
+
+  return null
+}
+,
+getters: {
+  isStripeReady: state => state.stripe.status === "ready"
+}
+,
     // 👑 Est-ce que l'utilisateur est admin (et pas en mode impersonation) ?
     isAdmin: (state) => {
       if (!state.user) return false;
@@ -144,14 +244,111 @@ authReady(state) {
   // --------------------------------------------------------------------------
   // ACTIONS
   // --------------------------------------------------------------------------
-  
+
   actions: {
     // ⏏️ Ouvre ou ferme le menu de navigation
     toggleMenu() {
       this.menuOpen = !this.menuOpen;
       localStorage.setItem("menuOpen", this.menuOpen ? "true" : "false");
     },
+async fetchHasOffer() {
+  console.group("🟡 [ONBOARDING] fetchHasOffer")
 
+  try {
+    console.log("1️⃣ state.prof_id =", this.prof_id)
+    console.log("1️⃣ user.prof_id =", this.user?.prof_id)
+
+    const profId = this.prof_id || this.user?.prof_id
+    if (!profId) {
+      console.warn("⛔ NO profId → abort fetchHasOffer")
+      console.groupEnd()
+      return
+    }
+
+    console.log("2️⃣ profId utilisé =", profId)
+
+    const jwt = await getValidToken()
+    console.log("3️⃣ JWT OK ?", !!jwt)
+
+    if (!jwt) {
+      console.warn("⛔ NO JWT → abort fetchHasOffer")
+      console.groupEnd()
+      return
+    }
+
+    const payload = {
+      route: "hasactiveproduct",
+      jwt,
+      prof_id: profId
+    }
+
+    console.log("4️⃣ payload envoyé =", payload)
+
+    const proxyUrl = getProxyPostURL()
+    console.log("5️⃣ proxyUrl =", proxyUrl)
+
+    const res = await fetch(proxyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+
+    console.log("6️⃣ fetch response status =", res.status)
+
+    const json = await res.json()
+    console.log("7️⃣ response JSON =", json)
+
+    if (json?.success !== true) {
+      console.warn("⛔ GAS returned error", json)
+      this.hasActiveOfferByProf[profId] = false
+      console.groupEnd()
+      return
+    }
+
+    this.hasActiveOfferByProf[profId] = json.hasOffer === true
+
+    console.log(
+      "8️⃣ STORE UPDATED → hasActiveOfferByProf =",
+      JSON.stringify(this.hasActiveOfferByProf, null, 2)
+    )
+
+  } catch (e) {
+    console.error("❌ fetchHasOffer CRASH", e)
+  } finally {
+    console.groupEnd()
+  }
+}
+
+,
+setStripeStatus({ status, accountId }) {
+  this.stripe.status = status
+  this.stripe.accountId = accountId || null
+  this.stripe.lastCheck = Date.now()
+}
+,
+async fetchHasSale() {
+  console.log("🟡 [ONBOARDING] fetchHasSale")
+
+  const profId = this.user?.prof_id
+  if (!profId) return
+
+  const jwt = await getValidToken()
+  if (!jwt) return
+
+  const res = await fetch(getProxyPostURL(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      route: "hassalebyprof",
+      jwt,
+      prof_id: profId
+    })
+  })
+
+  const json = await res.json()
+  this.hasSaleByProf[profId] = json.hasSale === true
+}
+,
     // 🎭 Active ou désactive le mode “impersonation” de l’élève
     toggleImpersonateStudent() {
       this.impersonateStudent = !this.impersonateStudent;
@@ -211,28 +408,52 @@ const jwt = await this.ensureValidJwt()
 
     // ♻️ Essaye de restaurer la session depuis IndexedDB (ou fallback localStorage)
 async restoreSessionFromStorage() {
-  // ⚠️ NE PAS TOUCHER sessionId s’il est déjà défini
-  if (this.sessionId) {
-    console.warn("🔒 SessionId déjà présent, restauration ignorée :", this.sessionId);
-    return;
+  // 🔒 STRIPE = runtime only → reset
+  this.stripe = {
+    status: "unknown",
+    accountId: null,
+    lastCheck: 0
   }
 
-  const jwtDB = await readKV("jwt");
-  const rtDB = await readKV("refreshToken");
-  const sidDB = await readKV("sessionId");
+  // ⚠️ session déjà hydratée → skip
+  if (this.sessionId) {
+    console.warn("🔒 SessionId déjà présent, restauration ignorée :", this.sessionId)
+    return
+  }
 
-  const jwt = localStorage.getItem("jwt") ?? jwtDB ?? null;
-  const rt = localStorage.getItem("refreshToken") ?? rtDB ?? null;
-  const sid = localStorage.getItem("sessionId") ?? sidDB ?? null;
+  // ⚡ fast-path localStorage
+  const jwtLS = localStorage.getItem("jwt")
+  const rtLS  = localStorage.getItem("refreshToken")
+  const sidLS = localStorage.getItem("sessionId")
 
-  this.jwt = jwt;
-  this.refreshToken = rt;
+  if (jwtLS || rtLS || sidLS) {
+    this.jwt = jwtLS ?? null
+    this.refreshToken = rtLS ?? null
 
-  if (sid) {
-    this.sessionId = sid;
-    console.log("♻️ sessionId restauré :", sid);
+    if (sidLS) {
+      this.sessionId = sidLS
+      console.log("♻️ sessionId restauré (LS) :", sidLS)
+    }
+    return
+  }
+
+  // 🧯 fallback IndexedDB (parallèle)
+  const [jwtDB, rtDB, sidDB] = await Promise.all([
+    readKV("jwt"),
+    readKV("refreshToken"),
+    readKV("sessionId")
+  ])
+
+  this.jwt = jwtDB ?? null
+  this.refreshToken = rtDB ?? null
+
+  if (sidDB) {
+    this.sessionId = sidDB
+    console.log("♻️ sessionId restauré (DB) :", sidDB)
   }
 }
+
+
 
 ,
 
@@ -451,11 +672,25 @@ if (!result || !result.jwt || typeof result.jwt !== "string") {
     return this.jwt
   }
 
-  // ❌ CAS GRAVE : JWT expiré + refresh refusé
-  console.warn("⛔ refresh KO + JWT expiré → session morte")
-  this.refreshFailed = true
-  this.stopAutoRefresh()
-  return null
+// ❌ CAS GRAVE : JWT expiré + refresh refusé
+// ❌ CAS GRAVE : JWT expiré + refresh refusé
+console.warn("⛔ refresh KO + JWT expiré → session morte")
+
+this.refreshFailed = true
+this.stopAutoRefresh()
+
+try {
+  if (typeof this.$reset === "function") this.$reset()
+} catch {}
+
+localStorage.clear()
+sessionStorage.clear()
+sessionStorage.setItem("AUTH_ABORTED", "1")
+
+// 🔥 REDIRECTION OBLIGATOIRE
+router.replace("/login")
+
+return null
 }
 
 
@@ -697,117 +932,167 @@ stopAutoRefresh() {
 
     // 🚀 Initialisation complète de l’auth à l'ouverture de l'app
 async initAuth() {
-  console.log("🔐 initAuth start")
-  this.authLoading = true
-
-  // 🛑 Anti-boucle globale (login / refresh KO)
-  if (sessionStorage.getItem("AUTH_ABORTED")) {
-    console.warn("🛑 initAuth skipped (AUTH_ABORTED)")
-    this.authLoading = false
-    return false
-  }
-
-  try {
-    // 1️⃣ Restaurer la session locale
-    await this.restoreSessionFromStorage()
-    let jwt = this.jwt
-
-    // 2️⃣ Vérifier si le JWT est expiré ou illisible
-    let expired = false
-    try {
-      expired = jwt ? isJwtExpired(jwt) : false
-    } catch (e) {
-      expired = true
-    }
-
-    // 3️⃣ Refresh si nécessaire
-    if (jwt && expired) {
-      console.log("🔄 initAuth → JWT expiré → refreshJwt")
-      jwt = await this.refreshJwt()
-    }
-
-    // 4️⃣ Échec définitif → purge totale
-// ⛔ AUCUN JWT VALIDE
-
-if (!jwt) {
-  console.warn("⛔ initAuth → aucun JWT valide → logout()")
-
-  sessionStorage.setItem("AUTH_ABORTED", "1")
-
-  await logoutUser({
-    silent: true,          // si prévu chez toi
-    redirect: false        // on gère la redirection au niveau main.ts
-  })
-
-  this.authLoading = false
-  this.isInitDone = true
+if (this.isLoggingIn) {
+  console.log("⏸️ initAuth ignoré → login en cours")
   return false
 }
 
 
 
-    // 5️⃣ Normalisation JWT
+  console.log("🔐 initAuth start")
+
+  this.stripe = {
+    status: "unknown",
+    accountId: null,
+    lastCheck: 0
+  }
+
+  this.authLoading = true
+// 🧊 accès public SI PAS DE JWT EN STORAGE
+const storedJwt = localStorage.getItem("jwt")
+
+if (!storedJwt) {
+  console.log("🧊 Aucun JWT en storage → accès public")
+
+  this.authLoading = false
+  this.isInitDone = true
+
+  requestAnimationFrame(() => {
+    window.__HIDE_SPLASH__?.()
+  })
+
+  return false
+}
+
+
+  // 🛑 anti-boucle (uniquement si déjà logout définitif)
+if (sessionStorage.getItem("AUTH_ABORTED")) {
+  console.warn("🛑 initAuth skipped (AUTH_ABORTED)")
+
+  this.authLoading = false
+  this.isInitDone = true
+
+  requestAnimationFrame(() => {
+    window.__HIDE_SPLASH__?.()
+  })
+
+  window.vueRouterPush?.("/login")
+  return false
+}
+
+
+  try {
+    // 1️⃣ restore session
+    await this.restoreSessionFromStorage()
+    let jwt = this.jwt
+
+    // 2️⃣ check expiration
+    let expired = false
+    try {
+      expired = jwt ? isJwtExpired(jwt) : false
+    } catch {
+      expired = true
+    }
+
+    // 3️⃣ refresh si possible
+    if (jwt && expired) {
+      console.log("🔄 JWT expiré → refresh")
+      try {
+        jwt = await this.refreshJwt()
+      } catch (e) {
+        console.warn("⚠️ refreshJwt failed", e)
+        jwt = null
+      }
+    }
+
+    const refreshToken = localStorage.getItem("refreshToken")
+
+    // 4️⃣ si jwt absent MAIS refresh possible → on laisse vivre
+    if (!jwt && refreshToken) {
+      console.log("⏳ JWT absent mais refresh possible → init OK (temp)")
+      this.authLoading = false
+      this.isInitDone = true
+      requestAnimationFrame(() => {
+  window.__HIDE_SPLASH__?.()
+})
+      return true
+    }
+
+
+
+    // 6️⃣ normalisation JWT
     const finalJwt =
       typeof jwt === "string"
         ? jwt
         : (jwt && jwt.jwt) || null
 
     if (!finalJwt) {
-      console.warn("⛔ initAuth → JWT invalide après normalisation")
-      sessionStorage.setItem("AUTH_ABORTED", "1")
+      console.warn("⛔ JWT invalide après normalisation")
       this.authLoading = false
       this.isInitDone = true
+      requestAnimationFrame(() => {
+  window.__HIDE_SPLASH__?.()
+})
       return false
     }
 
     this.jwt = finalJwt
     localStorage.setItem("jwt", finalJwt)
-
     this.jwtReady = true
 
-    // 6️⃣ Décodage payload
+    // 7️⃣ decode payload
     const payload = decodeJwt(finalJwt) || {}
 
     this.user = {
-      role: payload.role != null ? payload.role : null,
-      user_id: payload.user_id != null ? payload.user_id : null,
-      prof_id: payload.prof_id != null ? payload.prof_id : null
+      role: payload.role ?? null,
+      user_id: payload.user_id ?? null,
+      prof_id: payload.prof_id ?? null
     }
-// ✅ synchro globale
 
-    // 7️⃣ Fetchs non bloquants
+    // 👨‍🏫 fetch prof (NON BLOQUANT)
+    if (["prof", "admin"].includes(this.user.role) && this.user.prof_id) {
+      const profStore = useProfStore()
+      setTimeout(() => {
+        profStore.fetchProf(true)
+      }, 0)
+    }
+
+    // 8️⃣ fetchs non bloquants
     setTimeout(() => {
-      try {
-        this.fetchUserData()
-      } catch {}
+      try { this.fetchUserData() } catch {}
+    }, 0)
+
+    setTimeout(() => {
+      try { this.fetchPendingReports() } catch {}
     }, 0)
 
     setTimeout(() => {
       try {
-        this.fetchPendingReports()
+        if (this.user?.prof_id) this.fetchHasOffer()
       } catch {}
     }, 0)
 
-    // 8️⃣ Auto-refresh si session complète
-    const rt = localStorage.getItem("refreshToken")
+    // 9️⃣ auto-refresh
     const sid = localStorage.getItem("sessionId")
-
-    if (rt && sid && this.jwt) {
-      console.log("🚀 initAuth → startAutoRefresh")
+    if (refreshToken && sid && this.jwt) {
+      console.log("🚀 startAutoRefresh")
       this.startAutoRefresh()
     }
 
     this.authLoading = false
     this.isInitDone = true
+    requestAnimationFrame(() => {
+  window.__HIDE_SPLASH__?.()
+})
     console.log("🟢 initAuth OK")
     return true
 
   } catch (err) {
     console.error("❌ initAuth crash", err)
 
-    if (typeof this.$reset === "function") {
-      this.$reset()
-    }
+    try {
+      if (typeof this.$reset === "function") this.$reset()
+    } catch {}
 
     localStorage.clear()
     sessionStorage.clear()
@@ -815,10 +1100,75 @@ if (!jwt) {
 
     this.authLoading = false
     this.isInitDone = true
+    requestAnimationFrame(() => {
+  window.__HIDE_SPLASH__?.()
+})
     return false
   }
 }
 
+
 ,
   }
 });
+
+// store prof
+export const useProfStore = defineStore("prof", {
+  state: () => ({
+    prof: null,
+    ready: false
+  }),
+
+  actions: {
+async fetchProf(force = false) {
+  if (this.ready && !force) return
+
+  const auth = useAuthStore()
+
+  const profId =
+    auth.user?.prof_id ||
+    auth.prof_id
+
+  if (!profId) {
+    console.warn("👨‍🏫 fetchProf: no prof_id", auth.user)
+    return
+  }
+
+  if (!auth.jwt) {
+    console.warn("👨‍🏫 fetchProf: no jwt")
+    return
+  }
+
+  console.log("👨‍🏫 fetchProf START", profId)
+
+  const res = await gasPost("getProfByUser", {
+    jwt: auth.jwt,
+    prof_id: profId
+  })
+
+  console.log("👨‍🏫 RAW RES =", res)
+
+  if (!res?.success) {
+    console.error("❌ fetchProf error", res?.error)
+    this.prof = null
+    this.ready = false
+    return
+  }
+
+  this.prof = res.prof
+  this.ready = true
+
+  console.log("👨‍🏫 PROF AFTER SET =", this.prof)
+}
+
+,
+
+    refreshProf() {
+      this.ready = false
+      this.prof = null
+      return this.fetchProf()
+    }
+  }
+});
+
+
