@@ -3,7 +3,7 @@
 ===================================================== */
 
 export const GAS_POST_ROUTE =
-  "AKfycbytdaEuBxhLyYbYg4yrdohKMswS5ux8O7uqNJNPR9dkvEVXPyuLEGRKPZM75WuTQPQVoA"
+  "AKfycbwjY7AWRad6lpQREpNkv0pqOzupKxVCI9iBRjovSxlUnIAnhsV_28Vh5OCf0q_2kgACow"
 
 const GAS_BASE_URL = `https://script.google.com/macros/s/${GAS_POST_ROUTE}/exec`
 const CORS_PROXY = "https://cors-proxy-sbs.vercel.app/api/proxy?url="

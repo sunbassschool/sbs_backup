@@ -543,15 +543,22 @@ const onUploadError = (e) => {
 
 
 const onFilesSelected = (files) => {
-  console.log("🚀 EleveUploads reçoit files", files)
+  if (!files?.length) return
 
-  if (!uploader.value) {
-    console.error("⛔ uploader ref NULL")
-    return
+  // 🔥 créer la session AVANT
+  uploadSession.value = {
+    id: crypto.randomUUID(),
+    folderId: currentFolderId.value,
+    total: files.length,
+    done: 0
   }
 
-  uploader.value.handleFiles(files)
+  uploadFinished.value = false
+
+  // 🔥 forward vers UploadFileCore
+  uploader.value?.handleFiles(files)
 }
+
 
 const currentCoursId = null
 
@@ -1373,12 +1380,13 @@ const addFile = () => {
   // 👨‍🎓 élève → toujours OK
   if (!isProfLike.value) {
     uploadFolderId.value = currentFolderId.value
-    uploadSession.value = {
-      id: crypto.randomUUID(),
-      folderId: currentFolderId.value,
-      total: 1,
-      done: 0
-    }
+uploadSession.value = {
+  id: crypto.randomUUID(),
+  folderId: currentFolderId.value,
+  total: 0,     // 👈 sera fixé plus tard
+  done: 0
+}
+
 
     showUpload.value = true
     return
@@ -1395,12 +1403,13 @@ const addFile = () => {
 
   // ✅ dossier prof OU dossier élève valide
   uploadFolderId.value = currentFolderId.value
-  uploadSession.value = {
-    id: crypto.randomUUID(),
-    folderId: currentFolderId.value,
-    total: 1,
-    done: 0
-  }
+uploadSession.value = {
+  id: crypto.randomUUID(),
+  folderId: currentFolderId.value,
+  total: 0,     // 👈 sera fixé plus tard
+  done: 0
+}
+
 
   showUpload.value = true
 }
@@ -3097,37 +3106,29 @@ async function fetchSharedFolders() {
   sharedFolders.value = data.folders || []
 }
 function onQueued(payload) {
-  console.group("🟡 [ELEVE] onQueued")
-  console.log("payload =", payload)
-
   let files, folderId, sessionId
 
-  // 🔥 CAS ACTUEL (ARRAY)
   if (Array.isArray(payload)) {
     files = payload
     folderId = currentFolderId.value
     sessionId = uploadSession.value?.id || crypto.randomUUID()
-  }
-  // 🔥 CAS FUTUR (OBJET)
-  else if (payload && Array.isArray(payload.files)) {
+  } else if (payload && Array.isArray(payload.files)) {
     files = payload.files
     folderId = payload.folderId ?? currentFolderId.value
     sessionId = payload.sessionId ?? uploadSession.value?.id
   } else {
-    console.error("⛔ onQueued payload invalide", payload)
-    console.groupEnd()
     return
   }
 
-  console.log("🧩 parsed", {
-    filesCount: files.length,
-    folderId,
-    sessionId
-  })
+  // ✅ FIX TOTAL ICI
+  if (uploadSession.value && uploadSession.value.id === sessionId) {
+    uploadSession.value.total = files.length
+    uploadSession.value.done = 0
+  }
 
   addOptimisticUploads(files, folderId, sessionId)
-  console.groupEnd()
 }
+
 
 
 
@@ -3360,10 +3361,7 @@ folderRenameRefs.get(tmpId)?.focus({ preventScroll: true })
         ...folders.value[idx],
         folder_id: realFolder.folder_id,
         parent_id: parentId,
-        name:
-          realFolder.name ||
-          realFolder.folder_name ||
-          folders.value[idx].name,
+name: folders.value[idx].name || realFolder.name || realFolder.folder_name,
         _optimistic: false
       })
     } else {

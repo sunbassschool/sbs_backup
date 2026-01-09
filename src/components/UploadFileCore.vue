@@ -515,25 +515,27 @@ const launchNext = async () => {
   // ==================================================
   // 🚀 BATCH GAS FINAL (1 SEUL APPEL)
   // ==================================================
-  if (uploadedBatch.value.length) {
-    await fetch(getProxyPostURL(), {
-     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      route: "attachfilestocoursbatch",
-      jwt: batchJwt,
-      files: uploadedBatch.value
+if (uploadedBatch.value.length) {
+  const sendBatch = () =>
+    fetch(getProxyPostURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        route: "attachfilestocoursbatch",
+        jwt: batchJwt,
+        files: uploadedBatch.value
+      })
     })
-  })
+
+  try {
+    await sendBatch()
+  } catch (e) {
+    console.warn("🔁 retry batch GAS")
+    await new Promise(r => setTimeout(r, 800))
+    await sendBatch()
+  }
 }
 
-try {
-  await sendBatch()
-} catch (e) {
-  console.warn("🔁 retry batch GAS")
-  await new Promise(r => setTimeout(r, 800))
-  await sendBatch()
-}
 
   // 🧹 reset
   uploadedBatch.value = []
