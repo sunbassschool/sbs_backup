@@ -635,10 +635,10 @@ for (const key of SAFE_USER_CACHE_KEYS) {
     // 🔄 Rafraîchit le JWT + éventuellement refreshToken & sessionId
     // retry = true permet un second essai après échec
 async refreshJwt() {
- if (this.isLoggingOut) {
-  console.warn("⛔ refreshJwt annulé → logout");
-  return null;
-}
+  if (this.isLoggingOut || this.refreshFailed) {
+    console.warn("⛔ refreshJwt annulé")
+    return null
+  }
 
 
   if (this.isLoggingOut) {
@@ -666,32 +666,36 @@ async refreshJwt() {
     // ❌ réponse invalide → on garde la session
 if (!result || !result.jwt || typeof result.jwt !== "string") {
 
-  // 🔥 CAS SAIN : backend refuse le refresh mais JWT encore valide
+  // JWT encore valide → on laisse passer
   if (this.jwt && !isJwtExpired(this.jwt)) {
-    console.log("🟡 refresh refusé (SESSION_LOST) mais JWT valide → OK")
+    console.log("🟡 refresh refusé mais JWT valide → OK")
     return this.jwt
   }
 
-// ❌ CAS GRAVE : JWT expiré + refresh refusé
-// ❌ CAS GRAVE : JWT expiré + refresh refusé
-console.warn("⛔ refresh KO + JWT expiré → session morte")
+  // 🔥 SESSION MORTE
+  console.warn("⛔ refresh KO + JWT expiré → logout HARD")
 
-this.refreshFailed = true
-this.stopAutoRefresh()
+  this.refreshFailed = true
+  this.isLoggingOut = true
+  this.stopAutoRefresh()
 
-try {
-  if (typeof this.$reset === "function") this.$reset()
-} catch {}
+  try {
+    if (typeof this.$reset === "function") this.$reset()
+  } catch {}
 
-localStorage.clear()
-sessionStorage.clear()
-sessionStorage.setItem("AUTH_ABORTED", "1")
+  localStorage.clear()
+  sessionStorage.clear()
+  sessionStorage.setItem("AUTH_ABORTED", "1")
 
-// 🔥 REDIRECTION OBLIGATOIRE
-router.replace("/login")
+  // 🔥 FLAGS CRITIQUES
+  this.authLoading = false
+  this.isInitDone = true
 
-return null
+  router.replace("/login")
+
+  return null
 }
+
 
 
     // ✅ SUCCÈS
@@ -995,28 +999,22 @@ if (sessionStorage.getItem("AUTH_ABORTED")) {
     }
 
     // 3️⃣ refresh si possible
-    if (jwt && expired) {
-      console.log("🔄 JWT expiré → refresh")
-      try {
-        jwt = await this.refreshJwt()
-      } catch (e) {
-        console.warn("⚠️ refreshJwt failed", e)
-        jwt = null
-      }
-    }
+ if (jwt && expired) {
+  console.log("🔄 JWT expiré → refresh")
+  jwt = await this.refreshJwt()
+
+  if (!jwt) {
+    console.warn("⛔ refresh impossible → stop initAuth")
+    this.authLoading = false
+    this.isInitDone = true
+    window.__HIDE_SPLASH__?.()
+    return false
+  }
+}
 
     const refreshToken = localStorage.getItem("refreshToken")
 
-    // 4️⃣ si jwt absent MAIS refresh possible → on laisse vivre
-    if (!jwt && refreshToken) {
-      console.log("⏳ JWT absent mais refresh possible → init OK (temp)")
-      this.authLoading = false
-      this.isInitDone = true
-      requestAnimationFrame(() => {
-  window.__HIDE_SPLASH__?.()
-})
-      return true
-    }
+
 
 
 

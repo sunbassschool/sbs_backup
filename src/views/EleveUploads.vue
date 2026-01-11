@@ -8,7 +8,7 @@
       <div class="uploads-header">
         <div>
           <h3>📎 Mes documents</h3>
-          <div class="finder-tabs">
+ <div class="finder-tabs">
   <button
     class="tab"
     :class="{ active: finderMode === 'normal' }"
@@ -24,10 +24,19 @@
   >
     🔗 Partagé avec moi
   </button>
+
+  <button
+    class="tab danger"
+    :class="{ active: finderMode === 'trash' }"
+    @click="switchToTrash"
+  >
+    🗑️ Corbeille
+  </button>
+
   <button
     ref="addBtn"
     class="add-btn"
-    v-if="!isReadOnlyShared"
+    v-if="!isReadOnlyShared && finderMode !== 'trash'"
     :class="{ active: addMenu.visible }"
     @click.stop="openAddMenuFromButton"
   >
@@ -35,6 +44,7 @@
     Ajouter
   </button>
 </div>
+
 
           <p class="subtitle">Fichiers liés à tes cours</p>
 <div class="search-wrapper">
@@ -121,7 +131,10 @@ v-if="addMenu.visible && !isDragging && !showUpload"
       <!-- ===================================================== -->
       <!-- 🧱 BREADCRUMB -->
       <!-- ===================================================== -->
-      <div class="breadcrumb finder-breadcrumb">
+<div
+  v-if="finderMode !== 'trash'"
+  class="breadcrumb finder-breadcrumb"
+>
 
 
 
@@ -186,9 +199,81 @@ v-if="addMenu.visible && !isDragging && !showUpload"
   Chargement des dossiers partagés…
 </div>
 
+
+<!-- ===================================================== -->
+<!-- 🗑️ CORBEILLE -->
+<!-- ===================================================== -->
+<div v-if="finderMode === 'trash'" class="trash-view">
+
+  <div class="trash-header">
+    <p class="trash-info">
+      Les éléments supprimés seront automatiquement effacés.
+    </p>
+
+    <button
+      class="danger-btn"
+      :disabled="!selectedFiles.length && !selectedFolders.length"
+      @click="hardDeleteSelection"
+    >
+      ❌ Supprimer définitivement
+    </button>
+  </div>
+
+  <!-- EMPTY -->
+  <div
+    v-if="trashedFolders.length === 0 && trashedFiles.length === 0"
+    class="empty-state"
+  >
+    🗑️ La corbeille est vide
+  </div>
+
+  <!-- DOSSIERS -->
+  <div
+    v-for="folder in trashedFolders"
+    :key="folder.folder_id"
+    class="upload-item folder deleted"
+    :class="{ selected: selectedFolders.includes(folder.folder_id) }"
+    @click.stop="toggleFolderSelection(folder)"
+  >
+    <i class="bi bi-folder2"></i>
+    <strong>{{ folder.name }}</strong>
+
+    <div class="trash-actions">
+      <button @click.stop="restoreFolder(folder)">♻️ Restaurer</button>
+      <button class="danger" @click.stop="hardDeleteFolder(folder)">❌</button>
+    </div>
+  </div>
+
+  <!-- FICHIERS -->
+  <div
+    v-for="file in trashedFiles"
+    :key="file.upload_id"
+    class="upload-item deleted"
+    :class="{ selected: selectedFiles.includes(file.upload_id) }"
+    @click.stop="toggleFileSelection(file)"
+  >
+    <span class="file-icon">{{ getFileIcon(file) }}</span>
+
+    <div class="file-info">
+      <strong>{{ file.file_name }}</strong>
+      <span class="deleted-at">
+        Supprimé le {{ formatDate(file.deleted_at) }}
+      </span>
+    </div>
+
+    <div class="trash-actions">
+      <button @click.stop="restoreFile(file)">♻️ Restaurer</button>
+      <button class="danger" @click.stop="hardDeleteFile(file)">❌</button>
+    </div>
+  </div>
+
+</div>
+
+
+
         <!-- ================= CONTENT ================= -->
         <div
-          v-if="foldersLoaded"
+v-if="foldersLoaded && finderMode !== 'trash'"
           class="explorer-content"
             :class="{ 'no-anim': isNavigating }"
 
@@ -395,6 +480,20 @@ v-if="contextMenu.visible && !isDragging"
   <div class="context-item" @click="cutFromContext(contextMenu.target)">✂️ Couper</div>
   <div class="context-item danger" @click="deleteAndClose(contextMenu.target)">🗑️ Supprimer</div>
 </template>
+
+
+<template v-if="contextMenu.type === 'trash-file'">
+  <div class="context-item" @click="restoreFile(contextMenu.target)">
+    ♻️ Restaurer
+  </div>
+  <div class="context-item danger" @click="hardDeleteFile(contextMenu.target)">
+    ❌ Supprimer définitivement
+  </div>
+</template>
+
+
+
+
 <template v-else-if="contextMenu.type === 'explorer'">
 
   <div
@@ -458,7 +557,14 @@ v-if="contextMenu.visible && !isDragging"
 </template>
 
 
-
+<template v-else-if="contextMenu.type === 'trash-folder'">
+  <div class="context-item" @click="restoreFolder(contextMenu.target)">
+    ♻️ Restaurer
+  </div>
+  <div class="context-item danger" @click="hardDeleteFolder(contextMenu.target)">
+    ❌ Supprimer définitivement
+  </div>
+</template>
 
         </div>
       </div>
@@ -520,6 +626,8 @@ import { useToast } from "vue-toastification"
 // ============================================================================
 const auth = useAuthStore()
 const toast = useToast()
+const trashedUploads = ref([])   // fichiers supprimés
+const trashedFolders = ref([])   // dossiers supprimés
 
 const sharedWithMeIds = ref(new Set())
 const sharedByMeIds  = ref(new Set())
@@ -557,6 +665,367 @@ const onFilesSelected = (files) => {
 
   // 🔥 forward vers UploadFileCore
   uploader.value?.handleFiles(files)
+}
+
+const restoreFile = async (file) => {
+  console.group("♻️ RESTORE FILE — DEBUG")
+
+  console.log("📦 file reçu =", JSON.stringify(file, null, 2))
+
+  const folderId = file?.folder_id ?? null
+  console.log("📁 folder_id =", folderId)
+
+  if (!folderId) {
+    console.error("⛔ ABORT : folder_id manquant")
+    console.groupEnd()
+    return
+  }
+
+  console.log("👤 prof_id =", profId.value)
+  console.log("🔐 jwt présent =", !!auth.jwt)
+
+  // 🔁 SNAPSHOT (rollback)
+  const prevTrash = [...trashedUploads.value]
+  const prevFolder = [...(uploadsByFolder.value[folderId] || [])]
+
+  console.log("🧹 TRASH AVANT =", prevTrash.map(f => f.upload_id))
+  console.log(
+    "📂 DOSSIER AVANT =",
+    prevFolder.map(f => ({
+      id: f.upload_id,
+      deleted_at: f.deleted_at
+    }))
+  )
+
+  // ======================
+  // ⚡ UI INSTANT (optimistic)
+  // ======================
+  trashedUploads.value = trashedUploads.value.filter(
+    f => f.upload_id !== file.upload_id
+  )
+
+  uploadsByFolder.value[folderId] = [
+    ...prevFolder,
+    { ...file, deleted_at: null }
+  ]
+
+  console.log("🧹 TRASH APRÈS =", trashedUploads.value.map(f => f.upload_id))
+  console.log(
+    "📂 DOSSIER APRÈS OPTIMISTIC =",
+    uploadsByFolder.value[folderId].map(f => ({
+      id: f.upload_id,
+      deleted_at: f.deleted_at
+    }))
+  )
+
+  // ======================
+  // 🌍 BACKEND
+  // ======================
+  const payload = {
+    route: "restoreupload",
+    jwt: auth.jwt,
+    prof_id: profId.value,
+    upload_id: file.upload_id
+  }
+
+  console.log("📤 payload =", JSON.stringify(payload, null, 2))
+  const url = getProxyPostURL(routes.POST)
+  console.log("🌍 POST URL =", url)
+
+  try {
+    const t0 = performance.now()
+    const res = await axios.post(url, payload)
+    const t1 = performance.now()
+
+    console.log(`⏱ API durée ${(t1 - t0).toFixed(1)} ms`)
+    console.log("📥 response status =", res.status)
+    console.log("📥 response data =", JSON.stringify(res.data, null, 2))
+
+    if (!res.data?.success) {
+      console.error("❌ BACKEND restore FAILED", res.data)
+      throw new Error("restore_failed")
+    }
+
+    console.log("✅ BACKEND restore OK")
+
+    // 💾 cache
+    console.log("💾 writeUploadsCache")
+    writeUploadsCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      Object.values(uploadsByFolder.value).flat()
+    )
+
+    console.log("♻️ RESTORE SUCCESS =", file.upload_id)
+    console.groupEnd()
+
+  } catch (e) {
+    console.error("🔥 RESTORE ERROR — ROLLBACK", e)
+
+    // ======================
+    // 🔁 ROLLBACK
+    // ======================
+    trashedUploads.value = prevTrash
+    uploadsByFolder.value[folderId] = prevFolder
+
+    console.log("↩️ TRASH ROLLBACK =", prevTrash.map(f => f.upload_id))
+    console.log(
+      "↩️ DOSSIER ROLLBACK =",
+      prevFolder.map(f => f.upload_id)
+    )
+
+    console.groupEnd()
+    alert("Erreur restauration fichier")
+  }
+}
+
+
+
+const restoreFolder = (folder) => {
+  console.log("♻️ restore folder", folder.folder_id)
+  closeContextMenu()
+}
+
+const hardDeleteFile = async (file) => {
+  console.group("❌ HARD DELETE FILE — FRONT")
+
+  try {
+    if (!file?.upload_id) {
+      console.error("⛔ file invalide", file)
+      console.groupEnd()
+      return
+    }
+
+    if (!confirm("Supprimer définitivement ce fichier ?")) {
+      console.warn("⏭️ annulé par l’utilisateur")
+      console.groupEnd()
+      return
+    }
+
+    const uploadId = file.upload_id
+    const folderId = file.folder_id ?? null
+
+    console.log("📦 file =", JSON.stringify(file, null, 2))
+    console.log("🆔 upload_id =", uploadId)
+    console.log("📁 folder_id =", folderId)
+    console.log("👤 prof_id =", profId.value)
+    console.log("🔐 jwt present =", !!auth.jwt)
+
+    closeContextMenu()
+
+    // =========================
+    // SNAPSHOT (rollback)
+    // =========================
+    const prevTrash = [...trashedUploads.value]
+    const prevFolder = folderId
+      ? [...(uploadsByFolder.value[folderId] || [])]
+      : []
+
+    // =========================
+    // UI OPTIMISTIC
+    // =========================
+    trashedUploads.value = trashedUploads.value.filter(
+      u => u.upload_id !== uploadId
+    )
+
+    if (folderId && uploadsByFolder.value[folderId]) {
+      uploadsByFolder.value[folderId] =
+        uploadsByFolder.value[folderId].filter(
+          u => u.upload_id !== uploadId
+        )
+    }
+
+    console.log("⚡ UI optimistic applied")
+
+    // =========================
+    // PAYLOAD + API
+    // =========================
+    const payload = {
+      route: "harddeleteupload", // ⚠️ DOIT exister côté GAS
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      upload_id: uploadId
+    }
+
+    console.log("📤 payload =", JSON.stringify(payload, null, 2))
+
+    const url = getProxyPostURL(routes.POST)
+    console.log("🌍 POST URL =", url)
+
+    const t0 = performance.now()
+    const res = await axios.post(url, payload)
+    const t1 = performance.now()
+
+    console.log(`⏱ API durée ${(t1 - t0).toFixed(1)} ms`)
+    console.log("📥 response =", JSON.stringify(res.data, null, 2))
+
+    if (!res.data?.success) {
+      throw new Error(res.data?.message || "harddeleteupload_failed")
+    }
+
+    // =========================
+    // CACHE
+    // =========================
+    writeUploadsCache(
+      effectiveOwnerType.value,
+      effectiveOwnerId.value,
+      Object.values(uploadsByFolder.value).flat()
+    )
+
+    console.log("✅ HARD DELETE FILE OK =", uploadId)
+    console.groupEnd()
+
+  } catch (e) {
+    console.error("🔥 HARD DELETE FILE ERROR", e)
+
+    // =========================
+    // ROLLBACK
+    // =========================
+    trashedUploads.value = prevTrash
+    if (folderId) uploadsByFolder.value[folderId] = prevFolder
+
+    console.groupEnd()
+    alert("Erreur suppression définitive fichier")
+  }
+}
+
+
+const hardDeleteFolder = async (folder) => {
+  console.group("❌ HARD DELETE FOLDER — FRONT")
+
+  try {
+    // =========================
+    // 0) Guards
+    // =========================
+    if (!folder?.folder_id) {
+      console.error("⛔ folder invalide", folder)
+      console.groupEnd()
+      return
+    }
+
+    const folderId = folder.folder_id
+    console.log("📁 folder reçu =", JSON.stringify(folder, null, 2))
+    console.log("🆔 folder_id =", folderId)
+    console.log("👤 prof_id =", profId.value)
+    console.log("👤 role =", role.value)
+    console.log("🔐 jwt present =", !!auth.jwt)
+    console.log("🧭 finderMode =", finderMode.value)
+    console.log("📂 currentFolderId =", currentFolderId.value)
+
+    if (!confirm("Supprimer définitivement ce dossier et son contenu ?")) {
+      console.warn("⏭️ annulé par l’utilisateur")
+      console.groupEnd()
+      return
+    }
+
+    closeContextMenu()
+
+    // =========================
+    // 1) Snapshots (rollback)
+    // =========================
+    const prevFolders = JSON.parse(JSON.stringify(folders.value))
+    const prevUploadsByFolder = JSON.parse(JSON.stringify(uploadsByFolder.value))
+    const prevTrashFolders = Array.isArray(trashedFolders?.value)
+      ? JSON.parse(JSON.stringify(trashedFolders.value))
+      : null
+    const prevTrashUploads = Array.isArray(trashedUploads?.value)
+      ? JSON.parse(JSON.stringify(trashedUploads.value))
+      : null
+
+    console.log("🧷 snapshot counts =", {
+      folders: prevFolders.length,
+      uploadsFolders: Object.keys(prevUploadsByFolder).length,
+      trashFolders: prevTrashFolders ? prevTrashFolders.length : "(computed?)",
+      trashUploads: prevTrashUploads ? prevTrashUploads.length : "(computed?)"
+    })
+
+    // =========================
+    // 2) UI optimistic (optionnel)
+    // =========================
+    console.log("⚡ optimistic UI — remove folder locally")
+    folders.value = folders.value.filter(f => f.folder_id !== folderId)
+
+    // si tu stockes une trash list en ref (sinon ignore)
+    if (Array.isArray(trashedFolders?.value)) {
+      trashedFolders.value = trashedFolders.value.filter(f => f.folder_id !== folderId)
+    }
+
+    // vire aussi les uploads indexés DIRECTEMENT sur ce folderId (si présents)
+    if (uploadsByFolder.value?.[folderId]) {
+      console.log("🧹 remove uploadsByFolder[folderId] (direct children list)")
+      delete uploadsByFolder.value[folderId]
+      uploadsByFolder.value = { ...uploadsByFolder.value } // force re-render
+    }
+
+    // si on était dedans → reset
+    if (currentFolderId.value === folderId) {
+      console.warn("📁 current folder hard-deleted → reset currentFolderId")
+      currentFolderId.value = null
+    }
+
+    // =========================
+    // 3) Payload + call
+    // =========================
+    const payload = {
+      route: "harddeletefolder", // ✅ adapte au nom EXACT côté GAS
+      jwt: auth.jwt,
+      prof_id: profId.value,
+      folder_id: folderId
+    }
+
+    console.log("📤 payload =", JSON.stringify(payload, null, 2))
+
+    const url = getProxyPostURL(routes.POST)
+    console.log("🌍 POST URL =", url)
+
+    const t0 = performance.now()
+    const res = await axios.post(url, payload)
+    const t1 = performance.now()
+
+    console.log(`⏱ API durée ${(t1 - t0).toFixed(1)} ms`)
+    console.log("📥 response status =", res.status)
+    console.log("📥 response data =", JSON.stringify(res.data, null, 2))
+
+    if (!res?.data?.success) {
+      console.error("❌ BACKEND hard delete folder FAILED", res?.data)
+      throw new Error(res?.data?.message || "hard_delete_folder_failed")
+    }
+
+    // =========================
+    // 4) Cache sync
+    // =========================
+    console.log("💾 write cache after hard delete")
+    try {
+      writeFoldersCache(effectiveOwnerType.value, effectiveOwnerId.value, folders.value)
+      writeUploadsCache(
+        effectiveOwnerType.value,
+        effectiveOwnerId.value,
+        Object.values(uploadsByFolder.value).flat()
+      )
+    } catch (e) {
+      console.warn("⚠️ cache write failed (non bloquant)", e)
+    }
+
+    console.log("✅ HARD DELETE FOLDER OK =", folderId)
+    console.groupEnd()
+
+  } catch (e) {
+    console.error("🔥 HARD DELETE FOLDER ERROR", e)
+
+    // =========================
+    // 5) Rollback
+    // =========================
+    console.warn("↩️ rollback state")
+    if (typeof prevFolders !== "undefined") folders.value = prevFolders
+    if (typeof prevUploadsByFolder !== "undefined") uploadsByFolder.value = prevUploadsByFolder
+
+    // si trash en ref (sinon ignore)
+    if (prevTrashFolders && Array.isArray(trashedFolders?.value)) trashedFolders.value = prevTrashFolders
+    if (prevTrashUploads && Array.isArray(trashedUploads?.value)) trashedUploads.value = prevTrashUploads
+
+    console.groupEnd()
+    alert("Erreur suppression définitive dossier")
+  }
 }
 
 
@@ -852,6 +1321,17 @@ const getEventPosition = (e) => {
 // 🔗 MODE FINDER
 // =====================================================
 const finderMode = ref("normal") // normal | shared
+// 🗑️ TRASH MODE
+const isTrashMode = computed(() => finderMode.value === "trash")
+const trashFiles = computed(() =>
+  Object.values(uploadsByFolder.value)
+    .flat()
+    .filter(f => f.deleted_at)
+)
+
+const trashFolders = computed(() =>
+  folders.value.filter(f => f.deleted_at)
+)
 
 const sharedFolders = ref([])
 // [{ folder_id, permission, prof_id, share_id }]
@@ -1010,7 +1490,7 @@ const cacheStart = ref(performance.now())
 // ⚠️ Doit être IDENTIQUE à tes autres vues (Planning.vue etc.)
 // ============================================================================
 const routes = {
-  POST: "AKfycbzo0ooaiNkY6yyc9MmXfwVDxJmVwklyeoKOpPklgWotIsKRhNw9kim1rKcPPwsOj8wWGg/exec"
+  POST: "AKfycbz2ik_YIGEJTRlwoc-DLXY7rGXRFcBh-lyO-8tNp9bHUnUAw5fdlaOnYkOhvZdQ-gDjZA/exec"
 }
 const loaderStep = ref("init")
 const filteredFolders = computed(() => {
@@ -1657,37 +2137,27 @@ const isInsideSharedTree = (folderId) => {
 
 
 const visibleFolders = computed(() => {
-  // 🔗 RACINE PARTAGÉE
+  if (isTrashMode.value) return trashedFolders.value
+  // logique existante ↓
   if (isSharedMode.value && currentFolderId.value === SHARED_ROOT_ID) {
-    console.log("🧪 VISIBLE SHARED ROOT", {
-      sharedRoots: sharedFolders.value.map(s => s.folder_id),
-      allFolders: folders.value.length
-    })
-
     return folders.value.filter(f =>
       sharedFolders.value.some(s => s.folder_id === f.folder_id)
     )
   }
-
-  // 🔗 NAVIGATION DANS UN DOSSIER PARTAGÉ
   if (isSharedMode.value) {
-    const visibles = folders.value.filter(
+    return folders.value.filter(
       f =>
         f.parent_id === currentFolderId.value &&
         isInsideSharedTree(f.folder_id)
     )
-
-    console.log("🧪 VISIBLE SHARED CHILDREN", {
-      currentFolderId: currentFolderId.value,
-      visibles: visibles.map(f => f.folder_id)
-    })
-
-    return visibles
   }
-
-  // 📁 MODE NORMAL
   return foldersByParentCache.value[currentFolderId.value ?? null] || []
 })
+
+const trashedFoldersView = computed(() => trashedFolders.value)
+
+
+const trashedFiles = computed(() => trashedUploads.value)
 
 
 
@@ -1704,28 +2174,10 @@ const clearSelection = () => {
 
 // Fichiers du dossier courant uniquement
 const visibleFiles = computed(() => {
+  if (isTrashMode.value) return trashedFiles.value
   if (!currentFolderId.value) return []
-
-  const files = uploadsByFolder.value[currentFolderId.value] || []
-
-  // 🧠 RACINE ÉLÈVE : filtrage métier
-  if (
-    !isProfLike.value &&
-    !isSharedMode.value &&
-    currentFolderId.value === eleveRootId.value
-  ) {
-    return files.filter(f =>
-      // fichiers destinés aux élèves
-      f.visibility === "eleves" ||
-      // fichiers privés de l’élève
-      String(f.eleve_id).trim() === String(auth.user_id).trim()
-    )
-  }
-
-  // 📁 DOSSIERS : PAS de filtre visibility
-  return files
+  return uploadsByFolder.value[currentFolderId.value] || []
 })
-
 
 
 
@@ -1991,6 +2443,13 @@ const switchToNormal = () => {
     goHome()
   }
 }
+const switchToTrash = () => {
+  finderMode.value = "trash"
+  selectedFiles.value = []
+  selectedFolders.value = []
+  searchQuery.value = ""
+}
+
 
 const switchToShared = () => {
   normalStateSnapshot.value = {
@@ -3430,8 +3889,16 @@ const deleteUpload = async (file) => {
   // ======================
   const snapshot = [...(uploadsByFolder.value[folderId] || [])]
 
-  uploadsByFolder.value[folderId] =
-    snapshot.filter(u => u.upload_id !== file.upload_id)
+// retirer du dossier courant
+uploadsByFolder.value[folderId] =
+  snapshot.filter(u => u.upload_id !== file.upload_id)
+
+// 🔥 AJOUT CORBEILLE (front)
+trashedUploads.value.push({
+  ...file,
+  deleted_at: new Date().toISOString()
+})
+
 
   try {
     await axios.post(getProxyPostURL(routes.POST), {
@@ -3474,6 +3941,14 @@ ids.forEach(id => {
 
   uploadsByFolder.value[fid] =
     uploadsByFolder.value[fid].filter(u => u.upload_id !== id)
+    const removed = snapshots[fid].find(u => u.upload_id === id)
+if (removed) {
+  trashedUploads.value.push({
+    ...removed,
+    deleted_at: new Date().toISOString()
+  })
+}
+
 })
 
   selectedFiles.value = []
@@ -3674,17 +4149,16 @@ const openFolderMenu = (e, folder) => {
   closeContextMenu()
 
   const { x, y } = getEventPosition(e)
-folder._isSharedByMe = sharedByMeIds?.value?.has?.(folder.folder_id) ?? false
 
-contextMenu.value = {
-  visible: true,
-  x,
-  y: y + 8,
-  type: "folder",
-  target: folder
+  contextMenu.value = {
+    visible: true,
+    x,
+    y: y + 8,
+    type: isTrashMode.value ? "trash-folder" : "folder",
+    target: folder
+  }
 }
 
-}
 
 const folderRenameRefs = new Map()
 
@@ -3785,7 +4259,7 @@ const openFileMenu = (e, file) => {
     visible: true,
     x,
     y: y + 8,
-    type: "file",
+    type: isTrashMode.value ? "trash-file" : "file",
     target: file
   }
 }
