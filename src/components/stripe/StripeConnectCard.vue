@@ -51,13 +51,14 @@
 </div>
 
 <!-- NOT CONNECTED -->
-<div v-else class="state warn">
-  <p>❌ Paiements non activés</p>
-
-  <button class="btn" @click="goToStripeConnect">
-    Activer les paiements
+<div v-else class="state state-warn-inline">
+  <span class="state-icon">❌</span>
+  <span class="state-text">Paiements non activés</span>
+  <button class="btn btn-stripe" @click="goToStripeConnect">
+    Activer
   </button>
 </div>
+
 
 
 
@@ -199,97 +200,91 @@ checkStatusNetwork()
 // 🔗 GO TO STRIPE CONNECT
 // =====================================================
 const goToStripeConnect = async () => {
-clearStripeCache(auth.user.user_id)
-
-  onboardingStarted.value = true
-  onboardingLoading.value = true
-
-  // 1️⃣ ouverture immédiate (anti popup blocker)
-  const stripeWindow = window.open("about:blank", "_blank")
-
-  // sécurité (au cas où)
-  if (!stripeWindow) {
-    onboardingLoading.value = false
-    alert("Merci d’autoriser les popups pour continuer avec Stripe.")
-    return
-  }
-
-  // 2️⃣ loader visuel (évite page blanche)
-  stripeWindow.document.write(`
-    <html>
-      <head>
-        <title>Connexion Stripe</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style>
-          body {
-            margin: 0;
-            background: #0b0c0f;
-            color: #e6e6e6;
-            font-family: system-ui, -apple-system;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-          }
-          .box { text-align: center; }
-          .spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid rgba(255,255,255,.2);
-            border-top-color: #fb923c;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 12px;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <div class="spinner"></div>
-          <div>Connexion sécurisée à Stripe…</div>
-        </div>
-      </body>
-    </html>
-  `)
+  console.group("🧪 [STRIPE CONNECT] goToStripeConnect")
+  console.log("👤 user_id =", auth?.user?.user_id)
 
   try {
-    // 3️⃣ appel backend
-    const jwt = await getValidToken()
+    console.log("🧹 clearStripeCache")
+    clearStripeCache(auth.user.user_id)
 
+    onboardingStarted.value = true
+    onboardingLoading.value = true
+    console.log("🚀 onboarding flags set")
+
+    // 1️⃣ ouverture immédiate
+    console.log("🪟 window.open → about:blank")
+    const stripeWindow = window.open("about:blank", "_blank")
+
+    if (!stripeWindow) {
+      console.error("🚫 Popup bloquée")
+      onboardingLoading.value = false
+      alert("Merci d’autoriser les popups pour continuer avec Stripe.")
+      return
+    }
+
+    console.log("✅ Popup ouverte")
+
+    // 2️⃣ loader
+    try {
+      stripeWindow.document.write(`<!DOCTYPE html>...`)
+      console.log("🎨 Loader injecté")
+    } catch (e) {
+      console.warn("⚠️ Impossible d’écrire dans la popup", e)
+    }
+
+    // 3️⃣ JWT
+    console.log("🔐 getValidToken()")
+    const jwt = await getValidToken()
+    console.log("🔐 JWT OK", jwt?.slice(0, 20) + "...")
+
+    // 4️⃣ fetch backend
+    const payload = {
+      route: "stripeconnectlink",
+      jwt,
+      user_id: auth.user.user_id
+    }
+
+    console.log("📤 FETCH payload", payload)
+    console.log("🌍 proxyUrl =", proxyUrl)
+
+    const t0 = performance.now()
     const resp = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-     body: JSON.stringify({
-  route: "stripeconnectlink",
-  jwt,
-  user_id: auth.user.user_id
-})
-
+      body: JSON.stringify(payload)
     })
+    const t1 = performance.now()
+
+    console.log(`⏱️ fetch done in ${(t1 - t0).toFixed(1)}ms`)
+    console.log("📥 status =", resp.status)
+    console.log("📥 headers =", [...resp.headers.entries()])
 
     const text = await resp.text()
+    console.log("📥 raw response =", text)
 
     if (!text.trim().startsWith("{")) {
-      throw new Error("Non-JSON response (GAS crash / HTML)")
+      console.error("💥 Non-JSON response (HTML / crash GAS)")
+      throw new Error("non-json-response")
     }
 
     const res = JSON.parse(text)
+    console.log("📦 parsed JSON =", res)
 
-    // 4️⃣ redirection Stripe
+    // 5️⃣ redirection
     if (res?.onboarding_url) {
+      console.log("➡️ redirect Stripe =", res.onboarding_url)
       stripeWindow.location.replace(res.onboarding_url)
     } else {
+      console.error("❌ onboarding_url manquant")
       stripeWindow.close()
     }
 
   } catch (e) {
-    console.error("❌ stripeconnectlink ERROR", e)
-    try { stripeWindow.close() } catch {}
+    console.error("🔥 stripeconnectlink FATAL", e)
   } finally {
     onboardingLoading.value = false
+    console.log("🏁 onboardingLoading = false")
+    console.groupEnd()
   }
 }
 
@@ -436,5 +431,35 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
+.state-warn-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2a1f1f, #1c1414);
+  border: 1px solid rgba(255, 80, 80, 0.25);
+}
+
+.state-warn-inline .state-icon {
+  font-size: 18px;
+}
+
+.state-warn-inline .state-text {
+  flex: 1;
+  font-weight: 500;
+  color: #ff9a9a;
+}
+
+.btn-stripe {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-weight: 600;
+  border: none;
+  background: linear-gradient(135deg, #635bff, #4f46e5);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
 
 </style>

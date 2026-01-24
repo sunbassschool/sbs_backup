@@ -11,13 +11,16 @@
       </header>
 
       <!-- LOADING -->
-      <p v-if="loading" class="muted">Chargement des cours…</p>
+<SBSLoading
+  v-if="loading"
+  label="Chargement des offres…"
+/>
 
       <!-- EMPTY -->
       <div v-else-if="!products.length" class="empty">
-        <p>Aucun cours créé.</p>
+        <p>Aucune  offre créée.</p>
         <button class="btn primary small" @click="openCreateProduct">
-          Créer un cours
+          Créer une offre
         </button>
       </div>
 
@@ -36,7 +39,7 @@
           <!-- HEADER -->
           <div class="row-main">
             <div class="row-info">
-              <strong class="row-title">{{ product.name }}</strong>
+              <strong class="row-title">{{ product.product_name }}</strong>
               <span v-if="product.description" class="row-desc">
                 {{ product.description }}
               </span>
@@ -132,7 +135,7 @@
 
             <div class="row-main">
               <div class="row-info">
-                <strong class="row-title">{{ product.name }}</strong>
+                <strong class="row-title">{{ product.product_name }}</strong>
                 <span v-if="product.description" class="row-desc">
                   {{ product.description }}
                 </span>
@@ -223,7 +226,7 @@ import { getValidToken } from "@/utils/api"
 import { getProxyPostURL } from "@/config/gas"
 import CreateProductModal from "@/components/stripe/CreateProductModal.vue"
 import CreatePriceModal from "@/components/stripe/CreatePriceModal.vue"
-
+import SBSLoading from "@/components/SBSLoading.vue"
 const auth = useAuthStore()
 const proxyUrl = getProxyPostURL()
 const showCreateProduct = ref(false)
@@ -325,7 +328,7 @@ const fetchProducts = () => {
   // 2️⃣ pas de cache → réseau direct
   fetchProductsNetwork()
 }
-// Function on price created 
+// Function on price created
 const onPriceCreated = () => {
   const productId = selectedProductId.value
 

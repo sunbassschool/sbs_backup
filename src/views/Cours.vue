@@ -1,11 +1,10 @@
 <template>
 
-  <Layout>
+  <Layout><div class="cours-theme">
     <div class="container-xxl mt-4">
 
       <!-- ✅ Sélecteur de prénom -->
       <div class="mb-3 text-center">
-  <label for="studentSelect">Sélectionner un élève :</label>
 <select v-model="selectedStudent" class="form-select mt-2" id="studentSelect">
   <option value="">Tous les élèves</option>
 <option v-for="eleve in elevesInscrits" :key="eleve.email" :value="eleve.prenom">
@@ -13,15 +12,19 @@
 </option>
 
 </select>
-
+<!-- ✅ Sélecteur de semaine -->
+<div class="mb-3 text-center">
+  <select v-model="selectedWeek" class="form-select mt-2" id="weekSelect">
+    <option value="">Toutes les semaines</option>
+    <option v-for="week in weeks" :key="week.start" :value="week">
+      {{ week.label }}
+    </option>
+  </select>
 </div>
-
-<!-- ✅ Bouton de suppression -->
-<div class="text-center mt-3" v-if="selectedStudent">
-  <button @click="supprimerCours" class="btn btn-danger">❌ Supprimer les cours de {{ selectedStudent }}</button>
+<div v-if="successMessage" class="alert alert-success text-center mt-3">
+  {{ successMessage }}
 </div>
-
-
+</div>
       <!-- ✅ Chargement -->
       <div v-if="loading" class="d-flex flex-column align-items-center mt-4">
         <div class="spinner-border text-primary mb-2" role="status"></div>
@@ -34,29 +37,20 @@
       </div>
 <!-- ✅ Bouton pour activer/désactiver le filtre -->
 <div class="mb-3 d-flex align-items-center gap-2">
-  <input 
-    type="checkbox" 
-    id="filterUpcoming" 
+ <!--
+  <input
+    type="checkbox"
+    id="filterUpcoming"
     v-model="filterUpcoming"
     class="form-check-input"
   />
-  <label for="filterUpcoming" class="form-check-label">
+ <label for="filterUpcoming" class="form-check-label">
     Afficher uniquement les cours à venir 📅
   </label>
+
+  !-->
 </div>
-<!-- ✅ Sélecteur de semaine -->
-<div class="mb-3 text-center">
-  <label for="weekSelect">Sélectionner une semaine :</label>
-  <select v-model="selectedWeek" class="form-select mt-2" id="weekSelect">
-    <option value="">Toutes les semaines</option>
-    <option v-for="week in weeks" :key="week.start" :value="week">
-      {{ week.label }}
-    </option>
-  </select>
-</div>
-<div v-if="successMessage" class="alert alert-success text-center mt-3">
-  {{ successMessage }}
-</div>
+
 <div class="d-flex justify-content-center align-items-center gap-2 mt-2">
   <button class="btn btn-outline-light" @click="goToPreviousWeek">⬅</button>
 <div class="d-flex justify-content-center mt-2">
@@ -74,17 +68,17 @@
       <tr>
         <th scope="col">📆 Date & Heure</th>
         <th scope="col">🎸 Élève</th>
-        <th scope="col">🔗 Lien Meet</th>
+        <th scope="col">🔗 Lien visio</th>
         <th scope="col">📝 Commentaires</th>
-        <th scope="col">📄 Synthèse</th>
+
         <th scope="col">👀 Présence</th>
       </tr>
     </thead>
     <tbody>
-      <tr 
-  v-for="(cours, index) in filteredCours" 
+      <tr
+  v-for="(cours, index) in filteredCours"
   :key="index"
-  @click="openEditModal(cours)" 
+  @click="openEditModal(cours)"
   class="clickable-row"
   :class="{
     'past-course': isPastCourse(cours), // ✅ Ajoute la classe past-course si le cours est passé
@@ -112,14 +106,14 @@
         <td>{{ cours.Commentaires || "Aucun commentaire" }}</td>
 
         <!-- ✅ Synthèse -->
-        <td>{{ cours.Synthèse || "Non renseignée" }}</td>
+
 
         <!-- ✅ Case à cocher pour la présence -->
 <td>
-  <input 
-  type="checkbox" 
-  :checked="Boolean(cours.Présence)" 
-  @change.prevent="updatePresence(cours, $event.target.checked)" 
+  <input
+  type="checkbox"
+  :checked="Boolean(cours.Présence)"
+  @change.prevent="updatePresence(cours, $event.target.checked)"
   @click.stop
 />
 
@@ -134,62 +128,18 @@
 
 
       </div>
-    </div>
+    </div></div>
   </Layout>
-  <!-- ✅ MODAL DE MODIFICATION -->
-<div v-if="editModalOpen" class="modal show d-block" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Modifier le cours de {{ editedCours.Prénom }}</h5>
-        <button type="button" class="btn-close" @click="closeEditModal"></button>
-      </div>
-      <div class="modal-body">
-      <label class="form-label">Date et heure :</label>
-<input type="datetime-local" v-model="editedCours['Date et heure']" class="form-control" />
+<!-- 🟣 PREMIUM PROF – MODAL MODIFICATION COURS -->
+<EditCoursModal
+  v-model="editModalOpen"
+  :cours="editedCours"
+  :loading="updating"
+  @save="(c) => { editedCours = c; updateCours() }"
+/>
 
 
-        <label class="form-label mt-2">Lien Google Meet :</label>
-        <input type="url" v-model="editedCours['Lien Google Meet']" class="form-control" />
 
-        <label class="form-label mt-2">Lien Replay :</label>
-        <input type="url" v-model="editedCours['Lien Replay']" class="form-control" />
-
-        <label class="form-label mt-2">Trimestre :</label>
-        <select v-model="editedCours.Trimestre" class="form-select">
-          <option value="trimestre 1">Trimestre 1</option>
-          <option value="trimestre 2">Trimestre 2</option>
-          <option value="trimestre 3">Trimestre 3</option>
-        </select>
-     
-<!-- ✅ Champ pour modifier les commentaires -->
-<label class="form-label mt-2">📝 Commentaires :</label>
-<textarea 
-  v-model="editedCours.Commentaires" 
-  class="form-control" 
-  rows="3" 
-  placeholder="Ajouter un commentaire..."
-></textarea>
-
-<!-- ✅ Champ pour modifier la synthèse -->
-<label class="form-label mt-2">📄 Synthèse :</label>
-<textarea 
-  v-model="editedCours.Synthèse" 
-  class="form-control" 
-  rows="3" 
-  placeholder="Ajouter une synthèse..."
-></textarea>
-
-
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" @click="closeEditModal">Annuler</button>
-        <button class="btn btn-success" @click="updateCours">✅ Enregistrer</button>
-      </div>
-      
-    </div>
-  </div>
-</div>
 
 </template>
 
@@ -197,9 +147,10 @@
 import Layout from "../views/Layout.vue";
 import axios from "axios";
 import { getProxyPostURL, getProxyGetURL } from "@/config/gas"
+import EditCoursModal from "@/components/admin/EditCoursModal.vue"
 
-import { ref, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRouter,useRoute  } from "vue-router";
 import { getValidToken } from "@/utils/api.ts"; // 🔐 Import sécurisé
 import { useAuthStore } from "@/stores/authStore.js";
 import { useCoursStore } from "@/stores/coursStore"
@@ -207,8 +158,10 @@ import { useCoursStore } from "@/stores/coursStore"
 
 export default {
   name: "Cours",
-  components: { Layout },
+  components: { Layout,EditCoursModal  },
   setup() {
+    const route = useRoute();
+
     const authStore = useAuthStore();
 const profId = computed(() => authStore.user?.prof_id);
     const filterUpcoming = ref(false);
@@ -240,8 +193,8 @@ const TTL = 15 * 60 * 1000 // 15 min
 };
 const fetchElevesInscrits = async () => {
   try {
-    const jwt = await getValidToken()
-
+const jwt = authStore.jwt
+if (!jwt) return
 const proxyUrl = getProxyPostURL()
 
 const res = await fetch(proxyUrl, {
@@ -348,7 +301,7 @@ const goToNextWeek = () => {
     // ✅ Récupérer les cours depuis Google Sheets
 const fetchCours = async (noCache = false) => {
   try {
-    const jwt = await getValidToken()
+    const jwt = authStore.jwt
     if (!profId.value) throw new Error("prof_id manquant")
 
   const proxyUrl = getProxyGetURL(
@@ -451,9 +404,19 @@ const selectClosestWeek = () => {
   let filtered = [...coursData.value];
 
   if (selectedStudent.value) {
-    filtered = filtered.filter(
-      (cours) => cours.Prénom?.trim() === selectedStudent.value.trim()
-    );
+const normalize = (s = "") =>
+  s
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+filtered = filtered.filter(
+  (cours) =>
+    normalize(cours.Prénom) === normalize(selectedStudent.value)
+);
+
   }
 
   if (filterUpcoming.value) {
@@ -475,7 +438,19 @@ const selectClosestWeek = () => {
   }
 
   // ✅ Trier par date et heure dans l'ordre chronologique
-  filtered.sort((a, b) => new Date(a["Date et heure"]) - new Date(b["Date et heure"]));
+filtered.sort((a, b) => {
+  const da = new Date(a["Date et heure"]);
+  const db = new Date(b["Date et heure"]);
+
+  // ✅ Toutes les semaines → plus récent → plus ancien
+  if (!selectedWeek.value) {
+    return db - da;
+  }
+
+  // ✅ Semaine sélectionnée → chronologique
+  return da - db;
+});
+
 
   return filtered;
 });
@@ -493,7 +468,7 @@ const selectClosestWeek = () => {
 
   deleting.value = true;
   try {
-    const jwt = await getValidToken();
+    const jwt = authStore.jwt;
 
     // ✅ Construction de l'URL via le proxy
    const proxyUrl = getProxyPostURL()
@@ -529,7 +504,10 @@ const response = await fetch(proxyUrl, {
 
     // ✅ Ouvrir la modale d'édition
     const openEditModal = (cours) => {
-  editedCours.value = { ...cours };
+editedCours.value = {
+  ...cours,
+  Présence: cours["Présence"] === true
+};
 
   // ✅ Sauvegarde la date d'origine pour que l'API puisse retrouver le cours
   editedCours.value.AncienneDate = cours["Date et heure"];
@@ -537,7 +515,7 @@ const response = await fetch(proxyUrl, {
   // ✅ Vérifie et reformate la date pour l'input datetime-local
   if (editedCours.value["Date et heure"]) {
     const dateObj = new Date(editedCours.value["Date et heure"]);
-    
+
     if (!isNaN(dateObj.getTime())) {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, "0");
@@ -555,7 +533,19 @@ const response = await fetch(proxyUrl, {
   editModalOpen.value = true;
 };
 
+const updatePresence = async (cours, isPresent) => {
+  // patch local immédiat (UX instant)
+  cours.Présence = isPresent === true
 
+  editedCours.value = {
+    ...cours,
+    Présence: cours.Présence,
+    AncienneDate: cours["Date et heure"]
+  }
+
+  await updateCours()
+}
+;
 
     // ✅ Fermer la modale d'édition
     const closeEditModal = () => {
@@ -564,7 +554,7 @@ const response = await fetch(proxyUrl, {
     };
 
     // ✅ Met à jour un cours
-    const updateCours = async () => {
+const updateCours = async (noCache = false, jwtOverride = null) => {
   if (!editedCours.value.Prénom || !editedCours.value["Date et heure"]) {
     alert("❌ Tous les champs doivent être remplis !");
     return;
@@ -572,7 +562,8 @@ const response = await fetch(proxyUrl, {
 
   updating.value = true;
   try {
-    const jwt = await getValidToken();
+const jwt = authStore.jwt
+if (!jwt) return
 const proxyUrl = getProxyPostURL()
 
 const response = await fetch(proxyUrl, {
@@ -593,7 +584,19 @@ const response = await fetch(proxyUrl, {
 
     if (result.status === "success") {
       showSuccessMessage("✅ Cours mis à jour avec succès !");
-      await fetchCours(true);
+  editModalOpen.value = false   // 👈 fermer tout de suite
+// patch local optimiste
+const idx = coursData.value.findIndex(
+  c => c["Date et heure"] === editedCours.value.AncienneDate
+)
+if (idx !== -1) {
+  coursData.value[idx] = {
+    ...coursData.value[idx],
+    ...editedCours.value
+  }
+}
+     // refresh en background
+  editedCours.value = {};
       closeEditModal();
     } else {
       alert("❌ Erreur : " + result.message);
@@ -629,6 +632,15 @@ const response = await fetch(proxyUrl, {
     };
 
 onMounted(async () => {
+  const eleveFromQuery = route.query.eleve;
+  const fromCreatePlanning =
+    typeof eleveFromQuery === "string" && eleveFromQuery.length;
+
+  if (fromCreatePlanning) {
+    selectedStudent.value = eleveFromQuery;
+    selectedWeek.value = ""; // 👉 toutes les semaines
+  }
+
   try {
     await getValidToken()
   } catch {
@@ -636,74 +648,110 @@ onMounted(async () => {
     return
   }
 
-  // 1️⃣ affichage immédiat si cache
+  // cache immédiat
   const hasCache = loadFromStore()
-  console.log("🧠 cache affiché ?", hasCache, coursData.value.length)
-
   loading.value = !hasCache
-  selectClosestWeek()
 
-  // 2️⃣ fetch TOUJOURS en arrière-plan
+  // ⚠️ NE PAS auto-sélectionner une semaine si on vient du wizard
+  if (!fromCreatePlanning) {
+    selectClosestWeek()
+  }
+
   fetchElevesInscrits()
   fetchCours(true).finally(() => {
     loading.value = false
-    selectClosestWeek()
+
+    if (!fromCreatePlanning) {
+      selectClosestWeek()
+    }
   })
-})
+});
+
 
 ;
 
+//==================================================
+//==================================================
+// ------------------WATCHERS-----------------------
+//==================================================
+//==================================================
+
+watch(editModalOpen, v => {
+  console.log("🟣 MODAL OPEN =", v)
+})
+;
+watch(selectedStudent, () => {
+  selectedWeek.value = "" // reset semaine
+})
+;
     return {
       coursData, loading, deleting, updating, selectedStudent, filterUpcoming, filteredCours,
       supprimerCours, openEditModal, closeEditModal, updateCours, editModalOpen,goToPreviousWeek,selectNextWeekFromNow
 ,
 
-      editedCours, formatCompactDate, uniqueStudents, selectedWeek, weeks, successMessage,elevesInscrits ,goToNextWeek, isPastCourse
+      editedCours, formatCompactDate, uniqueStudents, selectedWeek, weeks, successMessage,elevesInscrits ,goToNextWeek, isPastCourse,  updatePresence
+
     };
   },
 };
 </script>
 
-<style>
-/* ==================================================
-   🎨 SBS DESIGN TOKENS — COURS PROF
-   ================================================== */
+<style scoped>
+.cours-theme {
+  /* ===== SURFACES ===== */
+  --surface-page: #000000;
+  --surface-panel: #000000;
+  --surface-glass: rgba(0, 0, 0, 0.95);
+  --surface-hover: #f3f4f6;
 
-:root {
-  /* Brand */
+ --bg-panel: var(--surface-glass);
+  --bg-glass: var(--surface-glass);
+  --bg-hover: var(--surface-hover);
+
+
+  /*=== input ==== */
+  --input-bg: var(--surface-hover);
+
+  /* ===== TEXT ===== */
+  --text-main: #ff5100;
+  --text-strong: #0f172a;
+  --text-muted: #ff5100;
+
+  /* ===== BRAND ===== */
   --brand-accent: #292929;
   --brand-accent-strong: #303030;
 
-  /* Backgrounds */
-  --bg-panel: #ffffff;
-  --bg-soft: #2a6aaa;
-  --bg-hover: #f3f4f6;
-  --bg-glass: rgba(255,255,255,0.95);
-
-  /* Text */
-  --text-main: #1f2937;
-  --text-strong: #0f172a;
-  --text-muted: #475569;
-
-  /* Borders */
+  /* ===== BORDERS ===== */
   --border-soft: #e5e7eb;
   --border-focus: var(--brand-accent);
---btn-border-width: 0px;
-  --btn-border-color: transparent;
-  /* States */
-  --success-bg: #ecfdf5;
-  --success-border: #34d399;
-  --danger-bg: #fef2f2;
-  --danger-border: #f87171;
 
-  /* Radius */
-  --radius-sm: 8px;
+  /* ===== INPUT TOKENS ===== */
+  --input-surface: var(--surface-panel);
+  --input-text: var(--text-main);
+  --input-border: var(--border-soft);
+  --input-placeholder: var(--text-muted);
+
+  /* ===== RADIUS / SHADOW ===== */
   --radius-md: 12px;
-  --radius-lg: 18px;
-
-  /* Shadows */
-  --shadow-soft: 0 8px 22px rgba(0,0,0,0.08);
   --shadow-panel: 0 24px 70px rgba(0,0,0,0.18);
+}
+
+/* état normal (idle) */
+select,
+input,
+textarea {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+
+
+/* options du dropdown */
+
+
+/* option "Tous / vide" */
+select option[value=""] {
+  color: var(--input-placeholder);
 }
 
 /* ==================================================
@@ -754,8 +802,6 @@ onMounted(async () => {
 textarea {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
-  background: var(--bg-glass);
-  color: var(--text-main);
   transition: all 0.25s ease;
 }
 
@@ -769,7 +815,6 @@ textarea:hover {
 .form-control:focus,
 textarea:focus {
   outline: none;
-  background: var(--bg-panel);
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(250,204,21,0.25);
 }
@@ -967,39 +1012,8 @@ textarea:focus {
 }
 
 
-/* ==================================================
-   MODAL
-   ================================================== */
 
-.modal-dialog {
-  max-width: 560px;
-}
 
-.modal-content {
-  border-radius: var(--radius-xl);
-  border: none;
-  box-shadow: var(--shadow-hover);
-}
-
-.modal-header,
-.modal-footer {
-  border-color: var(--border-soft);
-}
-
-.modal-title {
-  font-weight: 700;
-  color: var(--text-strong);
-}
-
-.modal-body {
-  padding: 22px;
-}
-
-.modal-footer {
-  background: var(--bg-panel);
-  position: sticky;
-  bottom: 0;
-}
 
 /* ==================================================
    ALERTS / LOADER
@@ -1030,9 +1044,7 @@ textarea:focus {
     font-size: 0.85rem;
   }
 
-  .modal-dialog {
-    max-width: 92vw;
-  }
+
 }
 .container-xxl select.form-select {
   text-align: center;
@@ -1066,6 +1078,36 @@ textarea:focus {
     padding: 4px 10px;
     font-size: 0.75rem;
   }
+}
+
+.sbs-modal-dialog {
+  margin-left: auto;
+  margin-right: auto;
+}
+select:disabled {
+  background-color: #e5e7eb !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+.container-xxl select.form-select:disabled {
+  background-color: #e5e7eb !important;
+  color: #64748b !important;
+  border-color: #cbd5e1 !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+}
+.container-xxl select.form-select:disabled option {
+  color: #94a3b8 !important;
+}
+
+.container-xxl select.form-select:disabled,
+.container-xxl select.form-select:disabled:hover,
+.container-xxl select.form-select:disabled:focus {
+  background-color: #e5e7eb !important;
+  color: #64748b !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 </style>

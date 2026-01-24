@@ -8,7 +8,7 @@ declare global {
 
 import { openDB } from "idb";
 import type { IDBPDatabase } from 'idb';
-import { getProxyGetURL } from "@/config/gas"
+import { getProxyPostURL  } from "@/config/gas.ts"
 
 import { nextTick } from "vue";
 import { jwtDecode } from "jwt-decode";
@@ -58,7 +58,7 @@ if (!jwt) {
 try {
   // Décodage du JWT pour extraire le payload
   const decoded = JSON.parse(atob(jwt.split(".")[1]));
-  
+
   // Vérification du rôle dans le payload
   return decoded.role === "admin"; // Retourne true si l'utilisateur est admin
 } catch (error) {
@@ -148,7 +148,7 @@ export async function resetIndexedDB(): Promise<void> {
     console.log("🗑️ Suppression de la base AuthDB...");
     await new Promise<void>((resolve, reject) => {
       const deleteRequest = indexedDB.deleteDatabase("AuthDB");
-      
+
       deleteRequest.onsuccess = () => resolve();
       deleteRequest.onerror = () => reject(deleteRequest.error);
     });
@@ -191,7 +191,7 @@ export function getFromIndexedDB(key: string): Promise<any> {
         throw new Error("IndexedDB inaccessible");
       }
       const tx = db.transaction("authStore", "readwrite");
-      
+
       if (!db.objectStoreNames.contains("authStore")) {
         reject("❌ Object store 'authStore' introuvable !");
         return;
@@ -234,7 +234,7 @@ export function saveToIndexedDB(key: string, value: any): Promise<void> {
         throw new Error("IndexedDB inaccessible");
       }
       const tx = db.transaction("authStore", "readwrite");
-      
+
 
       const transaction = db.transaction("authStore", "readwrite");
       const store = transaction.objectStore("authStore");
@@ -351,8 +351,13 @@ export function isTokenExpired(token: string): boolean {
 
 export async function getValidToken(): Promise<string | null> {
   const store = useAuthStore()
+
+  if (store.isLoggingOut) return null
+  if (!store.jwt) return null
+
   return await store.ensureValidJwt()
 }
+
 
 
 
@@ -372,7 +377,7 @@ async function waitForRefresh(timeout = 5000): Promise<string | null> {
   }
 
   const jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
-  return jwt && !isJwtExpired(jwt) ? jwt : null;
+  return jwt && !safeIsJwtExpired(jwt) ? jwt : null;
 }
 
 
@@ -510,7 +515,7 @@ export async function restoreUserInfo(): Promise<UserInfo | null> {
     }
 
     console.log("✅ Infos utilisateur restaurées !");
-    
+
     // ✅ Retourne un objet `UserInfo` si les données sont valides
     if (prenom && email) {
       return { prenom, email } as UserInfo;
@@ -565,7 +570,7 @@ export async function checkAndRefreshOnWakeUp() {
 
   // Vérifier si le JWT est encore valide
   const jwt = await getJWTFromIndexedDB();
-  if (jwt && !isJwtExpired(jwt)) {
+  if (jwt && !safeIsJwtExpired(jwt)) {
     console.log("✅ JWT encore valide, pas besoin de refresh.");
     return;
   }
@@ -651,9 +656,9 @@ if (!token) {
 try {
   // Décodage du JWT pour extraire le payload
   const decoded = JSON.parse(atob(token.split(".")[1]));
-  
+
   // Retourne le rôle de l'utilisateur, ou null s'il n'existe pas
-  return decoded.role || null; 
+  return decoded.role || null;
 } catch (error) {
   console.error("❌ Erreur lors du décodage du JWT :", error);
   return null; // Si le JWT est malformé, retourne null
@@ -754,7 +759,7 @@ export async function restoreTokensToIndexedDBIfMissing(): Promise<void> {
     // Vérifie si IndexedDB contient déjà les tokens
     const tx = db.transaction("authStore", "readonly");
     const store = tx.objectStore("authStore");
-    
+
     const jwtEntry = await store.get("jwt");
     const refreshTokenEntry = await store.get("refreshToken");
 
@@ -901,7 +906,25 @@ export function isJwtExpired(token: string | { key: string; value: string } | nu
     return true;
   }
 }
+export function safeIsJwtExpired(
+  token: string | { key: string; value: string } | null
+): boolean {
+  const auth = useAuthStore()
 
+  // ⛔ auth pas encore résolue
+  if (!auth.authReady || auth.authLoading) {
+    console.log("⏸️ [safeIsJwtExpired] skip → auth non prête")
+    return false
+  }
+
+  // ⛔ refresh en cours
+  if (auth.isRefreshing) {
+    console.log("⏸️ [safeIsJwtExpired] skip → refresh en cours")
+    return false
+  }
+
+  return isJwtExpired(token)
+}
 
 
 
@@ -969,7 +992,7 @@ if (jwt) {
 
   // ✅ Vérification du JWT
   let jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
-  if (!jwt || isJwtExpired(jwt)) {
+  if (!jwt || safeIsJwtExpired(jwt)) {
     console.warn("🚨 JWT manquant ou expiré, tentative de rafraîchissement...");
 
     const authStore = useAuthStore();
@@ -1098,7 +1121,7 @@ async function deleteIndexedDB(): Promise<void> {
 
 async function restoreTokensAfterDBReset() {
   console.log("🔍 Vérification : restoreTokensAfterDBReset() appelée !");
-  
+
   const jwt = localStorage.getItem("jwt") || sessionStorage.getItem("jwt");
   const refreshToken = localStorage.getItem("refreshToken") || sessionStorage.getItem("refreshToken");
 
@@ -1477,9 +1500,9 @@ export async function checkIndexedDBStatus(): Promise<void> {
     console.log("📌 Refresh Token :", refreshToken ? refreshToken.value : "❌ Perdu !");
   } catch (error) {
     const err = error as Error; // ✅ Correction du typage
-  
+
     console.error("❌ Erreur lors de la vérification d'IndexedDB :", err);
-  
+
     if (err.name === "NotFoundError") {
       console.warn("⚠️ IndexedDB corrompue, suppression et recréation...");
       await deleteDB("AuthDB");
@@ -1502,13 +1525,16 @@ type RefreshTokenParams = {
   deviceId: string
 }
 
+const REFRESH_TIMEOUT = 8000   // 8s max
+const REFRESH_RETRY = 1        // 1 retry max
+
 export async function refreshToken(
   params: RefreshTokenParams
 ): Promise<{ jwt: string; refreshToken: string; sessionId?: string } | null> {
 
   const { refreshToken, sessionId, deviceId } = params
-  console.group("🧨 [REFRESH DEBUG FRONT]")
-  console.log("➡️ input", { refreshToken, sessionId, deviceId })
+
+  console.group("🔁 [REFRESH TOKEN]")
 
   if (!refreshToken || !deviceId) {
     console.error("❌ paramètres manquants", { refreshToken, deviceId })
@@ -1516,48 +1542,69 @@ export async function refreshToken(
     return null
   }
 
-  const url = getProxyGetURL(
-    `route=refresh` +
-    `&refreshtoken=${encodeURIComponent(refreshToken)}` +
-    (sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : "") +
-    `&device_id=${encodeURIComponent(deviceId)}`
-  )
+const url = getProxyPostURL()
 
-  console.log("🌍 URL refresh =", url)
+const body = {
+  route: "refresh",
+  refreshToken,
+  sessionId,
+  deviceId
+}
+
+
+const attemptFetch = async (attempt: number): Promise<{
+  jwt: string
+  refreshToken: string
+  sessionId?: string
+} | null> => {
+  const ctrl = new AbortController()
+  const timeoutId = setTimeout(() => ctrl.abort(), REFRESH_TIMEOUT)
 
   try {
-    const res = await fetch(url)
-    console.log("🌐 HTTP status =", res.status)
+    console.log(`🌍 attempt ${attempt + 1}`, body)
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    })
+
+    console.log("🌐 HTTP", res.status)
 
     const text = await res.text()
-    console.log("📦 RAW response =", text)
+    console.log("📦 RAW", text)
 
-    let data = null
+    let data: any
     try {
       data = JSON.parse(text)
     } catch {
       console.error("❌ JSON invalide")
+      return null
     }
 
-    console.log("📊 PARSED response =", data)
+    // ❌ refus métier → pas de retry
+    if (data?.success === false) {
+      console.warn("❌ refresh refusé", data.code)
 
-    // normalisation
+      if (["SESSION_LOST", "INVALID_REFRESH", "UNAUTHORIZED"].includes(data.code)) {
+        throw new Error("NO_RETRY")
+      }
+
+      return null
+    }
+
     const payload =
       data?.jwt ? data :
       data?.success && data?.data ? data.data :
-      data?.success ? data :
       null
 
-    console.log("🧬 payload normalisé =", payload)
-
     if (!payload?.jwt || !payload?.refreshToken) {
-      console.error("❌ payload invalide", payload)
-      console.groupEnd()
+      console.error("❌ payload invalide")
       return null
     }
 
     console.log("✅ refresh accepté")
-    console.groupEnd()
 
     return {
       jwt: payload.jwt,
@@ -1565,11 +1612,37 @@ export async function refreshToken(
       sessionId: payload.sessionId
     }
 
-  } catch (err) {
-    console.error("💥 FETCH ERROR", err)
-    console.groupEnd()
+  } catch (err: any) {
+    if (err?.message === "NO_RETRY") {
+      throw err
+    }
+
+    if (err instanceof DOMException && err.name === "AbortError") {
+      console.warn("⏱️ timeout refresh")
+    } else {
+      console.error("💥 fetch error", err)
+    }
+
     return null
+  } finally {
+    clearTimeout(timeoutId)
   }
+}
+
+
+for (let i = 0; i <= REFRESH_RETRY; i++) {
+  try {
+    const result = await attemptFetch(i)
+    if (result) return result
+  } catch {
+    break // stop retry
+  }
+}
+
+
+  console.error("⛔ refresh définitivement KO")
+  console.groupEnd()
+  return null
 }
 
 
@@ -1715,7 +1788,7 @@ export async function updateRefreshTokenInDB(newRefreshToken: string | null, db?
       tx.oncomplete = () => resolve(null);
       tx.onerror = () => reject(tx.error);
     });
-    
+
     console.log("✅ Refresh token mis à jour dans IndexedDB :", newRefreshToken);
   } catch (err) {
     console.warn("⚠️ Erreur refreshToken →", err);
@@ -1731,14 +1804,14 @@ export async function updateJWTInIndexedDB(newJwt: string | null, db?: IDBPDatab
   try {
     db = db || await getAuthDB();
     if (!db) throw new Error("Impossible d'ouvrir IndexedDB");
-    
+
     const tx = db.transaction("authStore", "readwrite");
     await tx.objectStore("authStore").put({ key: "jwt", value: newJwt });
     await new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve(null);
       tx.onerror = () => reject(tx.error);
     });
-    
+
     console.log("✅ JWT mis à jour dans IndexedDB :", newJwt);
   } catch (err) {
     console.warn("⚠️ Erreur JWT →", err);
@@ -1803,9 +1876,9 @@ export async function clearUserData() {
   // ➤ Nettoyage localStorage
   Object.keys(localStorage).forEach((key) => {
     if (
-      key.startsWith("jwt") || 
-      key.startsWith("refreshToken") || 
-      key.startsWith("prenom") || 
+      key.startsWith("jwt") ||
+      key.startsWith("refreshToken") ||
+      key.startsWith("prenom") ||
       key.startsWith("userData_")
     ) {
       localStorage.removeItem(key);
@@ -1937,7 +2010,7 @@ export async function syncRefreshToken() {
       console.warn("⚠️ Aucun refresh token trouvé, vérification du JWT...");
 
       let jwt = await getValidToken();
-      if (jwt && !isJwtExpired(jwt)) {
+      if (jwt && !safeIsJwtExpired(jwt)) {
         console.log("✅ JWT encore valide, pas de réinitialisation forcée.");
         isSyncing = false;
         return;
@@ -1970,16 +2043,18 @@ export async function logoutUser() {
   if (logoutLock || store.isLoggingOut) return;
   logoutLock = true;
   store.isLoggingOut = true;
+store.authReady = true   // 🔥 bloque le splash
 
   console.log("🚨 Déconnexion en cours...");
 
   // 📣 Message UI (avant démontage)
-  window.dispatchEvent(new CustomEvent("show-logout-message"));
 
   // ---------------------------------------------------------
   // 🔒 1) Verrouillage immédiat auth (anti watchers / flash)
   // ---------------------------------------------------------
 store.hardLogoutReset()
+store.isAuthenticated = false
+store.isLoggingOut = false
 
   window.dispatchEvent(new Event("user-data-updated"));
 
@@ -2057,20 +2132,12 @@ Object.keys(localStorage).forEach(k => {
   // ---------------------------------------------------------
   // 🔄 7) Redirection propre
   // ---------------------------------------------------------
-  setTimeout(async () => {
-    console.log("🔄 Redirection vers login…");
-
-    const screen = document.getElementById("loading-screen");
-    if (screen) screen.style.display = "none";
-
-    const app = document.getElementById("app");
-    if (app) app.classList.add("app-visible");
-
-    await router.replace("/login");
-
-    store.isLoggingOut = false;
-    logoutLock = false;
-  }, 300);
+store.authReady = true
+logoutLock = false
+// 🔥 RESET TOTAL SPA (multi-rôle safe)
+setTimeout(() => {
+  window.location.reload()
+}, 0)
 
   return true;
 }
@@ -2295,5 +2362,5 @@ export async function restoreRefreshToken(): Promise<string | null> {
   return storedRefreshToken || null;
 }
 export function isJwtValid(jwt: string | null): boolean {
-  return !!jwt && typeof jwt === 'string' && !isJwtExpired(jwt);
+  return !!jwt && typeof jwt === 'string' && !safeIsJwtExpired(jwt);
 }

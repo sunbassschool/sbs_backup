@@ -1,20 +1,25 @@
-import { ref, watch } from 'vue';
+import { ref, watch } from "vue";
 
 export function usePullToRefresh({ container, threshold = 60, onRefresh }) {
   const pulling = ref(false);
   const startY = ref(0);
   const distance = ref(0);
 
+  const isAppMode = () =>
+    document.documentElement.classList.contains("app-mode");
+
   const handleTouchStart = (e) => {
+    if (!isAppMode()) return;
     if (container.value && container.value.scrollTop === 0) {
       startY.value = e.touches[0].clientY;
       pulling.value = true;
-      console.log("👆 Touch start");
     }
   };
 
   const handleTouchMove = (e) => {
+    if (!isAppMode()) return;
     if (!pulling.value) return;
+
     distance.value = e.touches[0].clientY - startY.value;
     if (distance.value < 0) {
       pulling.value = false;
@@ -23,21 +28,26 @@ export function usePullToRefresh({ container, threshold = 60, onRefresh }) {
   };
 
   const handleTouchEnd = async () => {
+    if (!isAppMode()) return;
+
     if (pulling.value && distance.value >= threshold) {
-      console.log("🔁 Pull to refresh triggered");
       await onRefresh();
     }
     pulling.value = false;
     distance.value = 0;
   };
 
-  // 👇 observe quand container devient dispo
-  watch(container, (el) => {
-    if (!el) return;
-    el.addEventListener("touchstart", handleTouchStart);
-    el.addEventListener("touchmove", handleTouchMove);
-    el.addEventListener("touchend", handleTouchEnd);
-  }, { immediate: true });
+  watch(
+    container,
+    (el) => {
+      if (!el) return;
+
+      el.addEventListener("touchstart", handleTouchStart, { passive: true });
+      el.addEventListener("touchmove", handleTouchMove, { passive: true });
+      el.addEventListener("touchend", handleTouchEnd, { passive: true });
+    },
+    { immediate: true }
+  );
 
   return { pulling, distance };
 }

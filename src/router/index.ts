@@ -34,7 +34,8 @@ import LinkProf from "@/views/LinkProf.vue";
 import DashboardProf from "@/views/dashboard-prof.vue";
 import Abonnements from "@/views/Abonnements.vue";
 import NotFound from "@/views/NotFound.vue";
-import UploadFile from '@/views/UploadFile.vue'
+import UploadFile from '@/views/UploadFile.vue';
+import MagicAccess from "@/views/MagicAccess.vue";
 import createplanning from "@/views/createplanning.vue"
 
 
@@ -46,35 +47,84 @@ const baseUrl = import.meta.env.MODE === "production" ? "/app/" : "/";
 const router = createRouter({
   history: createWebHistory(baseUrl),
 
+  scrollBehavior(to, from, savedPosition) {
+    // ✅ ancres
+    if (to.hash) {
+      return { el: to.hash, behavior: "smooth" }
+    }
+
+    // ✅ back/forward
+    if (savedPosition) return savedPosition
+
+    // on laisse le reset landing se faire dans afterEach (plus fiable)
+    return { top: 0 }
+  },
+
   routes: [
-    // =========================================================
-    // 🏠 ROOT → redirige selon login
-    // =========================================================
+
 {
   path: "/",
   name: "root",
-  redirect: () => {
-    const store = useAuthStore()
+  component: () => import("@/views/RootLoader.vue")
+}
+,
+{
+  path: "/home",
+  name: "home",
+  component: () => import("@/views/home.vue"),
+    meta: { layout: "landing" }
 
-    // 🔒 pas loggé
-    if (!store.jwt) {
-      return { path: "/login" }
-    }
+}
+,
+{
+  path: "/pricing",
+  name: "pricing",
+  component: () => import("@/views/pricing.vue"),
+    meta: { layout: "landing" }
 
-    const role = store.user?.role ?? ""
+}
+,
+{
+  path: "/cours-de-basse-en-ligne",
+  name: "cours-de-basse-en-ligne",
+  component: () => import("@/views/cartflow/cours-de-basse-en-ligne.vue"),
+    meta: { layout: "landing" }
 
-    // 👨‍🏫 prof / admin
-    if (role === "prof" || role === "admin") {
-      return { path: "/dashboard-prof" }
-    }
+}
+,
 
-    // 👤 élève
-    return { path: "/dashboard" }
+
+
+{
+  path: "/offerpage",
+  name: "offerpage",
+  component: () => import("@/views/cartflow/OfferPage.vue"),
+    meta: { layout: "landing" }
+
+}
+,
+{
+  path: "/magic-access",
+  name: "magic-access",
+  component: MagicAccess,
+  meta: {
+    layout: "landing"
   }
+}
+,
+
+{
+  path: "/secure-account",
+  component: () => import("@/views/SecureAccount.vue")
+}
+,
+
+
+{
+  path: "/thankyou",
+  name: "thankyou",
+  component: () => import("@/views/cartflow/ThankYou.vue")
 },
-
-
-
 
     // =========================================================
     // 🛂 AUTH
@@ -92,6 +142,12 @@ const router = createRouter({
       component: RegisterCursus,
       meta: { requiresAuth: true, role: "admin" },
     },
+{
+  path: "/admin",
+  name: "Admin",
+  component: () => import("@/views/Admin.vue"),
+  meta: { requiresAuth: true, role: "admin" }
+},
 
     {
       path: "/AdminFeedback",
@@ -99,7 +155,7 @@ const router = createRouter({
       component: AdminFeedback,
       meta: { requiresAuth: true, role: "admin" },
     },
-   
+
 
 
     // =========================================================
@@ -257,8 +313,9 @@ const router = createRouter({
   component: () => import("@/views/RegisterProf.vue")
 },
     { path: "/intro", name: "intro", component: IntroView },
-    { path: "/Feedback", name: "Feedback", component: Feedback },
-    { path: "/FeedBackProf", name: "FeedBackProf", component: FeedBackProf },
+{ path: "/feedback", name: "Feedback", component: Feedback, meta: { requiresAuth: true } },
+{ path: "/feedback-prof", name: "feedBackProf", component: FeedBackProf, meta: { requiresAuth: true } },
+
     { path: "/partitions", name: "partitions", component: Partitions },
     { path: "/videos", name: "videos", component: Videos },
     { path: "/Metronome", name: "Metronome", component: Metronome },
@@ -281,67 +338,63 @@ const router = createRouter({
 // =============================================================
 // 🔐 GLOBAL GUARD MULTI-PROF / ADMIN + STRIPE
 // =============================================================
-router.beforeEach(async (to) => {
+router.beforeEach((to) => {
   const store = useAuthStore()
-  const isLoggedIn = !!store.jwt
-  const requiresAuth = to.meta.requiresAuth === true
 
-  // ⛔ login interdit si déjà connecté
-  if (to.name === "login" && isLoggedIn) {
+  if (store.isLoggingOut) return true
+
+  // ⛔ rien tant que l’auth n’est pas prête
+  if (!store.authReady) return true
+
+  // 🎯 ROOT → dashboard selon état
+if (to.path === "/") {
+ if (!store.jwt) {
     return {
-      path: store.user?.role === "prof" ? "/dashboard-prof" : "/dashboard"
+      path: "/offerpage",
+      query: { funnel: "cours_basse" },
+      replace: true
     }
   }
 
-  // ✅ routes publiques
-  if (!requiresAuth) return true
-
-  // ⏳ attendre authReady uniquement pour routes protégées
-  if (!store.authReady) {
-    await new Promise(resolve =>
-      watch(() => store.authReady, v => v && resolve(true))
-    )
+  // ⏳ user pas encore hydraté → on attend
+  const role = store.user?.role
+  if (!role) {
+    return true
   }
 
-  // 🔐 non connecté
-  if (!isLoggedIn) {
-    return { name: "login" }
+  if (["prof", "admin"].includes(role)) {
+    return { path: "/dashboard-prof", replace: true }
   }
 
-  // 👨‍🏫 prof
-  if (
-    to.meta.requiresProf &&
-    !["prof", "admin"].includes(store.user?.role ?? "")
-  ) {
-    return { path: "/" }
-  }
-
-  // 👑 admin
-  if (to.meta.role === "admin" && store.user?.role !== "admin") {
-    return { path: "/" }
-  }
-
-  // =============================================================
-  // 💳 STRIPE GUARD (OFFRES UNIQUEMENT)
-  // =============================================================
-  if (
-    to.path === "/dashboard-prof/offres" &&
-    store.user?.role === "prof"
-  ) {
-    // stripe_ready doit être explicitement true
- if (
-  to.path === "/dashboard-prof/offres" &&
-  store.user?.role === "prof" &&
-  store.user?.stripe_ready === false // ⚠️ seulement false
-) {
-  console.warn("⛔ Accès Offres bloqué : Stripe non prêt")
-  return { path: "/dashboard-prof" }
+  return { path: "/dashboard", replace: true }
 }
 
+
+  const requiresAuth = to.meta.requiresAuth === true
+  const isLoggedIn = !!store.jwt
+
+  if (!requiresAuth) return true
+
+  if (!isLoggedIn) {
+    return { name: "login", replace: true }
+  }
+
+  const role = store.user?.role
+
+  if (to.meta.requiresProf && !["prof", "admin"].includes(role)) {
+    return { path: "/" }
+  }
+
+  if (to.meta.role === "admin" && role !== "admin") {
+    return { path: "/" }
   }
 
   return true
 })
+
+
+
+
 
 
 

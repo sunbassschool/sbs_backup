@@ -14,7 +14,7 @@
 
         <!-- DASHBOARD PROF -->
         <div v-else class="fade-in">
-           <OnboardingProfCard />
+<OnboardingProfCard v-if="showOnboarding" />
 <div class="prof-dashboard">
   <div class="dashboard-grid">
 
@@ -129,7 +129,7 @@ class="invite-box mt-3 fade-in">
   <span v-else>🔄 Générer un nouveau lien</span>
 </button>
 <div class="miseenpage">
-<StripeConnectCard />
+<StripeConnectCard v-if="!loading" />
 </div>
 </div>
 
@@ -182,23 +182,34 @@ const goToRevenus = () => {
 onMounted(() => {
   console.group("🧪 [DASHBOARD] onboarding hydration")
 
-  console.log("auth.user =", auth.user)
-  console.log("typeof fetchHasOffer =", typeof auth.fetchHasOffer)
+  watch(
+    () => auth.authReady,
+    (ready) => {
+      if (!ready) {
+        console.log("⏳ dashboard → auth pas prêt")
+        return
+      }
 
-  if (auth.user?.prof_id && typeof auth.fetchHasOffer === "function") {
-    console.log("➡️ dashboard → call fetchHasOffer")
-    auth.fetchHasOffer()
-    auth.fetchHasSale()
+      console.log("auth.user =", auth.user)
+      console.log("typeof fetchHasOffer =", typeof auth.fetchHasOffer)
 
-  } else {
-    console.warn("⛔ dashboard → fetchHasOffer NOT called", {
-      prof_id: auth.user?.prof_id,
-      fn: typeof auth.fetchHasOffer
-    })
-  }
+      if (auth.user?.prof_id && typeof auth.fetchHasOffer === "function") {
+        console.log("➡️ dashboard → call fetchHasOffer")
+        auth.fetchHasOffer()
+        auth.fetchHasSale()
+      } else {
+        console.warn("⛔ dashboard → fetchHasOffer NOT called", {
+          prof_id: auth.user?.prof_id,
+          fn: typeof auth.fetchHasOffer,
+        })
+      }
+    },
+    { immediate: true }
+  )
 
   console.groupEnd()
 })
+
 // === HELPERS API ===
 
 
@@ -356,27 +367,63 @@ async function copyLink() {
 }
 
 async function fetchEleves() {
-  if (!auth.jwt || !profId.value) return
+  const jwt = auth.jwt
+  const prof_id = profId.value
+
+  if (!jwt || !prof_id) {
+    console.warn("⛔ fetchEleves ABORT", { jwt: !!jwt, prof_id })
+    return
+  }
+
+  const payload = {
+    route: "getelevesbyprof",
+    jwt,
+    prof_id
+  }
+
+  const t0 = performance.now()
+  console.group("👥 fetchEleves")
 
   try {
+    console.log("📤 payload", payload)
+
     const res = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "getelevesbyprof",
-        jwt: auth.jwt,
-        prof_id: profId.value
-      })
+      body: JSON.stringify(payload)
     })
 
-    const data = await res.json()
+    const duration = (performance.now() - t0).toFixed(1)
+    console.log("📡 status", res.status, `⏱ ${duration}ms`)
 
-    totalEleves.value =
-      data?.eleves?.filter(e => e.statut === "inscrit").length || 0
-auth.dashboardElevesCount = totalEleves.value
+    const raw = await res.text()
+    console.log("📥 raw", raw)
+
+    let data
+    try {
+      data = JSON.parse(raw)
+    } catch (e) {
+      console.error("❌ JSON parse failed", e)
+      return
+    }
+
+    if (!data?.success) {
+      console.error("❌ API failure", data)
+      return
+    }
+
+    const count =
+      data.eleves?.filter(e => e.statut === "inscrit").length ?? 0
+
+    totalEleves.value = count
+    auth.dashboardElevesCount = count
+
+    console.log("✅ totalEleves =", count)
 
   } catch (err) {
-    console.error("❌ fetchEleves ERROR:", err)
+    console.error("💥 fetchEleves CRASH", err)
+  } finally {
+    console.groupEnd()
   }
 }
 
@@ -499,33 +546,45 @@ function isCacheFresh() {
     return false
   }
 }
+let isBootstrapping = false
 
 // ======================================================================
 // 🚀 INIT
 // ======================================================================
+const showOnboarding = ref(false)
+
 watch(
-  () => auth.authReady,
+  () => auth.onboardingSnapshot?.completed,
+  (completed) => {
+    if (typeof completed === "number" && completed < 4) {
+      showOnboarding.value = true
+    }
+  },
+  { immediate: true }
+)
+
+
+watch(
+  () => auth.onboardingReady,
   async (ready) => {
     if (!ready) return
 
-    profId.value = auth.user?.prof_id || ""
-    if (!profId.value) return
+    loading.value = true
 
-    const hasCache = loadFromStore()
-    const cacheFresh = isCacheFresh()
-
-    // ⚡ affichage immédiat
-    loading.value = !hasCache
-
-    // 🚫 cache OK → PAS DE FETCH
-    if (cacheFresh) {
-      loading.value = false
-      return
-    }
-
-    // 🔄 cache absent ou expiré → fetch
     try {
+      profId.value = auth.user?.prof_id || ""
+      if (!profId.value) return
+
+const hasCache = loadFromStore()
+if (hasCache && isCacheFresh()) {
+  loading.value = false
+  return
+}
+
+
       await refreshDashboard()
+    } catch (e) {
+      console.error("❌ dashboard init failed", e)
     } finally {
       loading.value = false
     }

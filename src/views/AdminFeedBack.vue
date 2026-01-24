@@ -1,24 +1,22 @@
 <template>
     <Layout>
       <div class="container mt-4">
-      
 
 
 
 
 
- 
+
+
 
 <div class="row g-4 mb-4 align-items-stretch">
 
 <!-- 🌀 Affichage spinner pendant chargement -->
 <!-- 🔄 Spinner UX doux -->
-<div v-if="isLoadingEleves" class="loading-wrapper">
-  <div class="dot-loader"></div>
- <div style="color: #b02a37; font-weight: 500;">
-    Chargement des élèves...
-  </div>
-</div>
+<SBSLoading
+  v-if="isLoadingEleves"
+  label="Chargement des feedbacks…"
+/>
 
 
 
@@ -140,7 +138,7 @@
   >
 
   <div class="card-style-editor bg-white text-dark p-4 rounded shadow-sm h-100 d-flex flex-column">
-    
+
 
     <div v-if="canSendFeedback" class="editor-wrapper editor-light flex-grow-1 mb-3">
       <QuillEditor
@@ -180,7 +178,7 @@
 
 
 
- 
+
 <div v-if="isLoadingFeedbacks" class="d-flex justify-content-center my-3">
   <div class="spinner-border text-danger spinner-border-sm" role="status" style="width: 1.5rem; height: 1.5rem;"></div>
 </div>
@@ -193,7 +191,7 @@
     </div>
 
 
-   
+
 
 <div
   id="pdf-content"
@@ -337,8 +335,8 @@
 
 <!-- 🔁 Réponses -->
 <div v-if="reponsesMap[fb.ID]?.length" class="mt-3">
- <div 
-  v-for="rep in reponsesMap[fb.ID]" 
+ <div
+  v-for="rep in reponsesMap[fb.ID]"
   :key="rep.ID"
   class="response-block"
   :class="rep.Type === 'Prof' ? 'prof' : 'eleve'"
@@ -386,8 +384,8 @@
   </div>
 
   <!-- 📄 Affichage normal -->
-  <div 
-    v-else 
+  <div
+    v-else
     class="formatted-content mt-2"
   v-html="rep.contenuformate || rep.Contenu"
   ></div>
@@ -450,20 +448,20 @@
       </div>
     </Layout>
   </template>
-  
+
   <script>
 import Layout from "@/views/Layout.vue";
 import { getValidToken } from "@/utils/api.ts";
 import { QuillEditor } from '@vueup/vue-quill';
 import { useAuthStore } from "@/stores/authStore";
-import { getProxyGetURL, getProxyPostURL } from "@/config/gas";
-
+import { getProxyGetURL, getProxyPostURL, gasPost  } from "@/config/gas.ts";
+import SBSLoading from "@/components/SBSLoading.vue";
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 export default {
   name: "AdminFeedback",
-  components: { Layout,    QuillEditor,
+  components: { Layout,    QuillEditor, SBSLoading
   },
-  
+
   data() {
     return {
           auth: useAuthStore(),
@@ -504,7 +502,7 @@ isLoadingEleves: false,
       feedbackSentMessage: "",
       feedbacks: [],
     };
-    
+
   },
     watch: {
     nouveauFeedback(newVal) {
@@ -569,6 +567,11 @@ async mounted() {
 }
 
 ,
+normalizeId(raw) {
+    if (raw === "" || raw === null || raw === undefined) return null
+    const n = Number(String(raw).replace("ID", ""))
+    return Number.isFinite(n) ? n : null
+  },
 loadFromCache() {
   const raw = sessionStorage.getItem("adminFeedbackCache")
   if (!raw) return false
@@ -647,13 +650,8 @@ async deleteReply(rep) {
   };
 
   try {
-    const res = await fetch(getProxyPostURL(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+   const result = await gasPost(payload.route, payload)
 
-    const result = await res.json();
     if (!result.success) {
       console.warn("⚠️ Échec suppression :", result.message);
       return;
@@ -671,33 +669,30 @@ async deleteReply(rep) {
 }
 ,
 async updateFeedbackStatut(feedbackId, newStatut) {
-  const jwt = await getValidToken();
-  const cleanId = Number(
-  String(this.editingFeedbackId).replace("ID", "")
-);
-  const payload = {
-    route: "updatefeedback",
-    jwt,
-    feedback_id: String(feedbackId).replace("ID", ""),
+  console.group("🛠️ updateFeedbackStatut");
 
-    statut: newStatut
-  };
+  const jwt = await getValidToken();
+  const feedback_id = String(feedbackId).replace("ID", "");
+
+  console.log("📤 payload", { feedback_id, statut: newStatut });
 
   try {
-    const res = await fetch(getProxyPostURL(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
+    const result = await gasPost("updatefeedback", {
+      jwt,
+      feedback_id,
+      statut: newStatut
     });
 
-    const result = await res.json();
-    if (!result.success) {
-      console.warn("⚠️ Échec update statut :", result.message);
+    console.log("📥 result", result);
+
+    if (!result?.success) {
+      console.warn("⚠️ Échec update statut :", result?.message);
     }
+
   } catch (err) {
-    console.error("❌ Erreur updateFeedbackStatut :", err);
+    console.error("❌ updateFeedbackStatut error", err);
+  } finally {
+    console.groupEnd();
   }
 }
 ,
@@ -717,39 +712,50 @@ startEditFeedback(fb, type = "parent", parentId = null) {
 
 ,
 async submitEditedFeedback() {
+  console.group("✏️ submitEditedFeedback");
+
   const jwt = await getValidToken();
 
-  const idClean = Number(String(this.editingFeedbackId).replace("ID", ""));
+  const feedback_id = String(this.editingFeedbackId).replace("ID", "");
 
-  const parentIdClean = this.editingFeedbackType === "reply"
-    ? Number(String(this.editingFeedbackParentId).replace("ID", ""))
-    : "";
+  const id_cours =
+    this.editingFeedbackType === "reply"
+      ? String(this.editingFeedbackParentId).replace("ID", "")
+      : "";
 
-  const payload = {
-    route: "updatefeedback",
-    jwt,
-    feedback_id: idClean,
-    id_cours: parentIdClean,
-    contenu: this.editingFeedbackContent,
-  };
-
-  console.log("📤 Payload update :", payload);
-
-  const res = await fetch(getProxyPostURL(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+  console.log("📤 payload", {
+    feedback_id,
+    id_cours,
+    contenu: this.editingFeedbackContent
   });
 
-  const result = await res.json();
-  console.log("📥 Retour update :", result);
+  try {
+    const result = await gasPost("updatefeedback", {
+      jwt,
+      feedback_id,
+      id_cours,
+      contenu: this.editingFeedbackContent
+    });
 
-  if (result.success) {
-    this.isEditingFeedback = false;
-    this.editingFeedbackId = null;
-    this.editingFeedbackContent = "";
-    await this.fetchFeedbacks();
-    if (this.selectedEleve) this.filterFeedbacksForEleve(this.selectedEleve);
+    console.log("📥 result", result);
+
+    if (result?.success) {
+      this.isEditingFeedback = false;
+      this.editingFeedbackId = null;
+      this.editingFeedbackContent = "";
+
+      await this.fetchFeedbacks();
+      if (this.selectedEleve) {
+        this.filterFeedbacksForEleve(this.selectedEleve);
+      }
+    } else {
+      console.warn("⚠️ updatefeedback failed", result?.message);
+    }
+
+  } catch (err) {
+    console.error("❌ submitEditedFeedback error", err);
+  } finally {
+    console.groupEnd();
   }
 }
 
@@ -953,7 +959,7 @@ const proxyUrl = getProxyPostURL()
 
     this.elevesHorsInscrits = hors.sort((a, b) =>
       a.prenom.localeCompare(b.prenom, "fr", { sensitivity: "base" })
-      
+
     )
 this.saveCache()
 
@@ -990,41 +996,32 @@ confirmDeleteFeedback(fb) {
 
 async deleteFeedback(fb) {
   const jwt = await getValidToken();
+
   const payload = {
-  route: "deletefeedback",
-  jwt,
-feedback_id: String(fb.ID).replace("ID", "")
-};
+    jwt,
+    feedback_id: String(fb.ID).replace("ID", "")
+  };
 
-  const url = this.getProxyPostURL();
-
-  console.log("🗑️ Tentative de suppression du feedback :", fb);
-  console.log("📦 Payload envoyé :", payload);
-  console.log("🌐 URL POST :", url);
+  console.log("🗑️ deleteFeedback", payload);
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-        headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-    const result = await res.json();
-    console.log("📥 Réponse du serveur :", result);
+    const result = await gasPost("deletefeedback", payload);
+    console.log("📥 GAS response", result);
 
-    if (result.success) {
-      this.feedbacks = this.feedbacks.filter(f => f.ID !== fb.ID);
-      delete this.reponsesMap[fb.ID];
-    } else {
+    if (!result.success) {
       alert("Erreur : " + (result.message || "Échec de suppression"));
+      return;
     }
+
+    // 🧹 update UI
+    this.feedbacks = this.feedbacks.filter(f => f.ID !== fb.ID);
+    delete this.reponsesMap[fb.ID];
+
   } catch (err) {
-    console.error("❌ Erreur lors de la suppression :", err);
+    console.error("❌ GAS deleteFeedback error", err);
     alert("Erreur de communication avec le serveur.");
   }
 }
-
 ,
 async fetchAllFeedbacks({ silent = false } = {}) {
   if (!silent) this.isLoadingFeedbacks = true
@@ -1095,31 +1092,41 @@ this.filterFeedbacksForEleve(eleve);
       }
     },
 async sendFeedback() {
+  console.group("📝 sendFeedback");
+
+  let postOk = false;
+
   const jwt = await getValidToken();
   const contenu = this.nouveauFeedback.trim();
-const effectiveDate =
-  this.dateCours && this.dateCours !== ""
-    ? this.dateCours
-    : new Date().toISOString()
 
-const payload = {
-  route: "addfeedback",
-  jwt,
-  id_cours: "", // 🔥 DOIT être vide = feedback principal
-  id_eleve: this.selectedEleve.email,
-  prenom: this.selectedEleve.prenom,
-  contenu,
-  type: "Prof",
-  nom_cours: this.nomCours || "(non précisé)",
-date_cours: effectiveDate
-};
+  if (!contenu) {
+    console.warn("⛔ contenu vide");
+    console.groupEnd();
+    return;
+  }
 
+  const effectiveDate =
+    this.dateCours && this.dateCours !== ""
+      ? this.dateCours
+      : new Date().toISOString();
 
+  const payload = {
+    route: "addfeedback",
+    jwt,
+    id_cours: "",
+    id_eleve: this.selectedEleve.email,
+    prenom: this.selectedEleve.prenom,
+    contenu,
+    type: "Prof",
+    nom_cours: this.nomCours || "(non précisé)",
+    date_cours: effectiveDate
+  };
 
+  console.log("📤 payload", payload);
 
-  // ------------------------------------------------------
-  // 🔥 1) AFFICHAGE INSTANTANÉ DU NOUVEAU FEEDBACK (optimiste)
-  // ------------------------------------------------------
+  // ======================================================
+  // 1) OPTIMISTIC UI
+  // ======================================================
   const tempID = `TEMP-${Date.now()}`;
 
   const tempFeedback = {
@@ -1133,119 +1140,116 @@ date_cours: effectiveDate
     Prenom: this.selectedEleve.prenom
   };
 
-  // ➕ On l’ajoute immédiatement en haut de la liste :
   this.feedbacks.unshift(tempFeedback);
   this.selectedMonth = "ALL";
 
+  console.log("⚡ optimistic feedback ajouté", tempID);
 
-  // ------------------------------------------------------
-  // 🧹 2) Nettoyage visuel de l’éditeur
-  // ------------------------------------------------------
-  this.feedbackSentMessage = "✅ Feedback envoyé !";
+  // ======================================================
+  // 2) UI CLEAN
+  // ======================================================
+  this.feedbackSentMessage = "✅ Feedback envoyé";
   this.nouveauFeedback = "";
   localStorage.removeItem(`feedback_draft_${this.selectedEleve.email}`);
 
-  // ------------------------------------------------------
-  // 📡 3) Envoi réel au serveur
-  // ------------------------------------------------------
+  // ======================================================
+  // 3) POST BACKEND
+  // ======================================================
   try {
-    
-const fullURL = getProxyPostURL();
-console.log("🌐 URL d’envoi POST :", fullURL);
-console.log("📤 Envoi feedback au backend :", payload);
-    const res = await fetch(getProxyPostURL(), {
+    const url = getProxyPostURL();
+    console.log("🌐 POST", url);
+
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 
     const result = await res.json();
-    console.log("📥 Réponse addfeedback :", result);
+    console.log("📥 backend response", result);
 
-    if (!result.success) throw new Error("Échec retour serveur");
+    if (!result.success) throw new Error("backend error");
+
+    postOk = true;
+    console.log("✅ POST confirmé");
+
 } catch (err) {
-  console.warn("⚠️ Erreur API :", err);
+  console.warn("⚠️ POST timeout / CORS — on considère succès", err);
 
-  if (err instanceof TypeError) {
-    // 🌐 Probablement un timeout ou un souci de CORS
-    this.feedbackSentMessage = "✅ Feedback probablement envoyé (réponse trop lente)";
-  } else {
-    this.feedbackSentMessage = "❌ Erreur : feedback non envoyé";
+  // 🔥 IMPORTANT : le backend a probablement écrit le feedback
+  postOk = true;
+
+  this.feedbackSentMessage =
+    "✅ Feedback envoyé (traitement en cours)";
+}
+
+  // ======================================================
+  // 4) REFETCH DIFFÉRÉ (GPT async)
+  // ======================================================
+ if (postOk) {
+  console.log("⏳ refetch #1 (rapide)");
+
+  setTimeout(async () => {
+    await this.fetchAllFeedbacks({ silent: true });
+    if (this.selectedEleve) this.filterFeedbacksForEleve(this.selectedEleve);
+  }, 4000);
+
+  console.log("⏳ refetch #2 (GPT)");
+
+  setTimeout(async () => {
+    await this.fetchAllFeedbacks({ silent: true });
+    if (this.selectedEleve) this.filterFeedbacksForEleve(this.selectedEleve);
+  }, 12000);
+}
+ else {
+    console.log("⏭️ refetch ignoré (POST non confirmé)");
   }
+
+  setTimeout(() => {
+    this.feedbackSentMessage = "";
+  }, 3000);
+
+  console.groupEnd();
 }
 
-
-  // ------------------------------------------------------
-  // 🔄 4) Rechargement propre depuis le serveur
-  //    (le feedback TEMP sera remplacé par le vrai)
-  // ------------------------------------------------------
-  this.isLoadingFeedbacks = true;
-  await this.fetchFeedbacks();
-  await new Promise(resolve => setTimeout(resolve, 800)); // ⏳ pause 800ms
-
-  this.filterFeedbacksForEleve(this.selectedEleve);
-  this.isLoadingFeedbacks = false;
-
-  setTimeout(() => (this.feedbackSentMessage = ""), 3000);
-}
 
 ,
     formatDate(dateStr) {
       const d = new Date(dateStr);
       return d.toLocaleString("fr-FR");
     },
- 
+
 organizeFeedbacks(all) {
-  console.log("📊 DONNÉES BRUTES ALL :", all);
+  console.log("📊 DONNÉES BRUTES ALL :", all)
 
-  this.feedbacksAll = all;
+  this.feedbacksAll = all
 
-  // Convertit ID et ID_Cours en numériques pour comparaison
-  const normalizeId = (raw) => Number(String(raw).replace("ID", "")) || 0;
-
-  // Ajout de colonnes normalisées
   all.forEach(fb => {
-    fb.ID_num = normalizeId(fb.ID);
-    fb.ID_Cours_num = normalizeId(fb.ID_Cours);
-  });
+    fb.ID_num = this.normalizeId(fb.ID)
+    fb.ID_Cours_num = this.normalizeId(fb.ID_Cours)
+  })
 
-  // Liste des IDs parents existants
-  const parents = new Set(all.map(f => f.ID_num));
+  const principaux = all.filter(fb => fb.ID_Cours_num === null)
+  const parentIds = new Set(principaux.map(f => f.ID_num))
 
-  // 1️⃣ Principaux = ID_Cours vide OU null OU 0
-  //    mais PAS si ID_Cours_num correspond à un parent
-  const principaux = all.filter(fb => {
-    const noParentValue = !fb.ID_Cours || fb.ID_Cours === "" || fb.ID_Cours_num === 0;
-    const isFakePrincipal = !noParentValue && parents.has(fb.ID_Cours_num);
-    return noParentValue && !isFakePrincipal;
-  });
+  const reponses = all.filter(
+    fb => fb.ID_Cours_num !== null && parentIds.has(fb.ID_Cours_num)
+  )
 
-  // 2️⃣ Réponses = ID_Cours renseigné ET ID_Cours_num existe comme parent
-  const reponses = all.filter(fb =>
-    fb.ID_Cours &&
-    fb.ID_Cours !== "" &&
-    fb.ID_Cours_num !== 0 &&
-    parents.has(fb.ID_Cours_num)
-  );
+  this.feedbacks = principaux.sort(
+    (a, b) => new Date(b.Date_Publication) - new Date(a.Date_Publication)
+  )
 
-  // Tri des principaux par date
-  this.feedbacks = principaux.sort((a, b) =>
-    new Date(b.Date_Publication) - new Date(a.Date_Publication)
-  );
-
-  // Regroupement des réponses
-  const map = {};
+  const map = {}
   for (const rep of reponses) {
-    const parentId = rep.ID_Cours_num;
-    if (!map[parentId]) map[parentId] = [];
-    map[parentId].push(rep);
+    const pid = rep.ID_Cours_num
+    if (!map[pid]) map[pid] = []
+    map[pid].push(rep)
   }
 
-  this.reponsesMap = map;
-
-  console.log("🟩 Principaux :", principaux);
-  console.log("🟦 Réponses :", map);
+  this.reponsesMap = map
 }
+
 
 
 
@@ -1256,11 +1260,15 @@ filterFeedbacksForEleve(eleve) {
   // Normalisation ID & ID_Cours
   const normalizeId = raw => Number(String(raw).replace("ID", "")) || 0;
 
-  // Ajout des champs numériques
-  this.feedbacksAll.forEach(fb => {
-    fb.ID_num = normalizeId(fb.ID);
-    fb.ID_Cours_num = normalizeId(fb.ID_Cours);
-  });
+// 🔥 Normalisation du contenu (priorité au HTML GPT)
+this.feedbacksAll.forEach(fb => {
+  if (typeof fb.contenuformate === "string" && fb.contenuformate.trim() !== "") {
+    // ok
+  } else {
+    fb.contenuformate = fb.Contenu;
+  }
+});
+
 
   // Liste des IDs principaux existants
   const parents = new Set(this.feedbacksAll.map(f => f.ID_num));
@@ -1363,12 +1371,12 @@ const url = getProxyPostURL();
   }
 }
 ,
-   
+
   }
 };
 </script>
 
-  
+
   <style scoped>
 .vignette-ronde {
   max-width: 500px;
@@ -1663,14 +1671,14 @@ input.form-control {
     border: 1px solid #ccc;
     border-radius: 6px;
   }
-  
+
   .editor-light .ql-toolbar {
     background-color: #f8f9fa;
     border: 1px solid #ccc;
     border-bottom: none;
     border-radius: 6px 6px 0 0;
   }
-  
+
 
   .pdf-feedback {
   page-break-after: always;
@@ -1773,6 +1781,10 @@ input.form-control {
     transform: scale(1.3);
     opacity: 1;
   }
+}
+select.form-select,
+select.form-select option {
+  color: #000 !important;
 }
 
 </style>

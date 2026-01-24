@@ -3,10 +3,10 @@
     <div class="container mt-4">
       <h2 class="text-white mb-4">📚 Feedbacks des élèves</h2>
 
-      <div v-if="feedbackLoading" class="text-light text-center">
-        <div class="spinner-border custom-spinner"></div>
-        <p>Chargement en cours...</p>
-      </div>
+    <SBSLoading
+  v-if="feedbackLoading"
+  label="Chargement des feedbacks"
+/>
 
       <div v-if="feedbackError" class="alert alert-danger">{{ feedbackError }}</div>
 
@@ -31,7 +31,7 @@
 
           <!-- 📝 Marquer comme "Lu" -->
           <div class="form-check" v-if="fb.Statut !== 'Lu'">
-            <input 
+            <input
               class="form-check-input"
               type="checkbox"
               :checked="fb.Statut === 'Lu'"
@@ -91,7 +91,7 @@
 <script>
 import Layout from "../views/Layout.vue";
 import { getValidToken } from "@/utils/api.ts";
-
+import SBSLoading from "@/components/SBSLoading.vue"
 export default {
   name: "FeedBackProf",
   components: { Layout },

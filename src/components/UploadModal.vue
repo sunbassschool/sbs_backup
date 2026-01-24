@@ -13,30 +13,27 @@
 
         <!-- BODY -->
         <section class="sbs-modal-body">
-          <label
-            class="sbs-dropzone"
-              :class="{ 'drag-active': isDragging }"
- @dragenter.prevent="isDragging = true"
-@dragleave.prevent="isDragging = false"
-@dragover.prevent
-@drop.prevent="isDragging = false; onDrop($event)"
+         <label
+  class="sbs-dropzone"
+  :class="{ 'drag-active': isDragging }"
+  @dragenter.prevent="isDragging = true"
+  @dragleave.prevent="isDragging = false"
+  @dragover.prevent
+  @drop.prevent.stop="isDragging = false; onDrop($event)"
+>
+  <input
+    id="upload-input"
+    type="file"
+    multiple
+    hidden
+    @change="onSelect"
+  />
 
-          >
-            <input
-              type="file"
-              multiple
-              hidden
-              @change="onSelect"
-            />
+  <div class="drop-icon">⬆️</div>
+  <div class="drop-text">Clique ou glisse tes fichiers ici</div>
+  <div class="drop-sub">PDF, images, audio, vidéo</div>
+</label>
 
-            <div class="drop-icon">⬆️</div>
-            <div class="drop-text">
-              Clique ou glisse tes fichiers ici
-            </div>
-            <div class="drop-sub">
-              PDF, images, audio, vidéo
-            </div>
-          </label>
         </section>
 
       </div>

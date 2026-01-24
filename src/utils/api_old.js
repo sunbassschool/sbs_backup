@@ -1568,76 +1568,49 @@ export async function syncRefreshToken() {
 
 
 export async function logoutUser() {
-  const store = useAuthStore();
+  const store = useAuthStore()
 
-  if (store.isLoggingOut) return; // ✅ Protection centralisée
-  store.isLoggingOut = true;      // ✅ Bloque tout le rendu
-  console.log("🚨 Déconnexion en cours...");
+  if (store.isLoggingOut) return
+  store.isLoggingOut = true
+  console.log("🚨 Déconnexion en cours...")
 
   try {
-    // 🔒 Stopper le refresh en cours
-    if (typeof refreshInProgress !== "undefined" && refreshInProgress) {
-      refreshInProgress = Promise.resolve(null);
-    }
+    // 🔒 stopper refresh
+    store.isRefreshingToken = false
+    store.refreshFailed = false
 
-    // 🔖 Marquer session expirée
-    localStorage.setItem("session_expired", "true");
-    localStorage.removeItem("userLogged");
-
- 
-
-    // 🧹 Reset du store
-    store.$reset();
-    store.user = null;
-    store.jwt = null;
-    store.impersonateStudent = false;
-    store.isRefreshingToken = false;
-    store.refreshFailed = false;
-
-    // 🗑️ Tokens & user infos
-    const toRemove = [
+    // 🧹 nettoyage storage
+    const keys = [
       "jwt", "refreshToken", "refreshTokenExpiration",
-      "prenom", "email", "videos_cache", "videos_cache_timestamp",
-      "savedEmail", "savedPrenom", "role", "visit-count"
-    ];
-    toRemove.forEach(k => {
-      localStorage.removeItem(k);
-      sessionStorage.removeItem(k);
-    });
+      "prenom", "email", "role", "visit-count",
+      "videos_cache", "videos_cache_timestamp",
+      "savedEmail", "savedPrenom"
+    ]
+    keys.forEach(k => {
+      localStorage.removeItem(k)
+      sessionStorage.removeItem(k)
+    })
 
-    // 🍪 Nettoyage des cookies
-    deleteAllCookies();
+    deleteAllCookies()
 
-    // 💾 Nettoyage IndexedDB
-    console.log("🗑️ Nettoyage de IndexedDB...");
-    await clearIndexedDBData();
-    console.log("✅ IndexedDB nettoyée !");
+    // 💾 IndexedDB
+    await clearIndexedDBData()
 
-    // 📣 Signal global pour App.vue
-    window.dispatchEvent(new Event("logout"));
+    // 🧠 reset store (UNE FOIS)
+    store.$reset()
+    store.user = null
+    store.jwt = null
 
-    // 🔁 Redirection propre
-    setTimeout(async () => {
-  console.log("🔄 Redirection vers login...");
-  const msg = document.querySelector(".logout-container");
-  if (msg) msg.remove();
+    // 🔁 laisser le guard gérer la navigation
+    return true
 
-  await router.replace("/login");
-
-  // ✅ Débloquer l'UI
-  store.isInitDone = true;
-  store.isLoggingOut = false;
-}, 800);
-
-
-    return true;
-
-  } catch (error) {
-    console.error("❌ Erreur lors de la déconnexion :", error);
-    store.isLoggingOut = false;
-    return false;
+  } catch (err) {
+    console.error("❌ Erreur logout", err)
+    store.isLoggingOut = false
+    return false
   }
 }
+
 
 // ✅ Affichage stylisé du message de déconnexion
 function showLogoutMessage() {

@@ -49,9 +49,10 @@
 <a
   v-if="canEditProfProfile"
   class="link-prof-profile"
+  style="cursor: pointer;"
   @click="showProfModal = true"
 >
-  ✏️ Compléter ma fiche prof
+   Compléter ma fiche prof
 </a>
 
 
@@ -352,7 +353,12 @@ import { logoutUser } from "@/utils/api.ts";
 import { useAuthStore } from "@/stores/authStore.js";
 
 // === STORES ===
+
 const authStore = useAuthStore();
+const isAuthReady = computed(
+  () => authStore.authReady && authStore.onboardingReady
+)
+
 const canEditProfProfile = computed(() => {
   return authStore.user?.role === "prof" || authStore.user?.role === "admin"
 })
@@ -396,16 +402,25 @@ const infosRaw = localStorage.getItem(infosKey);
 
 if (infosRaw) {
   try {
-    const infos = JSON.parse(infosRaw);
+    const infos = JSON.parse(infosRaw)
 
-   authStore.user.objectif = infos.objectif || "🎯 Aucun objectif défini";
-    editableObjectif.value = objectif.value;
+    if (authStore.user) {
+      authStore.user = {
+        ...authStore.user,
+        objectif: infos.objectif || "🎯 Aucun objectif défini"
+      }
+    }
 
-    console.log("⚡ Objectif chargé via userInfos :", objectif.value);
+    editableObjectif.value =
+      infos.objectif || "🎯 Aucun objectif défini"
+
+    console.log("⚡ Objectif chargé via userInfos :", editableObjectif.value)
+
   } catch {
-    authStore.user.objectif = "🎯 Aucun objectif défini";
+    editableObjectif.value = "🎯 Aucun objectif défini"
   }
 }
+
 
 // 🔥 SECOND SOURCE : userData_<email> (si existant)
 if (email) {
@@ -1142,6 +1157,21 @@ authStore.user.objectif = newObjectif;
 
 
 onMounted(async () => {
+   if (!authStore.isInitDone || !authStore.user) {
+    console.warn("⏳ moncompte: auth pas prête, on attend");
+    await new Promise(resolve => {
+      const stop = watch(
+        () => authStore.isInitDone && authStore.user,
+        (ready) => {
+          if (ready) {
+            stop()
+            resolve()
+          }
+        },
+        { immediate: true }
+      )
+    })
+  }
 const email = authStore.user?.email
            || localStorage.getItem("email")
            || sessionStorage.getItem("email")

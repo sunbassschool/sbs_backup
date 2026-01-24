@@ -199,6 +199,12 @@ noteLoadedFromCache: false,
   //     MOUNTED
   // -----------------------------
 async mounted() {
+  // ⛔ attendre hydratation auth réelle
+while (!this.auth.user?.user_id) {
+  await new Promise(r => setTimeout(r, 20))
+  if (this.destroyed) return
+}
+
   // --------------------------------------------------
   // 🔗 helper global upload
   // --------------------------------------------------

@@ -1,27 +1,34 @@
 <template>
   <div class="app-container">
 
+
     <!-- 🔐 Logout loader -->
     <div v-if="showLogoutMessage" class="logout-container">
       <div class="logout-spinner"></div>
       <p class="logout-text">Déconnexion en cours...</p>
     </div>
 
-    <router-view v-else />
+    <!-- 🚦 App -->
+<router-view />
+<UpgradeModal v-if="auth.upgradeCTA" />
+
   </div>
 </template>
 
+
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useAuthStore } from "@/stores/authStore.js";
 import { registerSW } from "virtual:pwa-register";
 import { useMetronomeStore } from "@/stores/useMetronomeStore";
+import UpgradeModal from "@/components/UpgradeModal.vue";
+
+
 
 const auth = useAuthStore();
 const showLogoutMessage = ref(false);
 
 onMounted(() => {
-  console.log("⏱️ UI affichée à", performance.now());
 
   window.addEventListener("show-logout-message", () => {
     showLogoutMessage.value = true;
@@ -71,6 +78,8 @@ onMounted(() => {
    ============================================================================ */
 .app-container {
   background-color: black;
+    min-height: 100vh;
+  overflow: visible; /* ou supprime la ligne */
 }
 
 /* ============================================================================
@@ -140,4 +149,16 @@ onMounted(() => {
   from { opacity: 0; transform: translate(-50%, -48%); }
   to   { opacity: 1; transform: translate(-50%, -50%); }
 }
+
+/* LANDING → scroll body */
+html.landing-mode .app-container {
+  overflow: visible;
+}
+
+/* APP → scroll interne */
+html.app-mode .app-container {
+  overflow-y: auto;
+  height: 100vh;
+}
+
 </style>

@@ -2,17 +2,20 @@
   <div class="upload-form">
 
     <!-- DROP ZONE -->
-<label
-  class="drop-zone"
-  @dragover.prevent
-  @drop.prevent
->
-   <input
-  type="file"
-  class="file-input"
-  multiple
-  @change="onFileSelect"
-/>
+
+<label class="drop-zone">
+
+<label class="file-picker">
+  <input
+    ref="fileInputRef"
+    type="file"
+    multiple
+    class="file-input"
+    @change="onFileSelect"
+  />
+  <span class="icon">＋</span>
+  <span class="text">Ajouter des fichiers</span>
+</label>
 
 
 <div v-if="!currentFile" class="drop-placeholder">
@@ -66,7 +69,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue"
 import { useAuthStore } from "@/stores/authStore.js"
 import { getValidToken } from "@/utils/api.ts"
-import { getProxyPostURL } from "@/config/gas.ts"
+import { getProxyPostURL,gasPost } from "@/config/gas.ts"
 
 const auth = useAuthStore()
 const emit = defineEmits([
@@ -78,15 +81,72 @@ const emit = defineEmits([
   "progress"
 ])
 const uploadSessionId = ref(null)
+const fileInputRef = ref(null)
 
-const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent)
-const MAX_MOBILE_SIZE = 50 * 1024 * 1024 // 50 Mo
+const isMobile = window.matchMedia("(pointer: coarse)").matches
+const MAX_MOBILE_SIZE = 1000 * 1024 * 1024 // 50 Mo
 let batchJwt = null
 const MAX_PARALLEL = 3
 const uploadedBatch = ref([])
 const activeProgress = ref({}) // { optimistic_id: percent }
 const globalProgress = ref(0)
+const CANCEL_ERROR = "upload-cancelled"
 
+const cancelledUploads = new Set()
+
+// const chunck
+const MAX_DIRECT_UPLOAD = 20 * 1024 * 1024
+// ============================================================================
+// 🔑 GET UPLOAD TOKEN — HARD LOG + SAFE
+// ============================================================================
+async function getUploadToken(payload) {
+  console.group("🔐 getUploadToken")
+  console.log("➡️ payload input =", payload)
+
+  let res
+  try {
+    res = await gasPost("getuploadtoken", payload)
+    console.log("📥 raw response =", res)
+  } catch (e) {
+    console.error("💥 gasPost failed", e)
+    console.groupEnd()
+    throw e
+  }
+
+  // ---- HARD VALIDATION ----
+  const token =
+    res?.uploadToken ||
+    res?.token ||
+    res?.data?.uploadToken ||
+    res?.data?.token
+
+  if (!token || typeof token !== "string") {
+    console.error("❌ INVALID UPLOAD TOKEN FORMAT", {
+      response: res,
+      extractedToken: token
+    })
+    console.groupEnd()
+    throw new Error("invalid-upload-token")
+  }
+
+  console.log("✅ uploadToken =", token)
+  console.groupEnd()
+  return token
+}
+
+
+
+const formatEta = s =>
+  s > 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`
+// UploadFileCore.vue <script setup>
+const openPicker = () => {
+  fileInputRef.value?.click()
+}
+
+defineExpose({
+  openPicker,
+  handleFiles
+})
 
 
 // 🔧 props dynamiques
@@ -150,14 +210,17 @@ function handleFiles(files) {
 emit("queued", wrappers.map(w => ({
   upload_id: null,
   optimistic_id: w.optimistic_id,
-  name: w.file.name,          // ✅ AJOUT
   file_name: w.file.name,
   file_size: w.file.size,
   folder_id: lockedFolderId.value,
   _optimistic: true,
-  status: "uploading",
+
+  // 🟢 UX
+  status: "queued",
+  message: "En attente",
   progress: 0
 })))
+
 
 
   filesQueue.value = wrappers
@@ -167,9 +230,7 @@ emit("queued", wrappers.map(w => ({
   startNextUpload()
 }
 
-defineExpose({
-  handleFiles
-})
+
 const onFileSelect = e => {
   if (uploading.value) return
 
@@ -190,7 +251,10 @@ const onFileSelect = e => {
 
   // 🔒 figer le dossier + session pour tout le batch
   lockedFolderId.value = props.folderId
+if (!filesQueue.value.length) {
   uploadSessionId.value = crypto.randomUUID()
+  lockedFolderId.value = props.folderId
+}
 
   // 📦 créer wrappers + optimistic côté parent
   const wrappers = files.map(file => {
@@ -216,7 +280,15 @@ emit("queued", wrappers.map(w => ({
 
 
   // 📥 queue interne
-  filesQueue.value = wrappers
+filesQueue.value = [
+  ...filesQueue.value,
+  ...wrappers
+]
+console.log(
+  "🧺 QUEUE AFTER SELECT",
+  filesQueue.value.length,
+  filesQueue.value.map(w => w.file.name)
+)
 
   error.value = ""
 
@@ -225,36 +297,118 @@ emit("queued", wrappers.map(w => ({
 }
 
 
+const finalizeUpload = async ({ upload_id, total_chunks, file_name, upload_token }) => {
+  const form = new FormData()
+  form.append("token", upload_token)
 
+  form.append("upload_id", upload_id)
+  form.append("total_chunks", total_chunks)
+  form.append("file_name", file_name)
+
+  const res = await fetch(
+    "https://www.sunbassschool.com/sbs-upload/finalize_upload.php",
+    { method: "POST", body: form }
+  )
+
+  const json = await res.json()
+
+  if (!json.success) {
+    if (json.error === "missing_chunks") {
+      throw json
+    }
+    throw new Error("finalize_failed")
+  }
+
+  return json.url
+}
 
 const uploadSingleFile = (wrapper) => {
-  const file = wrapper.file
   const optimisticId = wrapper.optimistic_id
+  cancelledUploads.delete(optimisticId) // 🔑 blindage
+
+  const file = wrapper.file
+
+  if (cancelledUploads.has(optimisticId)) {
+  throw new Error(CANCEL_ERROR)
+}
+emit("progress", {
+  optimistic_id: optimisticId,
+  status: "uploading",
+  message: "Envoi en cours…",
+  progress: 0
+})
 
   return new Promise(async (resolve, reject) => {
+    console.group(`⬆️ uploadSingleFile → ${file.name}`)
+    console.log("size =", Math.round(file.size / 1024 / 1024), "MB")
+    console.log("type =", file.type)
+
     try {
       // ==================================================
       // 🔐 JWT
       // ==================================================
-    const jwt = batchJwt
-if (!jwt) throw new Error("jwt-missing")
+      const jwt = batchJwt
+      if (!jwt) {
+        console.error("❌ jwt missing")
+        throw new Error("jwt-missing")
+      }
+
+if (file.size > MAX_DIRECT_UPLOAD) {
+  const chunkRes = await uploadChunkedFile(wrapper)
+
+  emit("progress", {
+    optimistic_id: optimisticId,
+    status: "processing",
+    message: "Traitement du fichier…"
+  })
+
+  if (cancelledUploads.has(optimisticId)) {
+    throw new Error(CANCEL_ERROR)
+  }
+
+  let finalUrl
+  try {
+    finalUrl = await finalizeUpload(chunkRes)
+  } catch (e) {
+    if (e?.error === "missing_chunks") {
+      // 🔁 retry finalize uniquement
+      finalUrl = await finalizeUpload(chunkRes)
+    } else {
+      throw e
+    }
+  }
+
+  resolve({
+    optimistic_id: chunkRes.optimistic_id,
+    file_url: finalUrl,
+    file_name: chunkRes.file_name,
+    file_size: chunkRes.file_size,
+    file_type: chunkRes.file_type,
+    folder_id: chunkRes.folder_id
+  })
+  return
+}
 
 
+
+
+
+      // ==================================================
+      // 1️⃣ UPLOAD TOKEN (GAS)
+      // ==================================================
       const proxyUrl = getProxyPostURL()
       const fileSizeMb = Math.ceil(file.size / 1024 / 1024)
 
-      // ==================================================
-      // 1️⃣ UPLOAD TOKEN
-      // ==================================================
       const tokenPayload = {
         route: "getuploadtoken",
         jwt,
         prof_id: auth.user.prof_id,
-        file_size_mb: fileSizeMb
+        file_size_mb: fileSizeMb,
+        ...(props.eleveId && { eleve_id: props.eleveId }),
+        ...(props.coursId && { cours_id: props.coursId })
       }
 
-      if (props.eleveId) tokenPayload.eleve_id = props.eleveId
-      if (props.coursId) tokenPayload.cours_id = props.coursId
+      console.log("📨 getuploadtoken payload", tokenPayload)
 
       const rawRes = await fetch(proxyUrl, {
         method: "POST",
@@ -263,39 +417,97 @@ if (!jwt) throw new Error("jwt-missing")
       })
 
       const text = await rawRes.text()
+      console.log("📥 getuploadtoken response", text)
 
       if (text.includes("quota_exceeded")) {
         throw new Error("quota_exceeded")
       }
 
-      const tokenRes = JSON.parse(text)
+      let tokenRes
+      try {
+        tokenRes = JSON.parse(text)
+      } catch {
+        throw new Error("invalid-token-json")
+      }
+
       if (!tokenRes?.success || !tokenRes.token) {
         throw new Error("upload-token-failed")
       }
 
-      // ==================================================
-      // 2️⃣ PHP UPLOAD
-      // ==================================================
+      // // ==================================================
+      // // 2️⃣ PHP UPLOAD (XHR)
+      // // ==================================================
+      console.log(
+  "📦 DIRECT UPLOAD",
+  file.name,
+  file.type,
+  file.size
+)
+
       const formData = new FormData()
       formData.append("token", tokenRes.token)
       formData.append("file", file)
 
       const xhr = new XMLHttpRequest()
       xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
+const cancelInterval = setInterval(() => {
+  if (cancelledUploads.has(optimisticId)) {
+    console.warn("🛑 abort xhr", optimisticId)
+    xhr.abort()
+    clearInterval(cancelInterval)
+  }
+}, 200)
+      xhr.timeout = 300000 // 5 min
+
+      // -------- lifecycle logs --------
+      xhr.onloadstart = () => console.log("🟡 xhr.onloadstart")
+      xhr.upload.onloadstart = () => console.log("🟡 xhr.upload.onloadstart")
+      xhr.onreadystatechange = () =>
+        console.log("🔁 readyState =", xhr.readyState)
 
       xhr.upload.onprogress = (e) => {
-        if (!e.lengthComputable) return
+        if (!e.lengthComputable) {
+          console.warn("⚠️ progress non computable")
+          return
+        }
+        const p = Math.round((e.loaded / e.total) * 100)
+        console.log(`📊 progress ${p}% (${e.loaded}/${e.total})`)
+        emit("progress", { optimistic_id: optimisticId, progress: p })
+        activeProgress.value[optimisticId] = p
+      }
 
-     const p = Math.round((e.loaded / e.total) * 100)
-emit("progress", { optimistic_id: optimisticId, progress: p })
-activeProgress.value[optimisticId] = p
+      xhr.onerror = (e) => {
+        console.error("❌ xhr.onerror", e)
+        reject(new Error("xhr-upload-error"))
+        clearInterval(cancelInterval)
 
       }
 
-      xhr.onerror = () =>
-        reject(new Error("xhr-upload-failed"))
+      xhr.onabort = () => {
+        console.error("🟥 xhr aborted")
+        reject(new Error("xhr-aborted"))
+        clearInterval(cancelInterval)
+
+      }
+
+    xhr.ontimeout = () => {
+  console.error("⏱️ xhr timeout")
+  clearInterval(cancelInterval)
+  reject(new Error("xhr-timeout"))
+}
+
 
       xhr.onload = () => {
+        console.log("🟢 xhr.onload status =", xhr.status)
+        console.log("responseText =", xhr.responseText)
+        console.log(
+  "📥 PHP upload response",
+  xhr.status,
+  xhr.responseText
+)
+
+clearInterval(cancelInterval)
+
         if (xhr.status < 200 || xhr.status >= 300) {
           reject(new Error("upload-http-error"))
           return
@@ -323,8 +535,10 @@ activeProgress.value[optimisticId] = p
         }
 
         // ==================================================
-        // ✅ RESOLVE POUR BATCH FINAL
+        // ✅ RESOLVE
         // ==================================================
+        console.log("✅ upload success", res)
+
         resolve({
           optimistic_id: optimisticId,
           file_url: res.url,
@@ -335,22 +549,45 @@ activeProgress.value[optimisticId] = p
         })
       }
 
-      xhr.send(formData)
+      console.log("🚀 xhr.send()")
+if (cancelledUploads.has(optimisticId)) {
+  console.warn("🛑 upload cancelled before start", optimisticId)
+  reject(new Error(CANCEL_ERROR))
+  return
+}
 
-    } catch (err) {
-      if (err.message === "quota_exceeded") {
-        emit("error", {
-          type: "quota",
-          optimistic_id: optimisticId,
-          message: "❌ Quota dépassé. Supprime des fichiers ou augmente ton espace."
-        })
-        return
-      }
 
-      reject(err)
-    }
+xhr.send(formData)
+
+} catch (err) {
+  if (err?.message === "upload-cancelled") {
+    emit("error", {
+      optimistic_id: optimisticId,
+      message: "Upload annulé"
+    })
+    reject(err) // ⛔ STOP DÉFINITIF
+    return
+  }
+
+  console.error("💥 upload error", err)
+
+  if (err.message === "quota_exceeded") {
+    emit("error", {
+      type: "quota",
+      optimistic_id: optimisticId,
+      message: "❌ Quota dépassé. Supprime des fichiers ou augmente ton espace."
+    })
+    return
+  }
+
+  reject(err)
+}
+
+
+    console.groupEnd()
   })
 }
+
 
 
 
@@ -365,6 +602,343 @@ const updateGlobalProgress = () => {
     values.reduce((a, b) => a + b, 0) / values.length
   )
 }
+
+
+const smoothProgress = Object.create(null)
+
+function animateProgress(id, target) {
+  if (smoothProgress[id] == null) {
+    smoothProgress[id] = target
+    emit("progress", {
+      optimistic_id: id,
+      progress: target
+    })
+    return
+  }
+
+  const start = smoothProgress[id]
+  if (target <= start) return
+
+  const diff = target - start
+  const steps = Math.min(diff, 6)
+  let i = 0
+
+  const tick = () => {
+    i++
+    const value = start + Math.round((diff * i) / steps)
+    smoothProgress[id] = value
+
+    emit("progress", {
+      optimistic_id: id,
+      progress: value
+    })
+
+    if (i < steps) {
+      requestAnimationFrame(tick)
+    }
+  }
+
+  requestAnimationFrame(tick)
+}
+
+
+
+const uploadChunkedFile = async (wrapper) => {
+uploading.value = true
+
+const CANCEL_ERROR = "upload-cancelled"
+
+  const file = wrapper.file
+  const optimisticId = wrapper.optimistic_id
+  const uploadId = crypto.randomUUID()
+
+const isCoarse = window.matchMedia("(pointer: coarse)").matches
+const isSlowNet =
+  navigator.connection &&
+  ["slow-2g", "2g", "3g"].includes(navigator.connection.effectiveType)
+
+// ⛔ calculé UNE FOIS
+const CHUNK_SIZE = isCoarse
+  ? (isSlowNet ? 4 * 1024 * 1024 : 8 * 1024 * 1024)
+  : 16 * 1024 * 1024
+
+const MAX_PARALLEL_CHUNKS = isCoarse
+  ? (isSlowNet ? 1 : 2)
+  : (isSlowNet ? 3 : 6)
+
+let dynamicParallel = MAX_PARALLEL_CHUNKS
+const chunkTimes = []
+const MIN_PARALLEL = isCoarse ? 1 : 2
+
+let cancelled = false
+
+
+  if (cancelledUploads.has(optimisticId)) {
+  throw new Error(CANCEL_ERROR)
+}
+  console.group(`🧩 chunked upload → ${file.name}`)
+  console.log("size =", Math.round(file.size / 1024 / 1024), "MB")
+if (cancelledUploads.has(optimisticId)) {
+  return { cancelled: true }
+}
+
+  try {
+    // ==================================================
+    // 🔐 JWT
+    // ==================================================
+    if (!batchJwt) throw new Error("jwt-missing")
+
+    const fileSizeMb = Math.ceil(file.size / 1024 / 1024)
+
+    // ==================================================
+    // 🔑 TOKEN UPLOAD (GAS)
+    // ==================================================
+const uploadToken = await getUploadToken({
+  jwt: batchJwt,
+  prof_id: auth.user.prof_id,
+  file_name: file.name,
+  file_size_mb: Math.ceil(file.size / 1024 / 1024),
+  mode: "chunked",
+  ...(props.eleveId && { eleve_id: props.eleveId }),
+  ...(props.coursId && { cours_id: props.coursId })
+})
+
+
+    // ==================================================
+    // 📦 CHUNKS
+    // ==================================================
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+    let completed = 0
+    let uploadedBytes = 0
+    const startTime = Date.now()
+
+    const retryCount = {}
+    let refreshingToken = null
+animateProgress(optimisticId, 1)
+
+ const uploadOneChunk = async (index) => {
+  // 🛑 cancel immédiat
+  if (cancelledUploads.has(optimisticId)) {
+    cancelled = true
+    console.warn("🛑 chunk cancelled before start", index)
+    return
+  }
+
+  const start = index * CHUNK_SIZE
+  const end = Math.min(start + CHUNK_SIZE, file.size)
+  const chunkSize = end - start
+
+  const blob = file.slice(start, end)
+
+  const formData = new FormData()
+  formData.append("token", uploadToken)
+  formData.append("upload_id", uploadId)
+  formData.append("chunk_index", index)
+  formData.append("total_chunks", totalChunks)
+  formData.append("file_name", file.name)
+  formData.append("chunk", blob)
+
+  console.log(`📤 chunk ${index + 1}/${totalChunks} (${Math.round(chunkSize / 1024 / 1024)} MB)`)
+
+  // ⏱️ START TIMER
+  const t0 = performance.now()
+
+  const res = await fetch(
+    "https://www.sunbassschool.com/sbs-upload/upload_chunck.php",
+    { method: "POST", body: formData }
+  )
+
+  const dt = performance.now() - t0
+  console.log(`⏱️ chunk ${index + 1} done in ${Math.round(dt)} ms`)
+
+  let json
+  try {
+    json = await res.json()
+  } catch {
+    throw new Error("invalid-chunk-json")
+  }
+if (cancelledUploads.has(optimisticId)) {
+  cancelled = true
+  console.warn("🛑 chunk cancelled after upload", index)
+  return
+}
+
+if (!res.ok || !json.success) {
+  // ⛔ token expiré = STOP BATCH
+  if (json?.error === "token-expired") {
+    throw new Error("batch-upload-token-expired")
+  }
+
+  throw new Error(`chunk-upload-failed-${index}`)
+}
+
+
+  // ==================================================
+  // 📊 METRICS
+  // ==================================================
+  chunkTimes.push(dt)
+  if (chunkTimes.length > 6) chunkTimes.shift()
+
+
+if (chunkTimes.length < 3) {
+  // pas d'adaptation trop tôt
+} else {
+  const avg = chunkTimes.reduce((a, b) => a + b, 0) / chunkTimes.length
+
+  if (avg > 15000 && dynamicParallel > MIN_PARALLEL) {
+    dynamicParallel--
+    console.log("🐢 slow net → parallel =", dynamicParallel)
+  }
+
+  if (avg < 6000 && dynamicParallel < MAX_PARALLEL_CHUNKS) {
+    dynamicParallel++
+    console.log("🚀 fast net → parallel =", dynamicParallel)
+  }
+}
+
+
+  // ==================================================
+  // 📈 PROGRESS
+  // ==================================================
+  completed++
+  uploadedBytes += chunkSize
+
+  const p = 5 + Math.round((completed / totalChunks) * 94)
+
+  animateProgress(optimisticId, p)
+
+  activeProgress.value[optimisticId] =
+    smoothProgress[optimisticId] ?? p
+}
+
+
+// ==================================================
+// 🚦 UPLOAD PARALLÈLE CONTRÔLÉ (FIX)
+// ==================================================
+const queue = Array.from({ length: totalChunks }, (_, i) => i)
+const active = new Set()
+const totalSizeMb = filesQueue.value.reduce(
+  (sum, w) => sum + Math.ceil(w.file.size / 1024 / 1024),
+  0
+)
+
+
+
+const launchNext = () => {
+  console.log(
+    "SESSION launchNext ENTER",
+    "queue =", queue.length,
+    "active =", active.size,
+    "parallel =", dynamicParallel
+  )
+
+  if (cancelled) {
+    console.log("SESSION cancelled → stop")
+    return
+  }
+
+  if (!queue.length) {
+    console.log("SESSION queue empty → stop")
+    return
+  }
+
+  if (active.size >= dynamicParallel) {
+    console.log("SESSION active full → wait")
+    return
+  }
+
+  const index = queue.shift()
+  active.add(index)
+
+  console.log(
+    "SESSION START FILE",
+    index,
+    "queue =", queue.length,
+    "active =", active.size
+  )
+
+  uploadOneChunk(index)
+    .catch(e => {
+      if (e?.message === CANCEL_ERROR) {
+        cancelled = true
+        console.log("SESSION CANCEL ERROR", index)
+      } else {
+        console.error("SESSION UPLOAD ERROR", index, e)
+        throw e
+      }
+    })
+    .finally(() => {
+      active.delete(index)
+
+      console.log(
+        "SESSION FILE FINALLY",
+        index,
+        "queue =", queue.length,
+        "active =", active.size
+      )
+
+      if (!cancelled) launchNext()
+    })
+}
+
+
+
+// kickstart
+for (let i = 0; i < dynamicParallel; i++) {
+  launchNext()
+}
+
+
+// attendre fin réelle
+while ((queue.length || active.size) && !cancelled) {
+  await new Promise(r => setTimeout(r, 20))
+}
+
+
+
+
+
+
+if (cancelledUploads.has(optimisticId)) {
+  throw new Error(CANCEL_ERROR)
+}
+
+
+console.log("✅ all chunks uploaded")
+    console.groupEnd()
+
+    // ==================================================
+    // ⛔ PAS D’ASSEMBLAGE ICI
+    // ==================================================
+    return {
+      optimistic_id: optimisticId,
+      upload_id: uploadId,
+      total_chunks: totalChunks,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type,
+      folder_id: lockedFolderId.value || props.folderId,
+        upload_token: uploadToken // 👈 AJOUT CRITIQUE
+
+    }
+
+  } catch (err) {
+if (err.message === "upload-cancelled") {
+  console.warn("🛑 chunked upload cancelled")
+  return { cancelled: true }
+}
+
+
+console.error("💥 chunked upload error", err)
+throw err
+
+  }
+  finally {
+  uploading.value = false
+}
+
+}
+
 
 
 
@@ -441,101 +1015,118 @@ const startNextUpload = async () => {
   uploading.value = true
   error.value = ""
 
-  // 🔐 JWT UNE FOIS
+  // 🔐 JWT une seule fois
   batchJwt = await getValidToken()
 
   const active = new Set()
 
-const launchNext = async () => {
-  if (!filesQueue.value.length) return
-  if (active.size >= MAX_PARALLEL) return
+  const launchNext = () => {
+    // 🔁 remplir les slots tant que possible
+    while (
+      filesQueue.value.length &&
+      active.size < MAX_PARALLEL
+    ) {
+      const wrapper = filesQueue.value.shift()
 
-  const wrapper = filesQueue.value.shift()
+      console.log("📤 START FILE", wrapper.file.name)
 
-  const p = uploadSingleFile(wrapper)
-    .then(res => {
-      // 🔑 RÉSOLUTION DU FOLDER ID ICI (POINT CRITIQUE)
-      const finalFolderId = resolveFolderId(res.folder_id)
+      const p = Promise.resolve(uploadSingleFile(wrapper))
+        .then(res => {
+          if (!res) return
 
-      // 🛑 sécurité hard (dev)
-      if (finalFolderId?.startsWith("TMP_")) {
-        console.error("❌ TMP folder_id non résolu", finalFolderId)
-        throw new Error("tmp-folder-not-resolved")
-      }
+          console.log("🟢 upload resolved", res)
 
-      // 📦 batch backend (ID FINAL)
-      uploadedBatch.value.push({
-        cours_id: props.coursId || "PARTITION",
-        prof_id: auth.user.prof_id,
-        eleve_id: props.eleveId || null,
-        folder_id: finalFolderId,
-        file_url: res.file_url,
-        file_name: res.file_name,
-        file_size: res.file_size,
-        file_type: res.file_type
-      })
+          emit("progress", {
+            optimistic_id: res.optimistic_id,
+            status: "done",
+            message: "Terminé",
+            progress: 100
+          })
 
-      // 🖥️ UI optimistic (ID FINAL AUSSI)
-      emit("uploaded", {
-        optimistic_id: res.optimistic_id,
-        file_name: res.file_name,
-        file_url: res.file_url,
-        file_size: res.file_size,
-        file_type: res.file_type,
-        folder_id: finalFolderId,
-        created_at: new Date().toISOString(),
-        session_id: uploadSessionId.value
-      })
-        // 🧹 NETTOYAGE PROGRESS ICI
-  delete activeProgress.value[res.optimistic_id]
-    })
-    .catch(e => {
-      error.value = e?.message || "Erreur upload"
-    })
-    .finally(() => {
-      active.delete(p)
-    })
+          const finalFolderId = resolveFolderId(res.folder_id)
+          if (finalFolderId?.startsWith("TMP_")) {
+            throw new Error("tmp-folder-not-resolved")
+          }
 
-  active.add(p)
-  launchNext()
-}
+          uploadedBatch.value.push({
+            cours_id: props.coursId || "PARTITION",
+            prof_id: auth.user.prof_id,
+            eleve_id: props.eleveId || null,
+            folder_id: finalFolderId,
+            file_url: res.file_url,
+            file_name: res.file_name,
+            file_size: res.file_size,
+            file_type: res.file_type,
+            optimistic_id: res.optimistic_id
+          })
 
+          delete activeProgress.value[res.optimistic_id]
+        })
+        .catch(e => {
+          let msg = "Échec de l’upload"
+
+          if (e.message === "xhr-timeout") msg = "Upload interrompu"
+          if (e.message === "xhr-aborted") msg = "Upload annulé"
+
+          emit("error", {
+            optimistic_id: wrapper.optimistic_id,
+            message: msg
+          })
+        })
+        .finally(() => {
+          active.delete(p)
+          console.log(
+            "🏁 END FILE",
+            wrapper.file.name,
+            "queue =", filesQueue.value.length,
+            "active =", active.size
+          )
+          launchNext() // 🔥 RELANCE OBLIGATOIRE
+        })
+
+      active.add(p)
+    }
+  }
 
   // 🚀 kickstart
-  for (let i = 0; i < MAX_PARALLEL; i++) {
-    launchNext()
-  }
+  launchNext()
 
-  // ⏳ attendre fin complète
+  // ⏳ attendre fin complète des fichiers
   while (active.size) {
-    await Promise.race(active)
-    launchNext()
+    await new Promise(r => setTimeout(r, 20))
   }
 
   // ==================================================
-  // 🚀 BATCH GAS FINAL (1 SEUL APPEL)
+  // 🚀 BATCH GAS FINAL (1 seul appel)
   // ==================================================
-if (uploadedBatch.value.length) {
-  const sendBatch = () =>
-    fetch(getProxyPostURL(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "attachfilestocoursbatch",
-        jwt: batchJwt,
-        files: uploadedBatch.value
+  if (uploadedBatch.value.length) {
+    const sendAndEmit = async () => {
+      const res = await fetch(getProxyPostURL(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          route: "attachfilestocoursbatch",
+          files: uploadedBatch.value
+        })
       })
-    })
 
-  try {
-    await sendBatch()
-  } catch (e) {
-    console.warn("🔁 retry batch GAS")
-    await new Promise(r => setTimeout(r, 800))
-    await sendBatch()
+      const text = await res.text()
+
+      let json = JSON.parse(text)
+      if (json?.uploads?.length) {
+        json.uploads.forEach(upload => {
+          emit("uploaded", upload)
+        })
+      }
+    }
+
+    try {
+      await sendAndEmit()
+    } catch {
+      await new Promise(r => setTimeout(r, 800))
+      await sendAndEmit()
+    }
   }
-}
-
 
   // 🧹 reset
   uploadedBatch.value = []
@@ -547,27 +1138,68 @@ if (uploadedBatch.value.length) {
   uploadSessionId.value = null
 
   emit("done")
+  if (fileInputRef.value) {
+    fileInputRef.value.value = null
+  }
 }
 
 
 
+const onCancelUpload = (e) => {
+  const id = e.detail?.optimistic_id
+  if (!id) return
+
+  cancelledUploads.add(id)
+  delete activeProgress.value[id]
+  uploading.value = false
+
+  // 🔥 reset input file (CRITIQUE)
+  if (fileInputRef.value) {
+    fileInputRef.value.value = null
+  }
+
+  // nettoyage async safe
+  queueMicrotask(() => {
+    cancelledUploads.delete(id)
+  })
+
+  emit("error", {
+    optimistic_id: id,
+    message: "Upload annulé"
+  })
+}
 
 
 
 onMounted(() => {
   window.addEventListener("sbs-drop-files", onDroppedFiles)
+    window.addEventListener("sbs-upload-cancel", onCancelUpload)
+
 })
 
 onUnmounted(() => {
   window.removeEventListener("sbs-drop-files", onDroppedFiles)
+    window.removeEventListener("sbs-upload-cancel", onCancelUpload)
+
 })
 
 watch(activeProgress, updateGlobalProgress, { deep: true })
+watch(
+  () => props.folderId,
+  () => {
+    if (uploading.value) return
+
+    lockedFolderId.value = null
+    uploadSessionId.value = null
+    uploadedBatch.value = []
+    activeProgress.value = {}
+  }
+)
 
 </script>
 
 
-<style scoped>
+<style>
 .upload-form {
   display: flex;
   flex-direction: column;
@@ -575,32 +1207,55 @@ watch(activeProgress, updateGlobalProgress, { deep: true })
 }
 
 /* Drop zone */
+/* DROPZONE — SBS STYLE */
 .drop-zone {
-  border: 2px dashed #ff8c00;
-  border-radius: 12px;
-  padding: 26px;
-  text-align: center;
+  all: unset; /* 🔥 reset total */
+  box-sizing: border-box;
+
+  width: 100%;
+  padding: 36px 22px;
+  border-radius: 18px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+
+  background: rgba(255,255,255,.025);
+  border: 2px dashed rgba(255,255,255,.14);
+
   cursor: pointer;
-  background: rgba(255, 140, 0, 0.05);
+  user-select: none;
+
+  transition:
+    border-color .18s ease,
+    background .18s ease,
+    transform .18s ease,
+    box-shadow .18s ease;
 }
 
+/* hover */
 .drop-zone:hover {
-  background: rgba(255, 140, 0, 0.08);
+  border-color: #facc15;
+  background: rgba(250,204,21,.07);
 }
 
-.file-input {
-  display: none;
-}
-
+/* contenu */
 .drop-placeholder {
+  text-align: center;
   color: #ccc;
-  font-size: 0.9rem;
 }
 
 .drop-placeholder span {
-  font-size: 0.8rem;
+  font-size: .85rem;
   color: #aaa;
 }
+
+/* click */
+.drop-zone:active {
+  transform: scale(.985);
+}
+
 
 .file-selected strong {
   display: block;
@@ -624,21 +1279,64 @@ watch(activeProgress, updateGlobalProgress, { deep: true })
   background: #ff8c00;
 }
 
-/* Button */
 .upload-btn {
-  background: #ff8c00;
-  border: none;
-  border-radius: 10px;
-  padding: 10px;
+  all: unset;
+  box-sizing: border-box;
+
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
   font-weight: 600;
-  color: #000;
+  font-size: .9rem;
+  letter-spacing: .2px;
+
+  color: #1a1a1a;
+  background:
+    linear-gradient(180deg, #ffb347, #ff8c00);
+
+  box-shadow:
+    0 10px 25px rgba(255,140,0,.35),
+    inset 0 1px 0 rgba(255,255,255,.35);
+
   cursor: pointer;
+  user-select: none;
+
+  transition:
+    transform .12s ease,
+    box-shadow .12s ease,
+    filter .12s ease;
 }
 
-.upload-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* hover */
+.upload-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 34px rgba(255,140,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.45);
 }
+
+/* active */
+.upload-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 6px 16px rgba(255,140,0,.35),
+    inset 0 2px 6px rgba(0,0,0,.25);
+}
+
+/* disabled */
+.upload-btn:disabled {
+  filter: grayscale(1);
+  opacity: .45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 
 /* Loader */
 .loader {
@@ -680,5 +1378,45 @@ watch(activeProgress, updateGlobalProgress, { deep: true })
   background: linear-gradient(90deg, #f5c16c, #facc15);
   transition: width .2s linear;
 }
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+.file-input {
+  display: none;
+}
+
+.file-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ff7a18, #ff9f43);
+  color: #111;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: transform .15s ease, box-shadow .15s ease, opacity .15s;
+}
+
+.file-picker:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+
+.file-picker:active {
+  transform: translateY(0);
+  opacity: .85;
+}
+
+.file-picker .icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
 
 </style>

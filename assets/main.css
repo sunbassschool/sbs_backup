@@ -4,17 +4,48 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fond global */
+/* ===============================
+   🔥 FIX SCROLL VERTICAL iOS
+   =============================== */
+
+/* MODE APP (par défaut) - Bloque le scroll global */
 html,
 body {
-  background-color: black !important;
-  color: white;
   margin: 0;
   padding: 0;
-
-  /* Utilisation correcte sur iOS */
+  width: 100%;
   height: 100%;
-  min-height: 100%;
+  overflow: hidden; /* ⛔ Bloque le scroll global */
+  position: fixed; /* 🔥 Empêche le scroll iOS */
+  background-color: black !important;
+  color: white;
+  
+  /* Désactive le bounce scroll iOS */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch; /* 🔥 CHANGÉ de auto à touch pour iOS */
+}
+
+/* ===============================
+   🚫 DISABLE HORIZONTAL SCROLL (APP MODE)
+   =============================== */
+html:not(.landing-mode),
+body:not(.landing-mode),
+#app {
+  overflow-x: hidden !important;
+}
+
+#app {
+  background-color: black !important;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh; /* iOS modern */
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden; /* ⛔ Pas de scroll sur #app */
+    max-width: 100vw;
+
+  display: flex;
+  flex-direction: column;
 }
 
 /* SAFE AREAS iPhone */
@@ -23,32 +54,101 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
-
-  overflow-x: hidden !important;
 }
 
-/* ⚠️ RETIRER 100vh ici ! */
-#app {
-  background-color: black !important;
-  width: 100%;
-  min-height: 100%; /* remplace height:100vh */
-  margin: 0 !important;
-  padding: 0 !important;
+/* ===============================
+   MODE LANDING (pages marketing)
+   =============================== */
 
-  display: flex;
-  flex-direction: column;
+/* Quand tu es sur une landing page, tu ajoutes la classe .landing-mode sur <html> */
+html.landing-mode,
+body.landing-mode {
+  position: static !important; /* 🔥 Réactive le scroll normal */
+  height: auto !important;
+  min-height: 100vh !important;
+  overflow-y: auto !important;
 }
 
-/* Version Desktop */
-@media (min-width: 1024px) {
-  #app {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start; /* pas center → sinon ça casse le layout */
-    padding: 0 !important;
-  }
+html.landing-mode #app {
+  height: auto !important;
+  min-height: 100vh !important;
+  overflow: visible !important;
 }
+
+/* ===============================
+   SELECT GLOBAL FIX
+   =============================== */
+select,
+.form-select {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+select:focus,
+.form-select:focus {
+  border-color: #292929 !important;
+  box-shadow: 0 0 0 3px rgba(41,41,41,.15) !important;
+}
+
+select:disabled,
+.form-select:disabled {
+  background-color: #e5e7eb !important;
+  color: #475569 !important;
+  opacity: 1 !important;
+}
+
+/* ===============================
+   SCROLLBAR STYLING
+   =============================== */
 body {
   scrollbar-gutter: stable;
 }
+
+/* Scrollbar global (pour les zones qui scroll) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255, 0, 0, 0.7), rgba(255, 120, 0, 0.7));
+  border-radius: 10px;
+  box-shadow: 0px 0px 10px rgba(255, 69, 0, 0.75);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(255, 0, 0, 1), rgba(255, 120, 0, 1));
+}
+
+/* ===============================
+   🚫 DISABLE LONG PRESS iOS
+   =============================== */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ✅ zones où le texte doit rester sélectionnable */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+html.landing-mode,
+body.landing-mode,
+html.landing-mode #app {
+  overflow-y: auto !important;
+}
+

@@ -1,11 +1,13 @@
 <template>
     <Layout>
+      <div class="feedback-theme">
+
       <div class="container mt-4">
- 
+
 <div class="filters-responsive mb-4">
 
   <!-- Filtre statut -->
-  <select 
+  <select
     v-model="filterStatut"
     class="filter-select-custom"
     @change="filterFeedbacks"
@@ -17,15 +19,15 @@
   </select>
 
   <!-- Filtre mois -->
-  <select 
+  <select
     v-model="selectedMonth"
     class="filter-select-custom"
     @change="filterFeedbacks"
   >
     <option value="">Tous les mois</option>
-    <option 
-      v-for="month in availableMonths" 
-      :key="month.value" 
+    <option
+      v-for="month in availableMonths"
+      :key="month.value"
       :value="month.value"
     >
       {{ month.label }}
@@ -41,22 +43,22 @@
           <div class="spinner-border custom-spinner"></div>
           <p>Chargement des feedbacks...</p>
         </div>
-  
+
         <!-- ❌ Erreur -->
         <div v-if="feedbackError" class="alert alert-danger">
           {{ feedbackError }}
         </div>
-  
+
         <!-- ✅ Feedbacks existants -->
         <div v-if="feedbacks.length && !feedbackLoading">
-<div 
+<div
  v-for="fb in filteredFeedbacks"
 
   :key="fb.ID"
   class="dashboard-card bg-dark border border-secondary rounded-3 p-0 mb-4 shadow-sm"
 >
 <!-- ✅ En-tête cliquable -->
-<div 
+<div
   class="feedback-header clickable px-3 py-2 d-flex justify-content-between align-items-center"
   @click="toggleFeedbackDetails(fb.ID)"
   style="cursor: pointer;"
@@ -92,7 +94,7 @@
   </div>
 
   <!-- Flèche -->
-  <span 
+  <span
     class="feedback-toggle-icon ms-3"
     :class="{ rotated: openedFeedbackId === fb.ID }"
   >
@@ -107,8 +109,8 @@
   <div v-if="openedFeedbackId === fb.ID" class="p-4">
     <!-- contenu habituel ici -->
     <!-- 💬 Message complet -->
-    <div 
-      class="text-light mb-3 formatted-content" 
+    <div
+      class="text-light mb-3 formatted-content"
       v-html="nettoyerContenu(fb.contenuformate || fb.Contenu)"
     ></div>
 
@@ -122,7 +124,7 @@
 
     <!-- ✅ Marquer comme lu -->
 <div v-if="fb.Statut !== 'Validé'" class="form-check mt-2">
-      <input 
+      <input
         class="form-check-input"
         type="checkbox"
         :id="'feedback-' + fb.ID"
@@ -144,8 +146,8 @@
 
     <!-- 🧾 Réponses -->
     <div v-if="fb.reponses?.length" class="mt-4">
-      <div 
-        v-for="rep in fb.reponses" 
+      <div
+        v-for="rep in fb.reponses"
         :key="rep.ID"
         class="bg-light text-dark p-3 mb-2 rounded border"
       >
@@ -166,30 +168,30 @@
         placeholder="Répondre à ce feedback..."
       ></textarea>
       <div class="d-flex justify-content-end">
-        <button 
+        <button
           class="btn btn-sm btn-outline-success"
           @click="sendReply(fb.ID)"
           :disabled="!reponses[fb.ID] || sendingReply[fb.ID]"
         >
           {{ sendingReply[fb.ID] ? "Envoi..." : "Répondre" }}
         </button>
-    
+
       </div>
     </div>
   </div>
   </transition>
 </div>
 </div>
-  
+
   <div class="question-card mb-4 p-0">
   <!-- 🔽 En-tête cliquable -->
-  <div 
+  <div
     class="question-card-header p-4 d-flex justify-content-between align-items-center clickable"
     @click="showNewFeedbackForm = !showNewFeedbackForm"
     style="cursor: pointer;"
   >
     <h4 class="question-card-title mb-0">✍️ Poser une question au prof</h4>
-    <span 
+    <span
       class="feedback-toggle-icon"
       :class="{ rotated: showNewFeedbackForm }"
     >⯆</span>
@@ -209,7 +211,7 @@
       </div>
 
       <div class="d-flex justify-content-center mt-3">
-        <button 
+        <button
           class="btn btn-minimal-submit"
           @click="sendFeedback"
           :disabled="sendingFeedback || !nouveauFeedback.trim()"
@@ -229,21 +231,21 @@
         <div v-if="!feedbacks.length && !feedbackLoading" class="text-light text-center">
           Aucun feedback pour l’instant.
         </div>
-  
+
         <!-- ✍️ Nouveau feedback -->
-        
-  
+
+
       </div>
+    </div>
     </Layout>
   </template>
-  
-  
+
+
   <script>
   import Layout from "../views/Layout.vue";
   import { useAuthStore } from "@/stores/authStore";
 import { getProxyGetURL, getProxyPostURL } from "@/config/gas"
 
-  import { getValidToken } from "@/utils/api.ts";
   import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
@@ -251,7 +253,7 @@ import '@vueup/vue-quill/dist/vue-quill.snow.css';
   const FEEDBACK_TTL = 2 * 60 * 1000 // 2 minutes
 
   export default {
-    
+
     name: "Feedback",
   components: {
   Layout,
@@ -276,7 +278,7 @@ sendingFeedback: false,
         feedbackError: null,
         filterStatut: "ALL",
 
-    
+
      email: null,
 prenom: null,
 userData: {},
@@ -354,7 +356,8 @@ filteredFeedbacks() {
 },
 
 async mounted() {
-  const auth = useAuthStore()
+const auth = useAuthStore()
+if (!auth.jwt) return
 
   this.email = auth.user?.email || null
   this.prenom = auth.user?.prenom || null
@@ -375,7 +378,7 @@ async mounted() {
 
 ,
 
-  
+
     methods: {
   loadFeedbackFromCache() {
   if (!this.feedbackCacheKey) return false
@@ -416,13 +419,12 @@ saveFeedbackToCache(list) {
         async deleteFeedback(id) {
   if (!confirm("❗ Supprimer ce feedback ?")) return;
 
-  const jwt = await getValidToken();
-  if (!jwt) return;
+if (!auth.jwt) return
 
   const url = getProxyPostURL()
   const payload = {
     route: "deletefeedback",
-    jwt,
+    jwt: auth.jwt,
     feedback_id: Number(String(id).replace("ID", ""))
   };
 
@@ -537,15 +539,13 @@ nettoyerContenu(contenu) {
 
   this.sendingReply[feedbackId] = true;
 
-  const jwt = await getValidToken();
-  if (!jwt) return;
+if (!auth.jwt) return
 
   const url = getProxyPostURL()
-const auth = useAuthStore();
 
 const payload = {
   route: "replytofeedback",
-  jwt,
+  jwt: auth.jwt,
   feedback_id: Number(String(feedbackId).replace("ID", "")),
   contenu: texte,
 id_eleve: auth.user?.id || auth.user?.email,
@@ -594,12 +594,13 @@ async fetchFeedbacks({ silent = false } = {}) {
   if (!silent) this.feedbackLoading = true
   this.feedbackError = null
 
-  const jwt = await getValidToken()
-  if (!jwt) return
 
-  const url = getProxyGetURL(
-    `route=getfeedbacks&jwt=${encodeURIComponent(jwt)}`
-  )
+const auth = useAuthStore()
+if (!auth.jwt) return
+
+ const url = getProxyGetURL(
+  `route=getfeedbacks&jwt=${encodeURIComponent(auth.jwt)}`
+)
 
   try {
     const res = await fetch(url)
@@ -611,7 +612,6 @@ async fetchFeedbacks({ silent = false } = {}) {
     }
 
     const all = data.feedbacks
-    const auth = useAuthStore()
     const idEleveActuel = auth.user?.id || auth.user?.email
 
     const allIds = new Set(all.map(fb => String(fb.ID)))
@@ -670,8 +670,8 @@ if (
 
 
 ,
-  
-  
+
+
 
       formatDate(dateString) {
         if (!dateString) return "Date inconnue";
@@ -694,16 +694,15 @@ if (
 
   this.sendingFeedback = true;
   this.feedbackSentMessage = "";
+const auth = useAuthStore()
 
-  const jwt = await getValidToken();
-  if (!jwt) return;
+if (!auth.jwt) return
 
   const url = getProxyPostURL()
-const auth = useAuthStore();
 
 const payload = {
   route: "addfeedback",
-  jwt,
+jwt: auth.jwt,
   id_cours: "",
 id_eleve: auth.user?.id || auth.user?.email,
   prenom: auth.user?.prenom,
@@ -713,8 +712,8 @@ id_eleve: auth.user?.id || auth.user?.email,
 };
 
 
+console.log("📡 URL POST :", url);
 
-  console.log("📡 URL POST brute :", this.getProxyPostURL(this.routes.POST));
 console.log("🧾 Payload envoyé :", payload);
 
   try {
@@ -729,7 +728,7 @@ console.log("🧾 Payload envoyé :", payload);
     const result = await response.json();
     if (result.success) {
       this.feedbackSentMessage = "✅ Feedback envoyé !";
-      this.nouveauFeedback = "";
+ this.nouveauFeedback = "<p></p>";
       localStorage.removeItem(this.feedbackCacheKey)
 
       await this.fetchFeedbacks(); // Recharge les feedbacks
@@ -746,8 +745,8 @@ console.log("🧾 Payload envoyé :", payload);
 async markAsRead(feedbackId) {
   console.log("📤 feedbackId reçu dans front :", feedbackId, typeof feedbackId);
 
-  const jwt = await getValidToken();
-  if (!jwt) return;
+const auth = useAuthStore()
+if (!auth.jwt) return
 
   const cleanedId = typeof feedbackId === "string"
     ? Number(feedbackId.replace("ID", ""))
@@ -756,7 +755,7 @@ async markAsRead(feedbackId) {
   const url = getProxyPostURL()
   const payload = {
     route: "validatefeedback",
-    jwt,
+   jwt: auth.jwt,
     feedback_id: cleanedId
   };
 console.log("📦 Payload envoyé pour validatefeedback :", payload);
@@ -791,13 +790,13 @@ console.log("📦 Payload envoyé pour validatefeedback :", payload);
     }
   };
   </script>
-  
+
   <<style>
 /* ==================================================
    🍏 SBS DARK — iTunes / Apple Music Premium
    ================================================== */
 
-:root {
+.feedback-theme {
   /* Accent Apple-like */
   --accent: #ffd54a;
   --accent-soft: rgba(255,213,74,0.12);

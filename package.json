@@ -3,24 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "commonjs",
-"scripts": {
-  "dev": "vite",
-  "build": "run-p type-check build-only",
-  "build:prod": "cross-env NODE_ENV=production vite build",
-  "build-only": "vite build",
-  "preview": "vite preview",
-  "type-check": "vue-tsc --build"
-}
-,
+  "scripts": {
+    "dev": "vite",
+    "build": "run-p type-check build-only",
+    "build:prod": "cross-env NODE_ENV=production vite build",
+    "build-only": "vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --build"
+  },
   "dependencies": {
     "@amirafa/vue3-pull-to-refresh": "^1.2.13",
     "@capacitor/cli": "^7.1.0",
     "@capacitor/core": "^7.1.0",
     "@capacitor/ios": "^7.1.0",
     "@fortawesome/fontawesome-free": "^6.7.2",
-    "@stripe/stripe-js": "^8.6.0",
+    "@stripe/stripe-js": "^8.6.4",
     "@vueup/vue-quill": "^1.2.0",
     "@vueuse/core": "^12.8.2",
+    "@vueuse/head": "^2.0.0",
     "axios": "^1.7.9",
     "bootstrap": "^5.3.3",
     "bootstrap-icons": "^1.11.3",

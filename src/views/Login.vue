@@ -1,51 +1,76 @@
 <template>
   <Layout>
 
-<!-- 🟡 Phase 2 : SUCCESS -->
-<div v-if="loginSuccess" class="login-status-box">
-  <div class="login-status-title">Connexion réussie</div>
-  <div class="login-status-text">Redirection en cours…</div>
-  <span class="login-status-spinner"></span>
-</div>
+    <!-- 🟡 SUCCESS -->
+    <div v-if="loginSuccess" class="login-status-box">
+      <div class="login-status-title">Connexion réussie</div>
+      <div class="login-status-text">Redirection en cours…</div>
+      <span class="login-status-spinner"></span>
+    </div>
 
-<!-- 🟠 Phase 1 : PROCESSING -->
-<div v-else-if="loginProcessing" class="login-status-box">
-  <div class="login-status-title">Connexion</div>
-  <div class="login-status-text">Merci de patienter…</div>
-  <span class="login-status-spinner"></span>
-</div>
+    <!-- 🟠 PROCESSING -->
+    <div v-else-if="loginProcessing" class="login-status-box">
+      <div class="login-status-title">Connexion</div>
+      <div class="login-status-text">Merci de patienter…</div>
+      <span class="login-status-spinner"></span>
+    </div>
 
-    <!-- 🟢 FORMULAIRE -->
+    <!-- 🟢 FORM -->
     <div v-else class="container d-flex justify-content-center align-items-center mt-5">
       <div class="row justify-content-center w-200">
         <div class="w-100 mx-auto">
           <div class="card shadow">
 
-            <Form @submit="onSubmit" :validation-schema="schema" :initial-values="initialValues">
+            <Form
+              @submit="onSubmit"
+              :validation-schema="schema"
+              :initial-values="initialValues"
+            >
+
               <div class="mb-3">
                 <label for="email" class="form-label">Adresse e-mail</label>
-                <Field name="email" type="email" id="email" class="form-control" />
-                <ErrorMessage name="email" class="text-danger small"/>
+                <Field
+                  name="email"
+                  id="email"
+                  type="email"
+                  class="form-control"
+                  autocomplete="username"
+                />
+                <ErrorMessage name="email" class="text-danger small" />
               </div>
 
               <div class="mb-3">
                 <label for="password" class="form-label">Mot de passe</label>
-                <Field name="password" type="password" id="password" class="form-control" />
-                <ErrorMessage name="password" class="text-danger small"/>
+                <Field
+                  name="password"
+                  id="password"
+                  type="password"
+                  class="form-control"
+                  autocomplete="current-password"
+                />
+                <ErrorMessage name="password" class="text-danger small" />
               </div>
 
               <Field name="botField" type="hidden" />
 
               <button type="submit" class="btn btn-primary" :disabled="loading">
                 <span v-if="!loading">Se connecter</span>
-                <span v-else>Connexion en cours… <span class="spinner" /></span>
+                <span v-else>
+                  Connexion en cours…
+                  <span class="spinner" />
+                </span>
               </button>
 
               <div class="login-links mt-3">
-                <router-link to="/forgot-password" class="login-link">Mot de passe oublié ?</router-link>
+                <router-link to="/forgot-password" class="login-link">
+                  Mot de passe oublié ?
+                </router-link>
                 <span class="separator">|</span>
-                <router-link to="/register" class="login-link">S’inscrire</router-link>
+                <router-link to="/register" class="login-link">
+                  S’inscrire
+                </router-link>
               </div>
+
             </Form>
 
           </div>
@@ -58,7 +83,9 @@
 
 
 <script setup>
-import { Form, Field, ErrorMessage } from 'vee-validate'
+import { ref } from "vue"
+import { Form, Field, ErrorMessage } from "vee-validate"
+
 import { getDeviceId } from "@/utils/device.ts"
 import { getProxyPostURL } from "@/config/gas"
 import * as yup from 'yup'
@@ -66,21 +93,10 @@ import { useToast } from 'vue-toastification'
 import { useAuthStore } from '@/stores/authStore.js'
 import { jwtDecode } from 'jwt-decode'
 import Layout from '@/views/Layout.vue'
-import {
-  verifyIndexedDBSetup,
-  checkAndRestoreTokens,
-  restoreUserInfo,
-  isJwtExpired,
-  refreshToken
-} from '@/utils/api.ts'
-import { saveSessionData } from '@/utils/AuthDBManager'
-import { onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
-let loginStartTime = 0
-let hashStart = 0;
-let fetchStart = 0;
-const authStore = useAuthStore()
+
+
 
 const loginSuccess = ref(false)
 const loginProcessing = ref(false)
@@ -92,7 +108,6 @@ console.log("📱 deviceId envoyé au backend :", deviceId)
 
 
 const loading = ref(false)
-const postLoginLoading = ref(false)
 
 const auth = useAuthStore()
 
@@ -116,141 +131,105 @@ async function sha256(text) {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function onSubmit(values) {
-  loginStartTime = performance.now();
-  hashStart = performance.now();
-  authStore.isLoggingIn = true
-
-  // 🔥 Reset pour que la reconnexion déclenche le watcher splash
-
-  if (values.botField) {
-    toast.error("Erreur : bot détecté.");
-    return;
-  }
-
-  loginProcessing.value = true;
-  loading.value = true;
-  console.log("🟡 Début process de login : hachage mot de passe…");
+async function loginApi({ email, hashedPassword, deviceId }) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
 
   try {
-    // -------------------------
-    // 1) HASH PASSWORD
-    // -------------------------
-    const hashedPassword = await sha256(values.password);
-    console.log("🔐 Mot de passe haché :", hashedPassword);
+    const res = await fetch(getProxyPostURL(), {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        route: "login",
+        email,
+        password: hashedPassword,
+        device_id: deviceId,
+        device_info: navigator.userAgent
+      })
+    })
 
-    // -------------------------
-    // 2) APPEL BACKEND
-    // -------------------------
-const deviceInfo = navigator.userAgent;
-const apiURL = getProxyPostURL();
+    if (!res.ok) throw new Error("Erreur serveur")
 
-fetchStart = performance.now();
-const controller = new AbortController();
-setTimeout(() => controller.abort(), 8000);
+    let data
+    try {
+      data = await res.json()
+    } catch {
+      throw new Error("Réponse invalide")
+    }
 
-const response = await fetch(apiURL, {
-  method: "POST",
-  signal: controller.signal,
-  headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-  route: "login",
-  email: values.email,
-  password: hashedPassword,
+    if (!data.jwt) throw new Error(data.message || "Login échoué")
 
-  // 🔐 CANONIQUE
-  device_id: deviceId,
-  device_info: deviceInfo
-})
-
-
-});
-
-
-    const data = await response.json();
-    console.log(`⏱️ API Apps Script = ${(performance.now() - fetchStart).toFixed(0)} ms`);
-
-    if (!data.jwt) throw new Error(data?.message || "Échec de connexion");
-
-    // -------------------------
-    // 3) ANIMATION DE SUCCÈS
-    // -------------------------
-   loginProcessing.value = false;
-loginSuccess.value = true;
-
-// ⏱️ durée fixe → UX stable
-await new Promise(r => setTimeout(r, 400));
-
-
-    // -------------------------
-    // 4) DÉCODE JWT
-    // -------------------------
-let payload;
-try {
-  payload = jwtDecode(data.jwt);
-} catch {
-  throw new Error("JWT invalide");
+    return data
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
-    // Dashboard utilise localStorage pour la clé du cache
-    localStorage.setItem("email", payload.email || "");
-    localStorage.setItem("prenom", payload.prenom || "");
+async function onSubmit(values) {
+  auth.isLoggingIn = true
+  loginProcessing.value = true
+  loading.value = true
 
-    // -------------------------
-    // 5) STOCKAGE SESSION
-    // (⚠️ userData minimal → fusionné dans store, pas remplacement)
-    // -------------------------
+  try {
+    if (values.botField) throw new Error("Bot détecté")
+
+    const hashedPassword = await sha256(values.password)
+
+    const data = await loginApi({
+      email: values.email,
+      hashedPassword,
+      deviceId
+    })
+
+    loginProcessing.value = false
+    loginSuccess.value = true
+    await new Promise(r => setTimeout(r, 400))
+
+let payload
+try {
+  payload = jwtDecode(data.jwt)
+} catch {
+  throw new Error("JWT invalide")
+}
+
+    localStorage.setItem("email", payload.email || "")
+    localStorage.setItem("prenom", payload.prenom || "")
+
 auth.setSessionData({
   jwt: data.jwt,
   refreshToken: data.refreshToken,
   sessionId: data.sessionId,
-  userData: {
-    email: payload.email,
-    prenom: payload.prenom,
-    nom: payload.nom || "",
-    role: payload.role,
-    user_id: payload.user_id,        // ✅ clé correcte
-    prof_id: payload.prof_id || null,
-    abo: payload.abo || null,
-    avatar_url: payload.avatar_url || null,
-    statut: payload.statut || null,
-  }
-});
-console.log("💥 USER STORE (login):", JSON.parse(JSON.stringify(auth.user)))
-await auth.initAuth()
+  userData: data.user   // 👈 ICI
+})
 
+// 🔓 reset verrous post-login (CRITIQUE)
+auth.isLoggingOut = false
+auth.refreshFailed = false
+sessionStorage.removeItem("AUTH_ABORTED")
 
+    localStorage.removeItem("session_expired")
+    auth.fetchUserData().catch(() => {})
 
-
-
-
-
-// 🔄 hydration non bloquante
-auth.fetchUserData().catch(console.warn);
-
-// 🔀 REDIRECTION SELON RÔLE
-if (payload.role === "prof") {
-  router.replace("/dashboard-prof");
-} else {
-  router.replace("/dashboard");
-}
-
-
+    router.replace(
+payload.role === "prof" || payload.role === "admin"
+        ? "/dashboard-prof"
+        : "/dashboard"
+    )
 
   } catch (err) {
-    loginProcessing.value = false;
-    toast.error(err.message || "Erreur serveur.");
+    loginProcessing.value = false
+    toast.error(err.message || "Erreur serveur")
 
-    const card = document.querySelector(".card");
+    const card = document.querySelector(".card")
     if (card) {
-      card.classList.add("shake");
-      setTimeout(() => card.classList.remove("shake"), 500);
+      card.classList.add("shake")
+      setTimeout(() => card.classList.remove("shake"), 500)
     }
 
   } finally {
-    loading.value = false;
-    authStore.isLoggingIn = false
-
+    loading.value = false
+    auth.isLoggingIn = false
   }
 }
 

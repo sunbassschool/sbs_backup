@@ -30,13 +30,13 @@ base: mode === "production" ? "/app/" : "/",
       vue(),
 
       VitePWA({
-       registerType: "prompt",
+registerType: "autoUpdate",
         strategies: "injectManifest",
         srcDir: "src",
         filename: "sw-custom.js",
 
         injectManifest: {
-          globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+globPatterns: ["assets/**/*.{js,css,svg,png,woff2}"],
         },
 
         includeAssets: ["favicon.ico", "robots.txt"],

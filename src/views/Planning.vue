@@ -38,8 +38,8 @@
 
 
             <tbody>
-         <tr 
-  v-for="(row, index) in upcomingCourses" 
+         <tr
+  v-for="(row, index) in upcomingCourses"
   :key="index"
   class="clickable-row"
   @click="openCourseMenu(row)"
@@ -128,7 +128,7 @@
       placeholder="Ajouter un message…"
     ></textarea>
 
-    <button 
+    <button
   class="btn btn-warning w-100 mb-2"
   @click="submitReport"
   :disabled="isSendingReport"
@@ -148,7 +148,7 @@
 
 
 
-<div 
+<div
   v-if="toast.show"
   :class="[
     'sbs-toast',
@@ -305,11 +305,22 @@ const prenom = computed(() => auth.user?.prenom || "");
 const fetchPlanningData = async (forceApi = false) => {
   console.log("🚀 fetchPlanningData() appelé !");
 
-if (!email.value || !profId.value) {
-  console.log("⏳ Auth pas encore prête, retry dans 200ms...");
-  setTimeout(() => fetchPlanningData(forceApi), 200);
+// JWT absent → stop silencieux
+if (!auth.jwt) return;
+
+// Élève sans prof → état bloqué, PAS de retry
+if (auth.user?.role === "eleve" && !profId.value) {
+  console.log("🔒 Élève sans prof → pas de planning");
+  planningData.value = [];
+  loading.value = false;
   return;
 }
+
+// Auth pas encore prête (cas légitime) → retry TEMPORAIRE
+// Auth pas encore prête (prof/admin uniquement)
+
+
+
 
 
 const cacheKey = `planning_${email.value}_${profId.value}`;
@@ -386,7 +397,7 @@ const openCourseMenu = (course) => {
 
   selectedCourse.value = course;
   showCourseMenu.value = true;
-  
+
 };
 
 // 🔵 Ferme le menu principal

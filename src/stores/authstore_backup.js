@@ -5,6 +5,8 @@
 // ============================================================================
 
 import { defineStore } from "pinia";
+import { gasPost } from "@/config/gas"
+import { decodeJwt } from "@/utils/jwt"
 import { readKV, saveSessionData, getSessionIdFromDB } from "@/utils/AuthDBManager.ts";
 import {
   getValidToken,
@@ -125,7 +127,7 @@ toggleImpersonateStudent() {
 },
 
   // -----------------------------------------------------------------------
-    // FECH pour récupérer les infos sur 
+    // FECH pour récupérer les infos sur
     // les demandes de repport de cours
     // -----------------------------------------------------------------------
 async fetchPendingReports() {
@@ -153,29 +155,34 @@ async fetchPendingReports() {
     // 🔄 RESTORE SESSION
     // Récupère JWT + RefreshToken + SessionId depuis IndexedDB si existants
     // -----------------------------------------------------------------------
- async restoreSessionFromStorage() {
-  const jwtDB = await readKV("jwt");
-  const rtDB = await readKV("refreshToken");
-  const sidDB = await readKV("sessionId");
+async restoreSessionFromStorage() {
+  const jwtDB = await readKV("jwt")
+  const rtDB = await readKV("refreshToken")
+  const sidDB = await readKV("sessionId")
+  const userDB = await readKV("user")
 
-  // LS prioritaire
-  const jwt = localStorage.getItem("jwt") || jwtDB || null;
-  const rt = localStorage.getItem("refreshToken") || rtDB || null;
-  const sid = localStorage.getItem("sessionId") || sidDB || null;
+  const jwt = localStorage.getItem("jwt") || jwtDB || null
+  const rt = localStorage.getItem("refreshToken") || rtDB || null
+  const sid = localStorage.getItem("sessionId") || sidDB || null
+  const user = userDB || null
 
-  this.jwt = jwt;
-  this.refreshToken = rt;
-  this.sessionId = sid;
+  this.jwt = jwt
+  this.refreshToken = rt
+  this.sessionId = sid
 
-  // 🔥 Sauvegarde SEULEMENT si la session est complète
+  if (user) {
+    this.user = user
+  }
+
   if (jwt && rt && sid) {
     await saveSessionData({
       jwt,
       refreshToken: rt,
-      sessionId: sid
-    });
+      sessionId: sid,
+      user
+    })
   } else {
-    console.warn("⚠️ Session incomplète → pas d’écriture IndexedDB");
+    console.warn("⚠️ Session incomplète → pas d’écriture IndexedDB")
   }
 }
 ,
@@ -220,15 +227,15 @@ async setSessionData({ jwt, refreshToken, sessionId, userData = null }) {
   // 4) Mise à jour du store utilisateur (fusion locale)
   if (userData) {
     this.user = {
-      ...(this.user || {}), 
-      ...userData              
+      ...(this.user || {}),
+      ...userData
     };
   }
 
   // 5) 🔥 IMPORTANT :
   // Pendant le LOGIN → ne pas écraser userData complet dans IndexedDB.
   // On enregistre QUE la session. Le vrai user est chargé après par initAuth.
-  
+
    saveSessionData({
     jwt: this.jwt || "",
     refreshToken: this.refreshToken || "",
@@ -244,77 +251,65 @@ async setSessionData({ jwt, refreshToken, sessionId, userData = null }) {
     // 👤 CHARGEMENT USER (API)
     // Appelé au lancement ou lors d’un refresh.
     // -----------------------------------------------------------------------
+
 async fetchUserData() {
-  if (!this.jwt) return false;
+  if (!this.jwt) return false
 
-  const jwtString = typeof this.jwt === "string" ? this.jwt : this.jwt?.jwt;
-  if (!jwtString || typeof jwtString !== "string") {
-    console.warn("⛔ fetchUserData : JWT invalide :", this.jwt);
-    return false;
-  }
+  const jwtString =
+    typeof this.jwt === "string" ? this.jwt : this.jwt?.jwt
 
-  const routeID = "AKfycbwW3WpK0hYr15_YBsw4q4PGZwlFcIwr26ddrpjvk1B8Pc52RGT3rgUKheqRHBbbBeZGxA";
-  const rawUrl =
-    `https://script.google.com/macros/s/${routeID}/exec?route=recupinfosmembres&jwt=${encodeURIComponent(jwtString)}`;
-  const url = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(rawUrl)}`;
+  if (!jwtString) return false
 
-  this.authLoading = true;
+  this.authLoading = true
 
   try {
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await gasPost("recup_infos_membres", {
+      jwt: jwtString
+    })
 
-    if (!data?.email) {
-      console.warn("⚠️ fetchUserData : données invalides");
-      return false;
+    if (!res?.email) {
+      console.warn("⚠️ fetchUserData : données invalides", res)
+      return false
     }
 
-    // ================================
-    // 1️⃣ Extraction du JWT
-    // ================================
-    const payload = decodeJwt(jwtString);
+    // priorité JWT
+    const payload = decodeJwt(jwtString)
 
-    const jwtRole = payload?.role || null;
-    const jwtProfId = payload?.prof_id || null;
-
-    // ================================
-    // 2️⃣ Construire user proprement
-    // ================================
     const builtUser = {
-      ...data,
-      playlist_youtube: data.youtube || "",
-      espace_google_drive: data.drive || "",
-      objectif: data.objectif || "",
+      ...res,
 
-      // 🔥 priorité absolue au JWT
-      role: jwtRole ?? data.role ?? this.user?.role,
-      prof_id: jwtProfId ?? data.prof_id ?? this.user?.prof_id,
-    };
+      playlist_youtube: res.youtube || "",
+      espace_google_drive: res.drive || "",
+      objectif: res.objectif || "",
 
-    // ================================
-    // 3️⃣ Mise à jour du store
-    // ================================
-this.user = {
-  ...(this.user || {}),
-  ...builtUser
-};
+      role: payload?.role ?? res.role,
+      prof_id: payload?.prof_id ?? res.prof_id,
 
-    // ================================
-    // 4️⃣ Cache persisté
-    // ================================
-    localStorage.setItem(`userData_${data.email}`, JSON.stringify(builtUser));
+      privileges: Array.isArray(res.privileges)
+        ? res.privileges
+        : []
+    }
 
-    return true;
+    this.user = {
+      ...(this.user || {}),
+      ...builtUser
+    }
 
-  } catch (err) {
-    console.error("❌ fetchUserData error :", err);
-    return false;
+    localStorage.setItem(
+      `userData_${res.email}`,
+      JSON.stringify(builtUser)
+    )
+
+    return true
+
+  } catch (e) {
+    console.error("❌ fetchUserData", e)
+    return false
 
   } finally {
-    this.authLoading = false;
+    this.authLoading = false
   }
 }
-
 ,
 
     async refreshJwt(retry = false) {
@@ -325,7 +320,7 @@ this.user = {
   this.isRefreshingToken = true;
 
   try {
-    const result = await refreshToken(); 
+    const result = await refreshToken();
     // result = { jwt: "...", refreshToken: "...", sessionId: "..." }
 
     if (!result || (!result.jwt && typeof result !== "string")) {

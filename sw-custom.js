@@ -1,41 +1,56 @@
+/* =========================================================
+   🧠 SBS – Service Worker auto-update (mobile safe)
+   ========================================================= */
+
 import { precacheAndRoute } from "workbox-precaching";
 
+// Precaching Vite / Workbox
 precacheAndRoute(self.__WB_MANIFEST);
 
-function broadcast(type) {
-  self.clients.matchAll({ type: "window", includeUncontrolled: true })
-    .then(clients => {
-      clients.forEach(client => {
-        client.postMessage({ type });
+// =========================================================
+// 🚀 INSTALL → active immédiatement + reload app
+// =========================================================
+self.addEventListener("install", () => {
+  console.log("[SW] install → skipWaiting");
+  self.skipWaiting();
+
+  self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({ type: "SW_UPDATED" });
       });
     });
-}
-
-self.addEventListener("install", (event) => {
-  console.log("[SW] install");
-  event.waitUntil(
-    (async () => {
-      broadcast("sw-installing");
-    })()
-  );
 });
 
-
+// =========================================================
+// ✅ ACTIVATE → claim + reload sécurité
+// =========================================================
 self.addEventListener("activate", (event) => {
-  console.log("[SW] activate");
+  console.log("[SW] activate → claim");
+
   event.waitUntil(
-    self.clients.claim().then(() => {
-      broadcast("sw-activated");
+    self.clients.claim().then(async () => {
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      clients.forEach((client) => {
+        client.postMessage({ type: "SW_UPDATED" });
+      });
     })
   );
 });
 
+// =========================================================
+// 🔁 Compat (au cas où)
+// =========================================================
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     console.log("[SW] skipWaiting forcé");
     self.skipWaiting();
   }
 });
-console.log("SW VERSION", Date.now())
 
-// 07/01/2026
+console.log("[SW] SBS AUTO UPDATE READY", Date.now());

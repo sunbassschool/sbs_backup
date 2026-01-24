@@ -26,16 +26,30 @@
       <h3>👤 Choisir l’élève</h3>
       <p class="subtitle">Pour qui est ce planning </p>
 
-      <select v-model="prenomEleve">
-        <option value="">— sélectionner un élève —</option>
-        <option v-for="e in eleves" :key="e.email" :value="e.prenom">
-          {{ e.prenom }} {{ e.nom }}
-        </option>
-      </select>
+<!-- ÉTAT LOADING -->
+<div v-if="isLoadingEleves" class="select-loading">
+  ⏳ Chargement des élèves…
+</div>
 
-      <button class="next" :disabled="!prenomEleve" @click="goNextFromStep1">
-        Continuer →
-      </button>
+<!-- SELECT RÉEL -->
+<select v-else v-model="prenomEleve">
+  <option value="">— sélectionner un élève —</option>
+  <option v-for="e in eleves" :key="e.email" :value="e.prenom">
+    {{ e.prenom }} {{ e.nom }}
+  </option>
+</select>
+
+
+
+ <button
+  class="next"
+  :disabled="isLoadingEleves || !prenomEleve"
+     @click="goNextFromStep1">
+
+>
+  Continuer →
+</button>
+
     </template>
 
     <!-- STEP 2 -->
@@ -44,10 +58,14 @@
       <p class="subtitle">Quand et à quel rythme ?</p>
 
       <div class="grid">
-        <div>
-          <label>Date & heure du 1er cours</label>
-          <input v-model="dateCours" placeholder="02/02/2025 10:00:00" />
-        </div>
+    <div>
+  <label>Date & heure du 1er cours</label>
+  <input
+    type="datetime-local"
+    v-model="dateCours"
+  />
+</div>
+
 
         <div>
           <label>Fréquence</label>
@@ -74,40 +92,95 @@
       </div>
     </template>
 
-    <!-- STEP 3 -->
-    <template v-else>
-      <h3>⚙️ Finalisation</h3>
-      <p class="subtitle">Vérifie avant de générer</p>
+<!-- STEP 3 -->
+<template v-else>
+  <h3>📅 Finalisation</h3>
+  <p class="subtitle">Aperçu du planning</p>
 
-      <div class="summary">
-        <p v-if="prenomEleve"><strong>Élève :</strong> {{ prenomEleve }}</p>
+  <div class="planning-card">
+    <!-- HEADER -->
+    <div class="planning-header">
+    <div class="avatar">
+  <img
+    v-if="avatarUrl"
+    :src="avatarUrl"
+    alt="avatar élève"
+  />
+  <span v-else>👤</span>
+</div>
 
-        <p v-if="dateCours">
-          <strong>Planning :</strong>
-          {{ nbSeances }} séance(s) de {{ duree }} min,
-          {{ frequence }}, à partir du {{ dateCours }}
-        </p>
+      <div class="header-text">
 
-        <p v-else class="summary-placeholder">
-          Aucun planning défini pour l’instant.
-        </p>
+        <strong class="value">{{ prenomEleve || "—" }}</strong>
+      </div>
+    </div>
+
+    <!-- GRID -->
+    <div class="planning-grid" v-if="dateCours">
+      <div class="item">
+        <span class="icon">📌</span>
+        <div>
+          <span class="label">Séances : </span>
+          <strong>{{ nbSeances }}</strong>
+        </div>
       </div>
 
-      <label>Commentaire (optionnel)</label>
-      <textarea v-model="commentaire" />
-
-      <div class="actions">
-        <button class="ghost" @click="goToStep(2)">← Retour</button>
-        <button class="primary" :disabled="loading" @click="submit">
-          {{ loading ? "Création…" : "📅 Générer le planning" }}
-        </button>
+      <div class="item">
+        <span class="icon">⏱️</span>
+        <div>
+          <span class="label">Durée : </span>
+          <strong>{{ duree }} min</strong>
+        </div>
       </div>
-    </template>
+
+      <div class="item">
+<i class="bi bi-calendar-week"></i>
+        <div>
+          <span class="label">Fréquence : </span>
+          <strong>{{ frequence }}</strong>
+        </div>
+      </div>
+
+      <div class="item highlight">
+        <span class="icon">📆</span>
+        <div>
+          <span class="label">Début : </span>
+          <strong>{{ formatDate(dateCours) }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="empty">
+      Aucun planning défini
+    </div>
+
+    <!-- COMMENT -->
+    <div class="comment-block">
+      <textarea v-model="commentaire" placeholder="Note interne ou message à l’élève…" />
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+<div class="planning-footer">
+  <button class="ghost" @click="goToStep(2)">← Retour</button>
+<button
+  type="button"
+  class="primary"
+  :disabled="loading"
+  @click="submit"
+>
+  {{ loading ? "Création…" : "Générer le planning" }}
+</button>
+</div>
+
+</template>
+
+
 
   </div>
 </Transition>
 
-    
+
 
     </div></div>
   </Layout>
@@ -116,7 +189,7 @@
 <script setup>
   import Layout from "@/views/Layout.vue"
 
-import { ref, onMounted } from "vue"
+import { ref, onMounted,computed } from "vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getValidToken } from "@/utils/api.ts"
 import { useToast } from "vue-toastification"
@@ -128,11 +201,20 @@ const toast = useToast()
 const eleves = ref([])
 const step = ref(1)
 const router = useRouter()
+const isLoadingEleves = ref(false)
+const selectedEleve = computed(() =>
+  eleves.value.find(e => e.prenom === prenomEleve.value) || null
+)
 
 const goToStep = (n) => {
   step.value = n
 }
-
+// CACHE ==============
+//=====================
+let ELEVE_CACHE = null
+let ELEVE_CACHE_TS = 0
+const ELEVE_CACHE_TTL = 15 * 60 * 1000 // 5 min
+//===========================================
 
 const goNextFromStep1 = () => {
   step.value = 2
@@ -155,9 +237,22 @@ const nbSeances = ref(1)
 const duree = ref(60)
 const commentaire = ref("")
 const loading = ref(false)
+const avatarUrl = computed(() => selectedEleve.value?.avatar_url || null)
 
-onMounted(async () => {
+const formatDate = (iso) => {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  return d.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  })
+}
+const fetchEleves = async () => {
   try {
+    isLoadingEleves.value = true
+
     const jwt = await getValidToken()
     const res = await fetch(getProxyPostURL(), {
       method: "POST",
@@ -169,27 +264,55 @@ onMounted(async () => {
       })
     }).then(r => r.json())
 
-const normalize = (str = "") =>
-  str
-    .toString()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
+    const normalize = (str = "") =>
+      str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()
 
-eleves.value = (res.eleves || []).filter(e =>
-  normalize(e.statut).startsWith("inscrit")
-)
+    const filtered = (res.eleves || []).filter(e =>
+      normalize(e.statut).startsWith("inscrit")
+    )
+
+    eleves.value = filtered
+    sessionStorage.setItem("eleves_cache", JSON.stringify(filtered))
+    sessionStorage.setItem("eleves_cache_ts", Date.now())
   } catch {
     toast.error("Impossible de charger les élèves")
+  } finally {
+    isLoadingEleves.value = false
+  }
+}
+
+onMounted(() => {
+  const cached = sessionStorage.getItem("eleves_cache")
+  const cachedTs = sessionStorage.getItem("eleves_cache_ts")
+
+  // ✅ afficher instantanément si cache
+  if (cached) {
+    eleves.value = JSON.parse(cached)
+    isLoadingEleves.value = false
+  }
+
+  // 🔄 fetch SEULEMENT si cache absent ou expiré
+  if (!cachedTs || Date.now() - cachedTs > ELEVE_CACHE_TTL) {
+    fetchEleves()
   }
 })
+const onSubmit = (e) => {
+  const required = e.currentTarget.dataset.privilege
+
+  if (!auth.user?.privileges?.includes(required)) {
+    auth.showUpgradeCTA({ privilege: required })
+    return
+  }
+
+  submit() // logique métier
+}
 
 const submit = async () => {
 
 
 
 const missingFields = []
+
 
 if (!prenomEleve.value) missingFields.push("élève")
 if (!dateCours.value)   missingFields.push("date / heure")
@@ -236,16 +359,38 @@ values: [
     console.log("payload =", payload)
     console.groupEnd()
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).then(r => r.json())
+const response = await fetch(url, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload)
+})
+
+const text = await response.text()
+
+let res
+try {
+  res = JSON.parse(text)
+} catch {
+  // ⛔ Réponse HTML / proxy / refus
+  auth.showUpgradeCTA({ privilege: "pro" })
+  return
+}
+
+if (!res.success) {
+  if (res.error === "FORBIDDEN") {
+    auth.showUpgradeCTA({ privilege: "pro" })
+    return
+  }
+  throw res.error
+}
+
+
 
     if (!res.success) throw res.error
     toast.success("Planning créé avec succès")
 setTimeout(() => {
-  router.push({ name: "planning" })
+  router.push({ name: "cours",  query: { eleve: prenomEleve.value }
+ })
 }, 600)
 
 
@@ -253,6 +398,7 @@ setTimeout(() => {
     console.error("❌ createplanning failed", e)
     toast.error("Erreur lors de la création du planning")
   } finally {
+
     loading.value = false
   }
 }
@@ -260,6 +406,10 @@ setTimeout(() => {
 </script>
 
 <style>
+  select option {
+  color: white;
+}
+
     .page-offset {
     padding:0px 16px 0; /* 🔥 16px à gauche / droite */
 
@@ -377,6 +527,7 @@ button {
 button.primary {
   background: linear-gradient(135deg, #b02a37, #d9480f);
   color: white;
+  border-radius: 10px;
 }
 
 button.next {
@@ -408,5 +559,145 @@ button.ghost {
   opacity: 0;
 }
 
+/* finalisation */
+
+.planning-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.planning-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #222;
+}
+
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.header-text .label {
+  font-size: 12px;
+  opacity: .6;
+}
+
+.value {
+  font-size: 16px;
+}
+
+.planning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+}
+
+.item {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.item .icon {
+  font-size: 18px;
+}
+
+.item .label {
+  font-size: 12px;
+  opacity: .6;
+}
+
+.item strong {
+  font-size: 14px;
+}
+
+.item.highlight {
+  border: 1px solid #2e2e2e;
+}
+
+.comment-block {
+  margin-top: 1px;
+}
+
+.comment-block textarea {
+  width: 100%;
+  min-height: 90px;
+  margin-top: 6px;
+  background: #111;
+  color: #fff;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.empty {
+  text-align: center;
+  opacity: .5;
+  padding: 20px;
+}
+
+textarea {
+  width: 100%;
+  min-height: 90px;
+  background: #111;
+  color: #fff;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 10px;
+  resize: vertical;
+}
+
+textarea::placeholder {
+  color: #777;
+}
+
+textarea:focus {
+  outline: none;
+  background: #111;
+  border-color: #444;
+  box-shadow: none;
+}
+@media (max-width: 520px) {
+  .planning-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .item {
+    padding: 10px;
+  }
+
+  .planning-card {
+    padding: 14px;
+  }
+}
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 </style>

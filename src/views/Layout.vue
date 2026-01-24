@@ -98,6 +98,10 @@
           <i class="bi bi-speedometer2"></i>
           <span>Dashboard Prof</span>
         </router-link>
+                <router-link v-if="isAdmin" to="/admin" class="sidebar-link">
+          <i class="bi bi-speedometer2"></i>
+          <span>Admin</span>
+        </router-link>
 
 <router-link v-if="isProf" to="/dashboard-prof/offres" class="sidebar-link">
 <i class="bi bi-bag"></i>
@@ -180,7 +184,7 @@
         <!-- Titre / Slogan -->
         <div class="hero-text">
           <h1 class="hero-title">SunBassAPP</h1>
-          <p class="hero-subtitle">L'école de basse en ligne qui groove</p>
+          <p class="hero-subtitle">L'école de basse qui groove.</p>
         </div>
 
         <!-- Auth desktop -->
@@ -190,28 +194,53 @@
         </div>
 
         <!-- Abonnement + compte desktop -->
-        <div v-if="isLoggedIn && !isMobile" class="account-info-block">
+          <div v-if="isLoggedIn && !isMobile" class="account-info-block">
+            <!-- CTA PROF -->
+             <div class="cta_header">
+<router-link
+  v-if="!hasPrivileges && auth.user?.role === 'prof'"
+  :to="{ name: 'pricing' }"
+  class="sub-pill cta"
+>
+  Passer Premium
+</router-link>
+
+<!-- INFO ÉLÈVE -->
+<router-link
+  v-else-if="!hasPrivileges && auth.user && auth.user.role !== 'prof' && auth.user.role !== 'admin'"
+  to="/eleve/offres"
+  class="sub-pill cta"
+>
+  Non abonné
+</router-link>
+
+
+
+<!-- PREMIUM -->
+<span
+  v-else-if="hasPrivileges && isPro"
+  class="sub-pill pro"
+>
+  ⭐ Premium
+</span>
+
+<!-- ABONNÉ -->
+<span
+  v-else-if="hasPrivileges"
+  class="sub-pill subscriber"
+>
+  Abonné
+</span>
+
+</div>
           <router-link to="/moncompte" class="account-link">
             <i class="bi bi-person-gear"></i>
           </router-link>
 
-
-          <div v-if="user?.statut" class="subscription-badge mt-2">
-            <template v-if="isSubscribed">
-              <span class="badge bg-success">✅ Abonné</span>
-            </template>
-            <template v-else>
-   <router-link
-  :to="{ name: 'eleve-offres' }"
-  class="subscription-badge-link"
->
-  ❌ Non abonné
-</router-link>
-
-
-            </template>
-          </div>
         </div>
+
+
+
 
       </div>
     </header>
@@ -219,14 +248,20 @@
     <!-- ========================================================= -->
     <!-- 🟩 3) MENU MOBILE (overlay)                               -->
     <!-- ========================================================= -->
-    <div v-if="showMenu" class="menu-overlay" @click="toggleMenu">
+<div
+  v-if="showMenu"
+  class="menu-overlay"
+  @click="closeMenu"
+  @touchend="closeMenu"
+>
+</div>
 
-
-    </div>
-  <!-- ========================================================= -->
-     <!-- ========================================================= -->
-        <!-- ========================================================= -->
-    <div class="mobile-menu" :class="{ active: showMenu }">
+<div
+  class="mobile-menu"
+  :class="{ active: showMenu }"
+  @click.stop
+  @touchend.stop
+>
       <!-- 🔵 PUBLIC (non connecté) -->
 <template v-if="!isLoggedIn">
 
@@ -255,10 +290,37 @@
 
 
       <!-- Sub badge -->
-      <div v-if="user && isMobile" class="subscription-badge mt-2 mb-2" style="text-align:center;">
-        <span v-if="isSubscribed" class="badge bg-success">✅ Abonné</span>
-        <a v-else href="https://www.sunbassschool.com" target="_blank" class="badge bg-danger">❌ Non abonné</a>
-      </div>
+  <router-link
+  v-if="!hasPrivileges && auth.user?.role === 'prof'"
+  :to="{ name: 'pricing' }"
+  class="account-badge upgrade"
+>
+  Passer Premium
+</router-link>
+
+<router-link
+  v-else-if="!hasPrivileges && auth.user && auth.user.role !== 'prof' && auth.user.role !== 'admin'"
+  to="/eleve/offres"
+  class="sub-pill cta"
+>
+  Non abonné
+</router-link>
+
+
+<span
+  v-else-if="hasPrivileges && isPro"
+  class="account-badge premium"
+>
+  ⭐ Premium
+</span>
+
+<span
+  v-else-if="hasPrivileges"
+  class="account-badge subscriber"
+>
+  Abonné
+</span>
+
 
       <!-- Élève -->
       <router-link v-if="isEleve" to="/dashboard" class="nav-link">
@@ -329,6 +391,27 @@
     <!-- 🟨 4) CONTENU PRINCIPAL                                   -->
     <!-- ========================================================= -->
     <main class="page-content" :class="{ collapsed: isSidebarCollapsed }">
+
+
+<!-- A ACTIVER POUR DEBUG UNIQUEMENT
+      <pre
+  style="
+    background:#300;
+    color:#ff6b6b;
+    border:1px solid #ff3b3b;
+    padding:12px;
+    font-size:12px;
+    margin-top:12px;
+    border-radius:6px;
+    max-height:300px;
+    overflow:auto;
+  "
+>
+🔥 AUTH STORE DEBUG 🔥
+{{ JSON.stringify(auth.$state, null, 2) }}
+</pre>
+
+-->
       <slot></slot>
     </main>
 
@@ -378,6 +461,8 @@ export default {
        🧩 STORES & ROUTERS
     ------------------------------------------------------------------------ */
     const authStore = useAuthStore();
+    const auth = useAuthStore();
+
     const router = useRouter();
     const route = useRoute();
 
@@ -388,7 +473,14 @@ export default {
 
 // Normaliser le rôle en minuscule
 const role = computed(() => (authStore.user?.role || "").toLowerCase());
-
+const hasPrivileges = computed(() =>
+  Array.isArray(auth.user?.privileges) && auth.user.privileges.length > 0
+)
+;
+const isPro = computed(() =>
+  auth.user?.privileges?.includes("pro")
+)
+;
 const user = computed(() => authStore.user);
 
 const pendingCount = computed(() => authStore.pendingReportsCount);
@@ -414,6 +506,12 @@ const isEleve = computed(() =>
   isLoggedIn.value && !isAdmin.value && !isProf.value
 );
 
+/*=================CLOSE MENU MOBILE */
+const closeMenu = () => {
+  if (authStore.menuOpen) {
+    authStore.menuOpen = false
+  }
+};
 
 
 
@@ -537,9 +635,9 @@ const isEleve = computed(() =>
       window.addEventListener("resize", checkMobile);
       window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
-      // Touch gestures
-      window.addEventListener("touchstart", handleTouchStart, { passive: false });
-      window.addEventListener("touchend", handleTouchEnd);
+      // SWIPE MENU HUMBERGER
+// window.addEventListener("touchstart", handleTouchStart, { passive: false });
+// window.addEventListener("touchend", handleTouchEnd);
 
       // Auto-close mobile menu when tapping a link
       const mobileMenu = document.querySelector(".mobile-menu");
@@ -549,12 +647,7 @@ const isEleve = computed(() =>
         });
       }
 
-      // Hint swipe first time
-      if (isMobile.value && !localStorage.getItem("seenSwipeHint")) {
-        showSwipeHint.value = true;
-        localStorage.setItem("seenSwipeHint", "true");
-        setTimeout(() => (showSwipeHint.value = false), 5000);
-      }
+
 
       window.addEventListener("session-expired", e => {
         logoutMessage.value = e.detail;
@@ -568,8 +661,9 @@ const isEleve = computed(() =>
     onUnmounted(() => {
       window.removeEventListener("resize", checkMobile);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchend", handleTouchEnd);
+// window.removeEventListener("touchstart", handleTouchStart);
+// window.removeEventListener("touchend", handleTouchEnd);
+
     });
 
     /* ------------------------------------------------------------------------
@@ -611,6 +705,9 @@ const isEleve = computed(() =>
     return {
       /* State & store */
       authStore,
+      auth,
+      isPro,
+      hasPrivileges,
       user,
       isLoggedIn,
       isAdmin,
@@ -650,7 +747,11 @@ const isEleve = computed(() =>
       authLoading,
       isRefreshing,
       tookTooLong,
-      logoutMessage
+      logoutMessage,
+
+      /* close menu */
+        closeMenu,
+
     };
   }
 };
@@ -666,9 +767,24 @@ const isEleve = computed(() =>
 
 
 <style scoped>
+  .cta
+  {
+    border:none;
+  }
 html, body {
-  height: 100%;
   margin: 0;
+  padding: 0;
+  background: #000 !important;
+
+  /* 🔥 FIX SCROLL VERTICAL */
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+
+  /* Désactive le bounce scroll iOS */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
 }
 
 .page-content {
@@ -699,25 +815,29 @@ html, body {
 }
 
 /* ✅ Bouton pour afficher/masquer la sidebar */
+/* ✅ Bouton pour afficher/masquer la sidebar */
 .toggle-menu-btn {
-  position: absolute;
+  position: fixed; /* ✅ CHANGÉ de absolute à fixed */
   top: 50%;
-  left: auto;
+  left: 232px; /* ✅ Position initiale (250px sidebar - 18px pour centrage) */
   transform: translateY(-50%);
+
   width: 28px;
   height: 56px;
   background: #0b0c0f;
-  margin-left:207px;
   border: 1px solid #1f2933;
   border-radius: 999px;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fb923c; /* accent SBS */
+
+  color: #fb923c;
   cursor: pointer;
   z-index: 1200;
+
   box-shadow: 0 6px 20px rgba(0,0,0,0.4);
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: left 0.3s ease, background 0.15s ease, transform 0.15s ease; /* ✅ AJOUT transition sur left */
 }
 
 .toggle-menu-btn:hover {
@@ -1148,10 +1268,10 @@ html, body {
 /* ✅ CONTAINER PRINCIPAL */
 .layout-container {
   display: flex;
-  flex-direction: row; /* ✅ Garde uniquement celui-ci */
+  flex-direction: row;
   background-color: #000000;
-    height: 100vh;
-
+  height: 100vh;
+  height: 100dvh; /* iOS modern */
   width: 100%;
   max-width: 100vw;
   overflow: hidden;
@@ -1609,23 +1729,186 @@ margin-top:80px;
 
 .account-info-block {
   position: absolute;
-  top: 10px;
+  top: px;
   right: 5%;
   display: flex;
   flex-direction: row;
   margin-top:10px;
   align-items: center;
-  gap: 15px; /* espace entre les icônes */
+  gap: 20px; /* espace entre les icônes */
   z-index: 1051; /* plus haut que .hero-banner si nécessaire */
 }
+.account-info-block .cta_header {
+  margin-right: 50px;
+  margin-top:10px;
+}
+
 
 
 body.loading-active {
   overflow: hidden;
 }
 
+
+.account-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;          /* ✅ centrage horizontal */
+  padding: .45rem .9rem;
+  min-height: 28px;                 /* ✅ centrage vertical stable */
+  border-radius: 999px;             /* vrai CTA */
+  font-size: .75rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, transform .12s ease, box-shadow .12s ease;
+}
+
+/* CTA */
+/* =========================
+   ACCOUNT BADGE (GLOBAL)
+   ========================= */
+.account-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 30px;
+  padding: .45rem 1rem;
+
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  line-height: 1;
+
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+
+  transition:
+    background .18s ease,
+    color .18s ease,
+    box-shadow .18s ease,
+    transform .15s ease;
+}
+
+/* =========================
+   CTA — UPGRADE
+   ========================= */
+.account-badge.upgrade {
+  background: linear-gradient(135deg, #6f7cff, #8b95ff);
+  color: #fff;
+
+  box-shadow:
+    0 2px 6px rgba(120,130,255,.35),
+    0 0 0 0 rgba(120,130,255,.5);
+
+  animation: cta-pulse 2.6s ease-in-out infinite;
+}
+
+.account-badge.upgrade:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 14px rgba(120,130,255,.45),
+    0 0 0 4px rgba(120,130,255,.15);
+  animation-play-state: paused;
+}
+
+/* =========================
+   PREMIUM
+   ========================= */
+.account-badge.premium {
+  background: linear-gradient(135deg, #f5c542, #f0a500);
+  color: #1a1a1a;
+
+  box-shadow: 0 2px 6px rgba(245,197,66,.35);
+}
+
+/* =========================
+   ABONNÉ
+   ========================= */
+.account-badge.subscriber {
+  background: linear-gradient(135deg, #1f3a2e, #21483a);
+  color: #7fffd4;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(127,255,212,.35),
+    0 2px 6px rgba(0,0,0,.25);
+}
+
+/* =========================
+   MICRO ANIMATION
+   ========================= */
+@keyframes cta-pulse {
+  0% {
+    box-shadow:
+      0 2px 6px rgba(120,130,255,.35),
+      0 0 0 0 rgba(120,130,255,.4);
+  }
+  70% {
+    box-shadow:
+      0 2px 6px rgba(120,130,255,.35),
+      0 0 0 6px rgba(120,130,255,0);
+  }
+  100% {
+    box-shadow:
+      0 2px 6px rgba(120,130,255,.35),
+      0 0 0 0 rgba(120,130,255,0);
+  }
+}
+
+
+
+
 </style>
 <style>
+/* ===============================
+   🔒 GLOBAL SCROLL & ZOOM FIX
+   =============================== */
+html {
+  overflow: hidden;
+  height: 100%;
+  position: fixed;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: #000 !important;
+}
+
+body {
+  overflow: hidden;
+  height: 100%;
+  position: fixed;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+
+#app {
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh; /* iOS modern */
+  width: 100%;
+}
+
+
+/* 🔥 Réactive la sélection pour les inputs */
+input,
+textarea,
+select,
+[contenteditable] {
+  touch-action: auto;
+}
+
+
+/* ===============================
+   LOGOUT TOAST
+   =============================== */
 .logout-toast {
   position: fixed;
   top: 60px;
@@ -1639,6 +1922,10 @@ body.loading-active {
   z-index: 9999;
 }
 
+
+/* ===============================
+   OVERLAY
+   =============================== */
 .overlay {
   position: fixed;
   top: 0;
@@ -1655,9 +1942,6 @@ body.loading-active {
   font-size: 1.2rem;
 }
 
-
-
-
 .overlay .slow-warning {
   margin-top: 20px;
   color: #ffb3b3;
@@ -1670,6 +1954,10 @@ body.loading-active {
   50% { opacity: 0.4; }
 }
 
+
+/* ===============================
+   MOBILE ACCOUNT ACTIONS
+   =============================== */
 .mobile-account-actions {
   position: absolute;
   top: 5px;
@@ -1683,7 +1971,6 @@ body.loading-active {
 .mobile-account-actions i {
   font-size: 22px;
   color: rgb(255, 255, 255);
-
   transition: transform 0.2s ease;
 }
 
@@ -1697,9 +1984,19 @@ body.loading-active {
   border: none;
   cursor: pointer;
 }
+
+
+/* ===============================
+   PAGE CONTENT SPACING FIX
+   =============================== */
 .page-content > *:last-child {
   margin-bottom: 0 !important;
 }
+
+
+/* ===============================
+   SWIPE HINT
+   =============================== */
 .swipe-hint {
   position: fixed;
   top: 50%;
@@ -1709,7 +2006,7 @@ body.loading-active {
   color: white;
   animation: swipe-fade 2s ease-in-out infinite;
   z-index: 9999;
-  pointer-events: none; /* Ne gêne pas le swipe réel */
+  pointer-events: none;
 }
 
 @keyframes swipe-fade {
@@ -1726,16 +2023,26 @@ body.loading-active {
     opacity: 0.2;
   }
 }
+
+
+/* ===============================
+   PAGE CONTENT COLLAPSED
+   =============================== */
 .page-content.collapsed {
-  margin-left: 00px;
+  margin-left: 0px;
   width: calc(100% - 30px);
 }
+
+
+/* ===============================
+   ACCOUNT LINK
+   =============================== */
 .account-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top:10px;
-  margin-left:-50px;
+  margin-top: 10px;
+  margin-left: -50px;
   font-size: 2rem;
   color: white;
   text-decoration: none;
@@ -1747,14 +2054,24 @@ body.loading-active {
   color: #ca300a;
   transform: scale(1);
 }
+
+
+/* ===============================
+   HERO BANNER SAFE AREA
+   =============================== */
 .hero-banner {
   padding-top: env(safe-area-inset-top);
   background: #000 !important;
 }
 
+
+/* ===============================
+   SUBSCRIPTION BADGE
+   =============================== */
 .subscription-badge a {
   text-decoration: none;
 }
+
 .subscription-badge-link {
   display: inline-flex;
   align-items: center;
@@ -1767,14 +2084,72 @@ body.loading-active {
   text-decoration: none;
   font-size: 0.85rem;
 }
+
 .subscription-badge-link:hover {
   background: #bb2d3b;
 }
 
+
+/* ===============================
+   BODY LOADING STATE
+   =============================== */
+body.loading-active {
+  overflow: hidden;
+}
+
+
+/* ===============================
+   MOBILE OVERFLOW FIX
+   =============================== */
 @media (max-width: 1024px) {
   html, body, #app {
     overflow-x: hidden !important;
   }
 }
+.badge-premium {
+  background: linear-gradient(135deg, #f5c16c, #f0a500);
+  color: #000;
+}
+
+.badge-free {
+  background: #2c2c2c;
+  color: #bbb;
+}
+
+.badge-link {
+  text-decoration: none;
+}
+
+.sub-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: .35rem .7rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+/* CTA */
+.sub-pill.cta {
+  background: #2a2a2a;
+  color: #fff;
+  border: 1px solid #3a3a3a;
+  text-decoration: none;
+}
+.sub-pill.cta:hover { background: #333; }
+
+/* PREMIUM */
+.sub-pill.pro {
+  background: linear-gradient(135deg, #f5c542, #f0a500);
+  color: #1a1a1a;
+}
+
+/* ABONNÉ */
+.sub-pill.subscriber {
+  background: #1f3a2e;
+  color: #7fffd4;
+}
+
+
 
 </style>

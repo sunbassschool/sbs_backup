@@ -1,48 +1,94 @@
 <!DOCTYPE html>
 <html lang="fr" style="background-color: black;">
+  
   <head>
     <meta charset="UTF-8" />
-    <meta name="theme-color" content="#000000">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-    <meta 
-      name="viewport" 
-      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
-    >
+<title>Cours de basse en ligne – Formation personnalisée avec professeur | SunBassSchool</title>
+
+<meta
+  name="description"
+  content="Cours de basse en ligne en visioconférence avec professeur expérimenté. Formation personnalisée, suivi via application dédiée et accès immédiat. Idéal pour bassistes débutants, intermédiaires et avancés."
+/>
+
+
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+<!-- Open Graph -->
+<meta property="og:title" content="Cours de basse en ligne – Formation personnalisée | SunBassSchool" />
+<meta
+  property="og:description"
+  content="Apprends la basse en ligne avec un professeur dédié. Cours en visio, programme personnalisé, feedbacks et suivi via SunBassApp."
+/>
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://www.sunbassschool.com" />
+
+
+<!-- 🔥 VIEWPORT FIX : désactive zoom + scroll -->
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+ />
+
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 
    <style>
 /* ===============================
-   BASE
+   BASE — DÉSACTIVE SCROLL GLOBAL
    =============================== */
 html, body {
   margin: 0;
   padding: 0;
-  background: #000 !important;
-  height: 100%;
-  overflow: hidden; /* ✅ UNE SEULE SOURCE DE VÉRITÉ */
+  background: #000;
+  width: 100%;
+  
+  /* Désactive le bounce scroll iOS */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
 }
+
 
 /* ===============================
    APP (⚠️ CRITIQUE)
    =============================== */
 #app {
-  display: block !important;          /* 🔥 NE JAMAIS SUPPRIMER */
-  min-height: 100dvh;                 /* iOS safe */
+  display: block !important;
   background-color: black;
-    height: 100dvh;
-  overflow-y: auto;
-opacity: 0;
-    -webkit-overflow-scrolling: touch;
 
+  /* 🔥 FIX SCROLL VERTICAL */
+  width: 100%;
+  min-height: 100vh;
+  opacity: 1;
+  
+  /* Désactive le bounce scroll iOS */
+  overscroll-behavior: none;
 }
+
+/* iOS uniquement */
+@supports (-webkit-touch-callout: none) {
+  #app {
+    height: 100dvh;
+  }
+}
+
 * {
   box-sizing: border-box;
+  
+  /* 🔥 Désactive le zoom sur double-tap iOS */
+  touch-action: manipulation;
 }
 
 img, video, canvas {
   max-width: 100%;
 }
-.app-visible { opacity: 1; transition: opacity .15s ease; }
+
+.app-visible { 
+  opacity: 1; 
+  transition: opacity .15s ease; 
+}
 
 /* ===============================
    SPLASH SCREEN
@@ -51,13 +97,11 @@ img, video, canvas {
   position: fixed;
   inset: 0;
   background: black;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 9999;
 
-  opacity: 1;                         /* visible par défaut */
-  pointer-events: auto;
   transition: opacity 0.3s ease;
 }
 
@@ -81,6 +125,7 @@ img, video, canvas {
   opacity: 1;
   transform: scale(1);
 }
+
 /* ===============================
    FIX LARGEUR LAYOUT
    =============================== */
@@ -97,6 +142,54 @@ html, body, #app {
 }
 
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "À qui s’adressent les cours de basse en ligne ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Les cours de basse en ligne s’adressent aux bassistes débutants, intermédiaires et avancés ayant déjà une base musicale. Le format en visioconférence n’est pas adapté aux personnes n’ayant jamais pratiqué la musique."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Comment se déroulent les cours de basse en visio ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Les cours se déroulent en visioconférence, en individuel, avec un professeur dédié. Chaque séance dure une heure, à raison d’un cours par semaine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Que travaille-t-on pendant les cours de basse ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Les cours abordent la technique de basse, le groove, le rythme, l’harmonie et le travail de répertoire (rock, funk, jazz, etc.), selon le niveau et les objectifs de l’élève."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Y a-t-il un suivi entre les cours ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Oui. Après chaque cours, l’élève retrouve sur SunBassApp un feedback détaillé, les exercices à travailler, le replay du cours et toutes les ressources nécessaires pour progresser."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Les cours de basse en ligne sont-ils efficaces ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Oui. Grâce à un encadrement structuré, un programme personnalisé et des retours précis, les cours de basse en ligne permettent de progresser efficacement, même avec peu de temps disponible."
+      }
+    }
+  ]
+}
+</script>
 
   </head>
 
@@ -112,7 +205,7 @@ html, body, #app {
     </div>
 
     <div id="app"></div>
-    <script type="module" src="/src/init/mainLoader.ts"></script>
+<script type="module" src="src/init/mainLoader.ts"></script>
 
     <script>
 const splash = document.getElementById("loading-screen");
@@ -131,6 +224,3 @@ window.__HIDE_SPLASH__ = () => {
     </script>
   </body>
 </html>
-
-
-
