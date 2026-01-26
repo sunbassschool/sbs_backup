@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue"
+import { ref, watch, onBeforeUnmount } from "vue"
 import { loadStripe } from "@stripe/stripe-js"
 
 const props = defineProps<{
   clientSecret: string
-  mode: "payment" | "setup"   // payment = one_time, setup = subscription
+  mode: "payment" | "setup"
 }>()
 
 const emit = defineEmits<{
@@ -12,31 +12,44 @@ const emit = defineEmits<{
   (e: "error", message: string): void
 }>()
 
+const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLIC_KEY
+
 const stripe = ref<any>(null)
 const elements = ref<any>(null)
+const paymentElement = ref<any>(null)
 const loading = ref(false)
 const mounted = ref(false)
 
-const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLIC_KEY
+// ✅ AJOUTE ÇA
+const destroy = () => {
+  try {
+    paymentElement.value?.unmount?.()
+  } catch (e) {}
+  paymentElement.value = null
+  elements.value = null
+  stripe.value = null
+  mounted.value = false
+}
 
 const mountElement = async () => {
+  if (mounted.value) return
+  if (!props.clientSecret) return
+
+  mounted.value = true
+
   stripe.value = await loadStripe(STRIPE_PK)
   if (!stripe.value) {
     emit("error", "Stripe non initialisé")
     return
   }
 
-elements.value = stripe.value.elements({
-  clientSecret: props.clientSecret,
-  appearance: { theme: "night" }
+  elements.value = stripe.value.elements({
+    clientSecret: props.clientSecret,
+    appearance: { theme: "night" }
+  })
 
-})
-
-
-
-
-  const paymentElement = elements.value.create("payment")
-  paymentElement.mount("#payment-element")
+  paymentElement.value = elements.value.create("payment")
+  paymentElement.value.mount("#payment-element")
 }
 
 watch(
@@ -47,41 +60,62 @@ watch(
   { immediate: true }
 )
 
-
-watch(() => props.clientSecret, async (cs) => {
-  if (!cs || mounted.value) return
-})
-
 const confirm = async () => {
-  if (!stripe.value || !elements.value) return
+  if (loading.value) return
+  if (!stripe.value || !elements.value) {
+    emit("error", "Stripe non prêt")
+    return
+  }
+
   loading.value = true
 
   try {
     let res
+
     if (props.mode === "payment") {
       res = await stripe.value.confirmPayment({
         elements: elements.value,
         redirect: "if_required"
       })
     } else {
-      res = await stripe.value.confirmSetup({
-        elements: elements.value,
-        redirect: "if_required"
-      })
+res = await stripe.value.confirmSetup({
+  elements: elements.value,
+  redirect: "if_required",
+  confirmParams: {
+    return_url: `${window.location.origin}/thankyou?pending=1&email=${encodeURIComponent(resolvedEmail.value)}`
+  }
+})
+
+
     }
 
-    if (res.error) {
+    if (res?.error) {
       emit("error", res.error.message || "Paiement refusé")
-    } else {
-      emit("success", res)
+      return
     }
+
+    // ✅ ICI : on démonte Stripe AVANT d’émettre success
+    destroy()
+
+    emit("success", {
+      setupIntent: res.setupIntent ?? null,
+      paymentIntent: res.paymentIntent ?? null
+    })
+
   } catch (e: any) {
     emit("error", e.message || "Erreur paiement")
   } finally {
     loading.value = false
   }
 }
+
+// ✅ et ici aussi
+onBeforeUnmount(() => {
+  destroy()
+})
 </script>
+
+
 
 <template>
   <div class="payment-wrapper">

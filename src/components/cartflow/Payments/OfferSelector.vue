@@ -4,12 +4,19 @@ defineProps<{
     product_id: string
     product_name: string
     description?: string
+
     amount: number
     currency: string
+
+    pricing_mode: "subscription" | "one_time"
+
+    interval?: "month" | "year"
+    duration_days?: number
   }>
   modelValue: any
   loading?: boolean
 }>()
+
 
 
 defineEmits(["update:modelValue"])
@@ -29,10 +36,10 @@ defineEmits(["update:modelValue"])
       </div>
     </div>
 
-<!-- aucune offre -->
- <div v-else-if="offers.length === 0" class="empty-state">
-  Aucune offre disponible pour le moment
-</div>
+    <!-- AUCUNE OFFRE -->
+    <div v-else-if="offers.length === 0" class="empty-state">
+      Aucune offre disponible pour le moment
+    </div>
 
     <!-- OFFERS -->
     <div
@@ -49,8 +56,30 @@ defineEmits(["update:modelValue"])
       </div>
 
       <div class="offer-price">
-        <span class="amount">{{ (o.amount / 100).toFixed(2) }} €</span>
-        <span class="hint">accès immédiat</span>
+        <span class="amount">
+          {{ (o.amount / 100).toFixed(2) }} €
+          <span v-if="o.pricing_mode === 'subscription'">
+            /
+            {{ o.interval === 'year'
+              ? 'an'
+              : o.interval === 'month'
+                ? 'mois'
+                : '' }}
+          </span>
+        </span>
+
+        <span class="hint" v-if="o.pricing_mode === 'subscription'">
+          <template v-if="o.duration_days">
+            engagement {{ o.duration_days }} jours
+          </template>
+          <template v-else>
+            sans engagement
+          </template>
+        </span>
+
+        <span class="hint" v-else>
+          accès immédiat
+        </span>
       </div>
     </div>
 

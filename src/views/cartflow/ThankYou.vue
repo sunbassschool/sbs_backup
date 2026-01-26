@@ -1,47 +1,150 @@
 <script setup lang="ts">
-import { useRouter } from "vue-router"
+import { onMounted, onUnmounted, computed, ref } from "vue"
+import { useRouter, useRoute } from "vue-router"
+import { useAuthStore } from "@/stores/authStore"
+import { getProxyPostURL } from "@/config/gas"
 import MarketingHeader from "@/components/MarketingHeader.vue"
 
 const router = useRouter()
+const route = useRoute()
+const auth = useAuthStore()
+const emailFromUrl = computed(() =>
+  typeof route.query.email === "string" ? route.query.email : null
+)
+
+const isPending = computed(() => route.query.pending === "1")
+const showSupport = ref(false)
+
+let timer: any = null
+let tries = 0
+const MAX_TRIES = 12 // ~30s
+
+onMounted(() => {
+  // 🔧 fix landing-mode
+  document.documentElement.classList.remove("landing-mode")
+  document.body.classList.remove("landing-mode")
+
+  if (!isPending.value) return
+
+timer = setInterval(async () => {
+  tries++
+  console.log("⏳ POLL try", tries)
+
+const email = emailFromUrl.value
+if (!email) {
+  console.warn("⚠️ no email in URL yet")
+  return
+}
+  console.log("📧 email used =", email)
+
+  try {
+    const r = await fetch(getProxyPostURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        route: "checkAccessStatus",
+        email
+      })
+    })
+
+    console.log("🌐 HTTP status =", r.status)
+
+    const text = await r.text()
+    console.log("📦 RAW RESPONSE =", text)
+
+    let json
+    try {
+      json = JSON.parse(text)
+    } catch (e) {
+      console.error("❌ JSON PARSE FAILED")
+      return
+    }
+
+    console.log("📡 PARSED RESPONSE =", json)
+
+    if (json.ok && json.data?.active === true) {
+      console.log("✅ ACCESS ACTIVE → redirect")
+      clearInterval(timer)
+      router.replace("/thankyou")
+      return
+    }
+
+    console.log("⌛ still pending (active =", json.data?.active, ")")
+
+    if (tries >= MAX_TRIES) {
+      console.warn("⚠️ TIMEOUT pending")
+      clearInterval(timer)
+      showSupport.value = true
+    }
+
+  } catch (e) {
+    console.error("❌ FETCH ERROR", e)
+  }
+}, 2500)
+
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
 </script>
 
+
+
 <template>
-    <!-- HEADER MARKETING -->
-  <MarketingHeader />
-  <div class="thankyou-page">
-    <div class="thankyou-card">
-      <div class="icon">✅</div>
+   <MarketingHeader />
 
-      <h1 class="title">
-        Paiement <span class="accent">confirmé</span>
-      </h1>
+<div class="thankyou-page">
+  <div class="thankyou-card">
 
-<p class="lead">
-  Ton suivi pédagogique se fera directement sur
-  <a
-    href="https://sunbassschool.com/app"
-    target="_blank"
-    rel="noopener"
-    class="app-link"
-  >
-    l’application
-  </a>.
-  Consulte ton email pour activer ton accès et débuter le cursus.
+    <div class="icon">
+      {{ isPending ? "⏳" : "✅" }}
+    </div>
+
+    <h1 class="title">
+      {{ isPending ? "Activation en cours…" : "Paiement " }}
+      <span v-if="!isPending" class="accent">confirmé</span>
+    </h1>
+
+    <p class="lead" v-if="isPending">
+      Ton paiement est bien passé.  
+      Nous finalisons l’activation de ton accès (quelques secondes).
+    </p>
+
+    <p class="lead" v-else>
+      Ton suivi pédagogique se fera directement sur
+      <a
+        href="https://sunbassschool.com/app"
+        target="_blank"
+        rel="noopener"
+        class="app-link"
+      >
+        l’application
+      </a>.
+      Consulte ton email pour activer ton accès et débuter le cursus.
+    </p>
+
+    <div class="actions" v-if="!isPending">
+      <button class="btn btn-primary" @click="router.push('/')">
+        Accéder à mon espace
+      </button>
+    </div>
+
+    <p class="note" v-if="isPending">
+      Cette page se mettra à jour automatiquement.
+    </p>
+
+    <p class="note" v-else>
+      Un email de confirmation vient de t’être envoyé afin d'activer ton espace sur l'application
+    </p>
+<p class="note" v-if="showSupport">
+  L’activation prend plus de temps que prévu.  
+  Contacte le support si le problème persiste.
 </p>
 
-
-
-      <div class="actions">
-        <button class="btn btn-primary" @click="router.push('/')">
-          Accéder à mon espace
-        </button>
-      </div>
-
-      <p class="note">
-        Un email de confirmation vient de t’être envoyé afin d'activer ton espace sur l'application
-      </p>
-    </div>
   </div>
+</div>
+
 </template>
 
 <style scoped>

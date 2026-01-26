@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue"
+import { ref, computed, onMounted, onUnmounted, watch, nextTick} from "vue"
 import { useRoute,useRouter  } from "vue-router"
 import { useAuthStore } from "@/stores/authStore"
 import { getProxyPostURL } from "@/config/gas"
@@ -13,9 +13,13 @@ import OfferRecap from "@/components/cartflow/Payments/OfferRecap.vue"
 import PaymentElement from "@/components/cartflow/Payments/PaymentElement.vue"
 const route = useRoute()
 const router = useRouter()
+const paymentDone = ref(false)
+const isPending = computed(() => route.query.pending === "1")
+
 const funnel =
   (route.query.funnel as string) || "cours_basse"
 const auth = useAuthStore()
+const subscriptionInProgress = ref(false)
 
 useHead({
   title: 'Cours de basse en ligne avec professeur | SunBassSchool',
@@ -38,6 +42,14 @@ useHead({
 // =====================
 const offers = ref<any[]>([])
 const selectedOffer = ref<any | null>(null)
+const onContinue = () => {
+  requestAnimationFrame(() => {
+    document
+      .getElementById("recap")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" })
+  })
+}
+
 
 const guestEmail = ref("")
 const clientSecret = ref<string | null>(null)
@@ -46,21 +58,25 @@ const clientSecret = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+let hasRedirected = false
+
 const onStripeSuccess = async (res) => {
-  console.log("🟢 STRIPE SUCCESS CALLBACK", res)
+  console.group("🧪 STRIPE CALLBACK")
+  console.log("raw res =", res)
+  console.log("pricing_mode =", selectedOffer.value?.pricing_mode)
+  console.log("subscriptionInProgress =", subscriptionInProgress.value)
+  console.log("setupCustomerId =", setupCustomerId.value)
+  console.groupEnd()
 
   // ===============================
-  // 💸 ONE-TIME
+  // 💸 ONE-TIME (inchangé)
   // ===============================
   if (selectedOffer.value?.pricing_mode === "one_time") {
     const pi = res?.paymentIntent
-    if (!pi || pi.status !== "succeeded") {
-      console.error("❌ PAYMENT FAILED", pi)
-      return
-    }
+    if (pi?.status !== "succeeded") return
 
-    console.log("✅ ONE-TIME PAID", pi.id)
-    router.push("/thankyou")
+    // Stripe ne reload pas la page en one-time
+    router.replace("/thankyou")
     return
   }
 
@@ -68,33 +84,39 @@ const onStripeSuccess = async (res) => {
   // 🔁 SUBSCRIPTION
   // ===============================
   const si = res?.setupIntent
-  if (!si || !si.payment_method || !setupCustomerId.value) {
-    console.error("❌ SETUP FLOW INCOMPLET")
+  if (!si) return
+  if (si.status !== "succeeded") return
+  if (!setupCustomerId.value) return
+
+  // 🔒 APPEL BACKEND UNE SEULE FOIS
+  if (subscriptionInProgress.value) {
+    console.log("🟡 backend déjà appelé, skip")
     return
   }
 
-  const payload = {
-    route: "createSubscriptionFromSetup",
-    offer_code: selectedOffer.value.product_id,
-    email: resolvedEmail.value,
-    customer_id: setupCustomerId.value,
-    payment_method: si.payment_method
-  }
+  subscriptionInProgress.value = true
+  console.log("🔒 CALL BACKEND")
 
-  const r = await fetch(getProxyPostURL(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  })
-
-  const json = await r.json()
-  if (!json.ok) {
-    console.error("❌ SUB FAILED", json)
+  try {
+    await gasPost("createSubscriptionFromSetup", {
+      product_id: selectedOffer.value.product_id,
+      droit_code: selectedOffer.value.droit_code,
+      email: resolvedEmail.value,
+      customer_id: setupCustomerId.value,
+      setup_intent_id: si.id
+    })
+  } catch (err) {
+    console.error("❌ SUB CREATE FAILED", err)
+    subscriptionInProgress.value = false
     return
   }
 
-  router.push("/thankyou")
+  // ❌ AUCUNE REDIRECTION ICI
+  // 👉 Stripe va rediriger via return_url (confirmSetup)
 }
+
+
+
 
 
 
@@ -197,6 +219,11 @@ console.log("OFFERS", offers.value)
   }
 })
 
+watch(selectedOffer, () => {
+  nextTick(() => {
+    document.querySelector(".email-field input")?.focus()
+  })
+})
 
 onUnmounted(() => {
   document.documentElement.classList.remove("landing-mode")
@@ -207,6 +234,11 @@ onUnmounted(() => {
 // CREATE PAYMENT INTENT
 // =====================
 const createIntent = async () => {
+  if (isPending.value) {
+    console.warn("🛑 pending=1 → createIntent bloqué")
+    return
+  }
+
   console.log("🟢 [createIntent] called")
 
   error.value = null
@@ -222,39 +254,44 @@ const createIntent = async () => {
     const isSubscription =
       selectedOffer.value.pricing_mode === "subscription"
 
-    const payload = isSubscription
-      ? {
-          route: "createEmbeddedSetupIntent",
-          offer_code: selectedOffer.value.product_id,
-          email: resolvedEmail.value
-        }
-      : {
-          route: "createEmbeddedIntent",
-          offer_code: selectedOffer.value.product_id,
-          email: resolvedEmail.value
-        }
+    // ===============================
+    // 🔥 GAS POST (UNIFIÉ)
+    // ===============================
+    const json = await gasPost(
+      isSubscription
+        ? "createEmbeddedSetupIntent"
+        : "createEmbeddedIntent",
+      {
+        product_id: selectedOffer.value.product_id,
+        droit_code: selectedOffer.value.droit_code,
+        email: resolvedEmail.value
+      }
+    )
 
-    console.log("➡️ POST", payload.route, payload)
+    console.log("💳 GAS RESPONSE =", json)
 
-    const res = await fetch(getProxyPostURL(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    })
-
-    console.log("⬅️ HTTP status", res.status)
-
-    const json = await res.json()
-    console.log("💳 response", json)
-
-    if (!json.ok) {
+    if (!json?.ok) {
       throw new Error(json.error?.message || "Erreur paiement")
     }
 
-    clientSecret.value = json.data.client_secret
-    // 🔥 STOCKE LE CUSTOMER ICI
-setupCustomerId.value = json.data.customer_id
+    // ===============================
+    // 🔑 CLIENT SECRET
+    // ===============================
+    clientSecret.value =
+      json.data?.client_secret || json.client_secret || null
+
+    // ===============================
+    // 🔥 CUSTOMER ID (SUB ONLY)
+    // ===============================
+    setupCustomerId.value =
+      json.data?.customer_id || json.customer_id || null
+
+    if (!clientSecret.value) {
+      throw new Error("client_secret manquant")
+    }
+
     console.log("✅ clientSecret SET =", clientSecret.value)
+    console.log("✅ setupCustomerId SET =", setupCustomerId.value)
 
   } catch (e: any) {
     console.error("❌ createIntent failed", e)
@@ -263,6 +300,7 @@ setupCustomerId.value = json.data.customer_id
     loading.value = false
   }
 }
+
 
 
 
@@ -800,7 +838,7 @@ Ce que l'on pourrait travailler ensemble  </h2>
       <span class="step-label">2 · Email</span>
 
       <div class="email-field">
-        <label>Email</label>
+        <label>Email*</label>
         <input
           v-model="guestEmail"
           type="email"
@@ -810,15 +848,30 @@ Ce que l'on pourrait travailler ensemble  </h2>
       </div>
       <p class="email-note">
   *Aucun spam. Juste l’accès à tes cours et ton suivi.
+  
 </p>
+<button
+  class="btn btn-primary w-100 continue-btn"
+  :disabled="!guestEmail"
+  @click="onContinue"
+>
+  Continuer
+</button>
+
 
     </div>
 
+
+
+
+    
     <!-- ÉTAPE 3 : RÉCAP -->
-    <div
-      v-if="selectedOffer && resolvedEmail && !clientSecret"
-      class="checkout-step"
-    >
+<div
+  id="recap"
+  v-if="selectedOffer && resolvedEmail && !clientSecret"
+  class="checkout-step"
+>
+
       <span class="step-label">3 · Récapitulatif</span>
 
       <OfferRecap
@@ -837,10 +890,10 @@ Ce que l'on pourrait travailler ensemble  </h2>
     </div>
 
     <!-- STRIPE -->
- <PaymentElement
-  v-if="clientSecret"
+<PaymentElement
+  v-if="clientSecret && !paymentDone"
   :client-secret="clientSecret"
-  :mode="selectedOffer.pricing_mode === 'subscription' ? 'setup' : 'payment'"
+  mode="setup"
   @success="onStripeSuccess"
   @error="onStripeError"
 />
@@ -1020,12 +1073,22 @@ margin-top:25px;
 
 .email-field input {
   width: 100%;
-  background: #0b0b0f;
-  border: 1px solid var(--border);
+
+  background: #ffffff;              /* 🔥 clair */
+  color: #0b0b0f;                    /* 🔥 texte foncé */
+
+  border: 1px solid rgba(0,0,0,0.15);
   border-radius: 12px;
-  padding: 0.65rem 0.75rem;
-  color: var(--text);
+  padding: 0.7rem 0.8rem;
+
+  font-size: 0.9rem;
+  font-weight: 600;
+
+  box-shadow:
+    inset 0 1px 2px rgba(0,0,0,0.08);
 }
+
+
 
 .email-field input:focus {
   outline: none;
@@ -1114,14 +1177,16 @@ margin-top:25px;
 }
 
 .overlay-box p {
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.95rem;
+  color: #f8fafc; /* 🔥 texte clair */
 }
 
 .overlay-box span {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: #d1d5db; /* 🔥 gris clair lisible */
 }
+
 
 /* spinner réutilisable */
 .spinner {
@@ -1876,6 +1941,12 @@ margin-top:25px;
     flex-direction: column;
     gap: 0.8rem;
   }
+}
+
+.continue-btn {
+  margin-top: 0.8rem;
+  padding: 0.7rem 1rem;
+  font-size: 0.85rem;
 }
 
 </style>

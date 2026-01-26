@@ -21,6 +21,8 @@ onMounted(async () => {
   try {
     stripe.value = await loadStripe(STRIPE_PUBLIC_KEY)
     console.log("🟢 stripe loaded", stripe.value)
+    console.log(import.meta.env.VITE_STRIPE_PUBLIC_KEY)
+
 
     elements.value = stripe.value.elements({
       clientSecret: props.clientSecret,
