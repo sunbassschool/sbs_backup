@@ -22,12 +22,12 @@
     <!-- MENU -->
 <nav class="menu" @click.capture="closeIfMobile">
       <RouterLink to="/offerpage" class="link">Accueil</RouterLink>
-   <router-link
+<!--   <router-link
   to="/cours-de-basse-en-ligne"
   class="link"
 >
   Cours de basse en ligne
-</router-link>
+</router-link> -->
 
 
              <RouterLink to="/home" class="link">Teachy.io</RouterLink>

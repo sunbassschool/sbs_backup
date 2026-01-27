@@ -5,11 +5,13 @@ import { loadStripe } from "@stripe/stripe-js"
 const props = defineProps<{
   clientSecret: string
   mode: "payment" | "setup"
+  email: string
 }>()
 
 const emit = defineEmits<{
   (e: "success", payload: any): void
   (e: "error", message: string): void
+  (e: "paying", value: boolean): void
 }>()
 
 const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLIC_KEY
@@ -20,11 +22,10 @@ const paymentElement = ref<any>(null)
 const loading = ref(false)
 const mounted = ref(false)
 
-// ✅ AJOUTE ÇA
 const destroy = () => {
   try {
     paymentElement.value?.unmount?.()
-  } catch (e) {}
+  } catch {}
   paymentElement.value = null
   elements.value = null
   stripe.value = null
@@ -32,8 +33,7 @@ const destroy = () => {
 }
 
 const mountElement = async () => {
-  if (mounted.value) return
-  if (!props.clientSecret) return
+  if (mounted.value || !props.clientSecret) return
 
   mounted.value = true
 
@@ -54,9 +54,7 @@ const mountElement = async () => {
 
 watch(
   () => props.clientSecret,
-  (cs) => {
-    if (cs) mountElement()
-  },
+  (cs) => cs && mountElement(),
   { immediate: true }
 )
 
@@ -68,6 +66,7 @@ const confirm = async () => {
   }
 
   loading.value = true
+  emit("paying", true)
 
   try {
     let res
@@ -78,15 +77,10 @@ const confirm = async () => {
         redirect: "if_required"
       })
     } else {
-res = await stripe.value.confirmSetup({
-  elements: elements.value,
-  redirect: "if_required",
-  confirmParams: {
-    return_url: `${window.location.origin}/thankyou?pending=1&email=${encodeURIComponent(resolvedEmail.value)}`
-  }
-})
-
-
+      res = await stripe.value.confirmSetup({
+        elements: elements.value,
+        redirect: "if_required"
+      })
     }
 
     if (res?.error) {
@@ -94,7 +88,6 @@ res = await stripe.value.confirmSetup({
       return
     }
 
-    // ✅ ICI : on démonte Stripe AVANT d’émettre success
     destroy()
 
     emit("success", {
@@ -104,15 +97,10 @@ res = await stripe.value.confirmSetup({
 
   } catch (e: any) {
     emit("error", e.message || "Erreur paiement")
-  } finally {
-    loading.value = false
   }
 }
 
-// ✅ et ici aussi
-onBeforeUnmount(() => {
-  destroy()
-})
+onBeforeUnmount(destroy)
 </script>
 
 

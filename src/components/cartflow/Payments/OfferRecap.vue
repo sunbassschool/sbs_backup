@@ -49,7 +49,7 @@ defineEmits(["pay"])
       class="btn btn-primary w-100 mt-3"
       @click="$emit('pay')"
     >
-      Payer
+      continuer vers le paiement
     </button>
   </div>
 </template>

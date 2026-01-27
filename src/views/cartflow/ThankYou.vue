@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, ref } from "vue"
 import { useRouter, useRoute } from "vue-router"
-import { useAuthStore } from "@/stores/authStore"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getProxyPostURL } from "@/config/gas"
 import MarketingHeader from "@/components/MarketingHeader.vue"
 
@@ -107,22 +107,11 @@ onUnmounted(() => {
     </h1>
 
     <p class="lead" v-if="isPending">
-      Ton paiement est bien passé.  
+      Ton paiement est bien passé.
       Nous finalisons l’activation de ton accès (quelques secondes).
     </p>
 
-    <p class="lead" v-else>
-      Ton suivi pédagogique se fera directement sur
-      <a
-        href="https://sunbassschool.com/app"
-        target="_blank"
-        rel="noopener"
-        class="app-link"
-      >
-        l’application
-      </a>.
-      Consulte ton email pour activer ton accès et débuter le cursus.
-    </p>
+
 
     <div class="actions" v-if="!isPending">
       <button class="btn btn-primary" @click="router.push('/')">
@@ -134,11 +123,9 @@ onUnmounted(() => {
       Cette page se mettra à jour automatiquement.
     </p>
 
-    <p class="note" v-else>
-      Un email de confirmation vient de t’être envoyé afin d'activer ton espace sur l'application
-    </p>
+
 <p class="note" v-if="showSupport">
-  L’activation prend plus de temps que prévu.  
+  L’activation prend plus de temps que prévu.
   Contacte le support si le problème persiste.
 </p>
 

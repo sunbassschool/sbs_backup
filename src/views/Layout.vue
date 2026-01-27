@@ -252,15 +252,12 @@
   v-if="showMenu"
   class="menu-overlay"
   @click="closeMenu"
-  @touchend="closeMenu"
->
-</div>
+></div>
 
 <div
   class="mobile-menu"
   :class="{ active: showMenu }"
   @click.stop
-  @touchend.stop
 >
       <!-- 🔵 PUBLIC (non connecté) -->
 <template v-if="!isLoggedIn">
@@ -1477,7 +1474,9 @@ html, body {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 998;
+  z-index: 1200;
+    pointer-events: auto;
+
 }
 
 /* ✅ Menu latéral qui arrive depuis la gauche */
@@ -1495,7 +1494,7 @@ html, body {
   padding: 15px;
   box-shadow: 4px 0px 10px rgba(0, 0, 0, 0.2);
   transition: transform 0.3s ease-in-out; /* ✅ Animation fluide */
-  z-index: 999;
+  z-index: 1201;
 }
 .mobile-menu a:not(:last-child),
 .mobile-menu .nav-link:not(:last-child) {

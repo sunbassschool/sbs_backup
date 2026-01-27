@@ -1,7 +1,11 @@
 <script setup lang="ts">
+type StripeSuccessRes = {
+  paymentIntent?: any
+  setupIntent?: any
+}
 import { ref, computed, onMounted, onUnmounted, watch, nextTick} from "vue"
 import { useRoute,useRouter  } from "vue-router"
-import { useAuthStore } from "@/stores/authStore"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getProxyPostURL } from "@/config/gas"
 import MarketingHeader from "@/components/MarketingHeader.vue"
 import { useHead } from '@vueuse/head'
@@ -15,6 +19,11 @@ const route = useRoute()
 const router = useRouter()
 const paymentDone = ref(false)
 const isPending = computed(() => route.query.pending === "1")
+const checkoutLocked = ref(false)
+const onPayClick = () => {
+  preparing.value = true
+  createIntent()
+}
 
 const funnel =
   (route.query.funnel as string) || "cours_basse"
@@ -55,27 +64,34 @@ const guestEmail = ref("")
 const clientSecret = ref<string | null>(null)
   const setupCustomerId = ref<string | null>(null)
 
-const loading = ref(false)
+const preparing = ref(false) // création SetupIntent
+const paying = ref(false)    // paiement Stripe réel
 const error = ref<string | null>(null)
 
 let hasRedirected = false
-
-const onStripeSuccess = async (res) => {
+// =====================
+// COMPUTED
+// =====================
+const resolvedEmail = computed(() =>
+  auth.user?.email || guestEmail.value.trim()
+)
+const onStripeSuccess = async (res: StripeSuccessRes) => {
   console.group("🧪 STRIPE CALLBACK")
   console.log("raw res =", res)
   console.log("pricing_mode =", selectedOffer.value?.pricing_mode)
-  console.log("subscriptionInProgress =", subscriptionInProgress.value)
-  console.log("setupCustomerId =", setupCustomerId.value)
   console.groupEnd()
 
   // ===============================
-  // 💸 ONE-TIME (inchangé)
+  // 💸 ONE-TIME
   // ===============================
   if (selectedOffer.value?.pricing_mode === "one_time") {
     const pi = res?.paymentIntent
     if (pi?.status !== "succeeded") return
 
-    // Stripe ne reload pas la page en one-time
+    if (paymentDone.value) return
+    paymentDone.value = true
+
+    paying.value = false
     router.replace("/thankyou")
     return
   }
@@ -83,36 +99,27 @@ const onStripeSuccess = async (res) => {
   // ===============================
   // 🔁 SUBSCRIPTION
   // ===============================
+  if (paymentDone.value) return
+  paymentDone.value = true
+
   const si = res?.setupIntent
-  if (!si) return
-  if (si.status !== "succeeded") return
+  if (!si || si.status !== "succeeded") return
   if (!setupCustomerId.value) return
 
-  // 🔒 APPEL BACKEND UNE SEULE FOIS
-  if (subscriptionInProgress.value) {
-    console.log("🟡 backend déjà appelé, skip")
-    return
-  }
-
+  if (subscriptionInProgress.value) return
   subscriptionInProgress.value = true
-  console.log("🔒 CALL BACKEND")
 
-  try {
-    await gasPost("createSubscriptionFromSetup", {
-      product_id: selectedOffer.value.product_id,
-      droit_code: selectedOffer.value.droit_code,
-      email: resolvedEmail.value,
-      customer_id: setupCustomerId.value,
-      setup_intent_id: si.id
-    })
-  } catch (err) {
-    console.error("❌ SUB CREATE FAILED", err)
-    subscriptionInProgress.value = false
-    return
-  }
+  await gasPost("createSubscriptionFromSetup", {
+    product_id: selectedOffer.value.product_id,
+    droit_code: selectedOffer.value.droit_code,
+    email: resolvedEmail.value,
+    customer_id: setupCustomerId.value,
+    setup_intent_id: si.id
+  })
 
-  // ❌ AUCUNE REDIRECTION ICI
-  // 👉 Stripe va rediriger via return_url (confirmSetup)
+router.replace(
+  `/thankyou?pending=1&email=${encodeURIComponent(resolvedEmail.value)}`
+)
 }
 
 
@@ -125,13 +132,13 @@ const onStripeSuccess = async (res) => {
 
 
 
-const onStripeError = (msg) => {
+const onStripeError = (msg: string) => {
   error.value = msg
 }
 
 
 
-const onPaymentSuccess = (pi) => {
+const onPaymentSuccess = (pi: any) => {
   console.log("🎉 paiement confirmé", pi)
 
   // reset UI
@@ -142,12 +149,8 @@ const onPaymentSuccess = (pi) => {
 }
 const offersLoading = ref(true)
 
-// =====================
-// COMPUTED
-// =====================
-const resolvedEmail = computed(() =>
-  auth.user?.email || guestEmail.value.trim()
-)
+watch(paying, v => console.log("🧠 paying =", v))
+
 
 // =====================
 // FETCH OFFERS
@@ -158,10 +161,11 @@ document.body.classList.add("landing-mode")
 
   console.log("🟢 [OfferPage] mount → fetch offers")
 
-  const counter = document.querySelector(".stat-counter");
-  if (!counter) return;
+const counter = document.querySelector(".stat-counter") as HTMLElement | null
+if (!counter) return
 
-  const target = Number(counter.dataset.target);
+const target = Number(counter.dataset.target ?? 0)
+
   let current = 0;
 
   const duration = 1200; // ms
@@ -170,12 +174,11 @@ document.body.classList.add("landing-mode")
 
   const interval = setInterval(() => {
     current += increment;
-    if (current >= target) {
-      counter.textContent = target;
-      clearInterval(interval);
-    } else {
-      counter.textContent = Math.floor(current);
-    }
+if (current >= target) {
+  counter.textContent = String(target)
+} else {
+  counter.textContent = String(Math.floor(current))
+}
   }, duration / steps);
 
 
@@ -221,9 +224,14 @@ console.log("OFFERS", offers.value)
 
 watch(selectedOffer, () => {
   nextTick(() => {
-    document.querySelector(".email-field input")?.focus()
+    const input = document.querySelector(
+      ".email-field input"
+    ) as HTMLInputElement | null
+
+    input?.focus()
   })
 })
+
 
 onUnmounted(() => {
   document.documentElement.classList.remove("landing-mode")
@@ -234,29 +242,17 @@ onUnmounted(() => {
 // CREATE PAYMENT INTENT
 // =====================
 const createIntent = async () => {
-  if (isPending.value) {
-    console.warn("🛑 pending=1 → createIntent bloqué")
-    return
-  }
+  if (checkoutLocked.value) return
+  if (isPending.value) return
+  if (!selectedOffer.value || !resolvedEmail.value) return
 
-  console.log("🟢 [createIntent] called")
-
-  error.value = null
-
-  if (!selectedOffer.value || !resolvedEmail.value) {
-    console.warn("⛔ abort: missing offer or email")
-    return
-  }
-
-  loading.value = true
+  checkoutLocked.value = true
+  preparing.value = true   // 👈 FEEDBACK IMMÉDIAT
 
   try {
     const isSubscription =
       selectedOffer.value.pricing_mode === "subscription"
 
-    // ===============================
-    // 🔥 GAS POST (UNIFIÉ)
-    // ===============================
     const json = await gasPost(
       isSubscription
         ? "createEmbeddedSetupIntent"
@@ -268,38 +264,24 @@ const createIntent = async () => {
       }
     )
 
-    console.log("💳 GAS RESPONSE =", json)
+    if (!json?.ok) throw new Error("Erreur paiement")
 
-    if (!json?.ok) {
-      throw new Error(json.error?.message || "Erreur paiement")
-    }
-
-    // ===============================
-    // 🔑 CLIENT SECRET
-    // ===============================
     clientSecret.value =
-      json.data?.client_secret || json.client_secret || null
+      json.data?.client_secret || json.client_secret
 
-    // ===============================
-    // 🔥 CUSTOMER ID (SUB ONLY)
-    // ===============================
     setupCustomerId.value =
-      json.data?.customer_id || json.customer_id || null
-
-    if (!clientSecret.value) {
-      throw new Error("client_secret manquant")
-    }
-
-    console.log("✅ clientSecret SET =", clientSecret.value)
-    console.log("✅ setupCustomerId SET =", setupCustomerId.value)
+      json.data?.customer_id || json.customer_id
 
   } catch (e: any) {
-    console.error("❌ createIntent failed", e)
+    checkoutLocked.value = false
     error.value = e.message
   } finally {
-    loading.value = false
+    preparing.value = false // 👈 FIN “préparation”
   }
 }
+
+
+
 
 
 
@@ -848,7 +830,7 @@ Ce que l'on pourrait travailler ensemble  </h2>
       </div>
       <p class="email-note">
   *Aucun spam. Juste l’accès à tes cours et ton suivi.
-  
+
 </p>
 <button
   class="btn btn-primary w-100 continue-btn"
@@ -864,7 +846,7 @@ Ce que l'on pourrait travailler ensemble  </h2>
 
 
 
-    
+
     <!-- ÉTAPE 3 : RÉCAP -->
 <div
   id="recap"
@@ -876,27 +858,43 @@ Ce que l'on pourrait travailler ensemble  </h2>
 
       <OfferRecap
         :offer="selectedOffer"
+
         @pay="createIntent"
       />
     </div>
+    <!-- OVERLAY preparation paiment -->
+<div v-if="preparing" class="checkout-overlay">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p>Connexion au paiement sécurisé…</p>
+    <span>Merci de patienter</span>
+  </div>
+</div>
 
-    <!-- LOADING -->
-    <div v-if="loading" class="checkout-overlay">
-      <div class="overlay-box">
-        <div class="spinner"></div>
-        <p>Préparation du paiement sécurisé…</p>
-        <span>Merci de patienter quelques secondes</span>
-      </div>
-    </div>
+<!-- OVERLAY PAIEMENT -->
+<div v-if="paying" class="checkout-overlay">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p>Paiement en cours…</p>
+    <span>Ne fermez pas la page</span>
+  </div>
+</div>
+
+<Transition name="slide-fade">
 
     <!-- STRIPE -->
 <PaymentElement
   v-if="clientSecret && !paymentDone"
   :client-secret="clientSecret"
-  mode="setup"
+  :mode="selectedOffer?.pricing_mode === 'one_time' ? 'payment' : 'setup'"
+  :email="resolvedEmail"
+@paying="paying = $event"
   @success="onStripeSuccess"
   @error="onStripeError"
 />
+</Transition>
+
+
 
 
     <!-- FOOTER -->
@@ -1947,6 +1945,20 @@ margin-top:25px;
   margin-top: 0.8rem;
   padding: 0.7rem 1rem;
   font-size: 0.85rem;
+}
+
+/* transistion animation composant payment element stripe */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.35s ease;
+}
+.slide-fade-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.slide-fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 </style>

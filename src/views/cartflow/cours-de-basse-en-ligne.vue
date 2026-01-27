@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue"
 import { useRoute,useRouter  } from "vue-router"
-import { useAuthStore } from "@/stores/authStore"
+import { useAuthStore } from "@/stores/authStore.js"
 import { getProxyPostURL } from "@/config/gas"
 import MarketingHeader from "@/components/MarketingHeader.vue"
 
 import EmbeddedCheckout from "@/components/cartflow/Payments/EmbeddedCheckout.vue"
 import OfferSelector from "@/components/cartflow/Payments/OfferSelector.vue"
 import OfferRecap from "@/components/cartflow/Payments/OfferRecap.vue"
+import type { PaymentIntent } from "@stripe/stripe-js"
 
 
 import { useHead } from "@vueuse/head"
@@ -46,15 +47,11 @@ const guestEmail = ref("")
 const clientSecret = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
-const onPaymentSuccess = (pi) => {
-  console.log("🎉 paiement confirmé", pi)
-
-  // reset UI
+const onPaymentSuccess = (pi: PaymentIntent) => {
   clientSecret.value = null
-
-  // redirect
-  router.push("/thankyou") // ou page succès
+  router.push("/thankyou")
 }
+
 const offersLoading = ref(true)
 
 // =====================
