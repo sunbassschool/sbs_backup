@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     // ===================================================
     // 🌍 BASE URL
     // ===================================================
-    base: mode === "production" ? "/app/" : "/",
+base: "/",
 
     // ===================================================
     // 🌱 ENV
@@ -35,33 +35,38 @@ export default defineConfig(({ mode }) => {
         srcDir: "src",
         filename: "sw-custom.js",
 
-        injectManifest: {
-          globPatterns: ["assets/**/*.{js,css,svg,png,woff2}"],
-        },
+     injectManifest: {
+  globPatterns: [
+    "**/*.{js,css,html,svg,png,woff2}"
+  ],
+},
+
 
         includeAssets: ["favicon.ico", "robots.txt"],
 
-        manifest: {
-          name: "SunBassSchool",
-          short_name: "SunBass",
-          description: "Une école de musique pour bassistes",
-          theme_color: "#1a1a2e",
-          background_color: "#1a1a2e",
-          start_url: "/app/",
-          scope: "/app/",
-          icons: [
-            {
-              src: "logo-192x192.png",
-              sizes: "192x192",
-              type: "image/png",
-            },
-            {
-              src: "logo-512x512.png",
-              sizes: "512x512",
-              type: "image/png",
-            },
-          ],
-        },
+manifest: {
+  name: "SunBassSchool",
+  short_name: "SunBass",
+  description: "Une école de musique pour bassistes",
+  theme_color: "#000000",
+  background_color: "#000000",
+  start_url: "/",
+  scope: "/",
+  display: "standalone",
+  icons: [
+    {
+      src: "logo-192x192.png",
+      sizes: "192x192",
+      type: "image/png",
+    },
+    {
+      src: "logo-512x512.png",
+      sizes: "512x512",
+      type: "image/png",
+    },
+  ],
+},
+
       }),
     ],
 

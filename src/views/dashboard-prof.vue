@@ -4,17 +4,23 @@
       <div class="dashboard-wrapper">
 
         <!-- Loader -->
-        <div v-if="loading" class="loader-container">
-      <div class="dashboard-loader">
-  <div class="spinner"></div>
-<p class="loader-text">Chargement du tableau de bord…</p>
+<div v-if="!auth.user || !auth.user.prof_id" class="loader-container">
+  <div class="dashboard-loader">
+    <div class="spinner"></div>
+    <p class="loader-text">Chargement du tableau de bord…</p>
+  </div>
 </div>
 
-        </div>
+
+
 
         <!-- DASHBOARD PROF -->
         <div v-else class="fade-in">
-<OnboardingProfCard v-if="showOnboarding" />
+          <!-- ⏳ Skeleton onboarding -->
+<OnboardingSkeleton v-if="auth.authFullyReady && !auth.onboardingSnapshot.isReady" />
+<OnboardingProfCard v-else-if="auth.onboardingSnapshot.completed < 4" />
+
+
 <div class="prof-dashboard">
   <div class="dashboard-grid">
 
@@ -24,7 +30,11 @@
         <i class="bi bi-people"></i>
       </div>
       <div class="info">
-<h3>{{ totalEleves }}</h3>
+<h3>
+  <span v-if="loadingEleves" class="mini-loader"></span>
+  <span v-else>{{ totalEleves }}</span>
+</h3>
+
         <p>Élèves actifs</p>
       </div>
     </div>
@@ -35,7 +45,11 @@
         <i class="bi bi-calendar-event"></i>
       </div>
       <div class="info">
-        <h3>{{ upcomingCount }}</h3>
+    <h3>
+  <span v-if="loadingPlanning" class="mini-loader"></span>
+  <span v-else>{{ upcomingCount }}</span>
+</h3>
+
         <p>Cours à venir</p>
       </div>
     </div>
@@ -58,7 +72,10 @@
         <i class="bi bi-arrow-repeat"></i>
       </div>
       <div class="info">
-        <h3>{{ pendingReports }}</h3>
+<h3>
+  <span v-if="loadingReports" class="mini-loader"></span>
+  <span v-else>{{ pendingReports }}</span>
+</h3>
         <p>Demandes à traiter</p>
       </div>
     </div>
@@ -81,7 +98,11 @@
   </div>
 
   <div class="info">
-    <h3>{{ partitionsCount }}</h3>
+   <h3>
+  <span v-if="loadingPartitions" class="mini-loader"></span>
+  <span v-else>{{ partitionsCount }}</span>
+</h3>
+
     <p>
       Partitions<br />
       <small class="muted">Clique pour ajouter / gérer</small>
@@ -129,7 +150,7 @@ class="invite-box mt-3 fade-in">
   <span v-else>🔄 Générer un nouveau lien</span>
 </button>
 <div class="miseenpage">
-<StripeConnectCard v-if="!loading" />
+<StripeConnectCard v-if="auth.authReady" />
 </div>
 </div>
 
@@ -140,37 +161,64 @@ class="invite-box mt-3 fade-in">
       </div>
     </div>
   </Layout>
+
 </template>
 
 <script setup>
   import Layout from "@/views/Layout.vue";
 
-import { ref, onMounted,watch } from "vue";
+import { ref, onMounted,watch, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/authStore";
 import { useDashboardStore } from "@/stores/dashboardStore";
 import StripeConnectCard from "@/components/stripe/StripeConnectCard.vue"
 import { getProxyGetURL, getProxyPostURL } from "@/config/gas"
 import OnboardingProfCard from "@/components/onboarding/OnboardingProfCard.vue"
+import OnboardingSkeleton from "@/components/onboarding/OnboardingSkeleton.vue"
 
 // === STORES ===
 const auth = useAuthStore();
 const router = useRouter();
+const loadingEleves = ref(false)
+const loadingPlanning = ref(false)
+const loadingReports = ref(false)
+const loadingPartitions = ref(false)
+
 
 // === STATE ===
-const loading = ref(true);
 const profName = ref("");
 const profId = ref("");
 const inviteLink = ref("");
-const partitionsCount = ref(0);
+const totalEleves = ref(null)
+const upcomingCount = ref(null)
+const pendingReports = ref(null)
+const partitionsCount = ref(null)
 
-const totalEleves = ref(0);
-const upcomingCount = ref(0);
-const pendingReports = ref(0);
 const dashboardStore = useDashboardStore()
 
 const TTL = 15 * 60 * 1000 // 15 min
 const CACHE_PREFIX = "dashboard_cache_"
+const onboardingReady = computed(() => auth.onboardingReady === true)
+const showOnboarding = computed(() => {
+  const s = auth.onboardingSnapshot
+  if (!s) return false
+
+  return s.completed < 4
+})
+const shouldShowOnboarding = computed(() =>
+  auth.onboardingReady &&
+  auth.onboardingSnapshot.completed < 4
+)
+const onboardingStable = computed(() => {
+  const s = auth.onboardingSnapshot
+  if (!s) return false
+
+  // ⚠️ clé anti-flash
+  if (auth.stripe.status === "unknown") return false
+
+  return s.isReady === true
+})
+
 
 const regenLoading = ref(false);
 const data = ref(null)
@@ -178,46 +226,60 @@ const goToRevenus = () => {
   router.push("/prof/revenus")
 }
 
+const getCachedDashboard = () => {
+  try {
+    const raw = localStorage.getItem(
+      CACHE_PREFIX + auth.user?.prof_id
+    )
+    if (!raw) return null
+
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > TTL) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+const cachedDashboard = getCachedDashboard()
+
 // === ROUTES ===
-onMounted(() => {
-  console.group("🧪 [DASHBOARD] onboarding hydration")
 
-  watch(
-    () => auth.authReady,
-    (ready) => {
-      if (!ready) {
-        console.log("⏳ dashboard → auth pas prêt")
-        return
-      }
+watch(
+  () => auth.user?.prof_id,
+  async (pid) => {
+    if (!pid || !auth.jwt) return
 
-      console.log("auth.user =", auth.user)
-      console.log("typeof fetchHasOffer =", typeof auth.fetchHasOffer)
+    console.log("🟢 [DASHBOARD] jwt + prof_id OK → fetch")
 
-      if (auth.user?.prof_id && typeof auth.fetchHasOffer === "function") {
-        console.log("➡️ dashboard → call fetchHasOffer")
-        auth.fetchHasOffer()
-        auth.fetchHasSale()
-      } else {
-        console.warn("⛔ dashboard → fetchHasOffer NOT called", {
-          prof_id: auth.user?.prof_id,
-          fn: typeof auth.fetchHasOffer,
-        })
-      }
-    },
-    { immediate: true }
-  )
+    profId.value = pid
 
-  console.groupEnd()
-})
+    loadFromStore()
+    refreshDashboard()
+  },
+  { immediate: true }
+)
+
+
+
+
+
 
 // === HELPERS API ===
 
+function shouldShowLoader(value) {
+  return value === null || value === undefined
+}
 
 async function fetchPartitionsCount() {
+    if (!auth.jwt || !profId.value) return
+
   if (!auth.jwt || !profId.value) return
 
   console.group("🎵 FETCH PARTITIONS COUNT")
-
+  if (shouldShowLoader(partitionsCount.value)) {
+    loadingPartitions.value = true
+  }
   try {
     const payload = {
       route: "getuploadsbyprof",
@@ -269,6 +331,8 @@ async function fetchPartitionsCount() {
     console.error("❌ fetchPartitionsCount ERROR", e)
   } finally {
     console.groupEnd()
+        loadingPartitions.value = false
+
   }
 }
 
@@ -301,7 +365,9 @@ await Promise.all([
   fetchInviteLink(),
   fetchPartitionsCount()
 ])
-
+  if (!inviteLink.value) {
+    await fetchInviteLink()
+  }
 
 const payload = {
   totalEleves: totalEleves.value,
@@ -336,7 +402,11 @@ function loadFromStore() {
     pendingReports.value = data.pendingReports ?? 0
     inviteLink.value = data.inviteLink ?? ""
     partitionsCount.value = data.partitionsCount ?? 0
-
+    // ✅ cache = data déjà là → stop loaders
+    loadingEleves.value = false
+    loadingPlanning.value = false
+    loadingReports.value = false
+    loadingPartitions.value = false
     return true
   } catch {
     return false
@@ -348,6 +418,8 @@ function loadFromStore() {
 // 📌 API CALLS AVEC LOGS
 // ======================================================================
 async function copyLink() {
+    if (!auth.jwt || !profId.value) return
+
   if (!inviteLink.value) return
 
   try {
@@ -367,6 +439,8 @@ async function copyLink() {
 }
 
 async function fetchEleves() {
+    if (!auth.jwt || !profId.value) return
+
   const jwt = auth.jwt
   const prof_id = profId.value
 
@@ -383,7 +457,9 @@ async function fetchEleves() {
 
   const t0 = performance.now()
   console.group("👥 fetchEleves")
-
+  if (shouldShowLoader(totalEleves.value)) {
+    loadingEleves.value = true
+  }
   try {
     console.log("📤 payload", payload)
 
@@ -397,6 +473,8 @@ async function fetchEleves() {
     console.log("📡 status", res.status, `⏱ ${duration}ms`)
 
     const raw = await res.text()
+    if (auth.isLoggingOut) return
+
     console.log("📥 raw", raw)
 
     let data
@@ -424,11 +502,20 @@ async function fetchEleves() {
     console.error("💥 fetchEleves CRASH", err)
   } finally {
     console.groupEnd()
+        loadingEleves.value = false
+
   }
 }
 
 
 async function fetchPlanning() {
+    if (auth.isLoggingOut) return
+
+    if (!auth.jwt || !profId.value) return
+
+  if (shouldShowLoader(upcomingCount.value)) {
+    loadingPlanning.value = true
+  }
   try {
     const jwt = auth.jwt
     if (!jwt || !profId.value) return
@@ -445,6 +532,7 @@ async function fetchPlanning() {
 
 
     const data = await res.json()
+if (auth.isLoggingOut) return
 
     console.log("📨 fetchPlanning RESPONSE:", data)
 
@@ -452,11 +540,20 @@ async function fetchPlanning() {
       data?.planning?.filter(p => p.status === "A_VENIR")?.length || 0
   } catch (err) {
     console.error("❌ fetchPlanning ERROR:", err)
+  }finally {
+    loadingPlanning.value = false
   }
 }
 
 
 async function fetchReports() {
+  if (auth.isLoggingOut) return
+
+    if (!auth.jwt || !profId.value) return
+
+  if (shouldShowLoader(pendingReports.value)) {
+    loadingReports.value = true
+  }
   try {
     const jwt = localStorage.getItem("jwt");
 
@@ -470,6 +567,8 @@ async function fetchReports() {
   )
 )
 ;
+  if (auth.isLoggingOut) return
+
     const data = await res.json();
 
     console.log("📨 fetchReports RESPONSE:", data);
@@ -478,36 +577,36 @@ async function fetchReports() {
       data?.reports?.filter(r => r.status === "DEMANDE")?.length || 0;
   } catch (err) {
     console.error("❌ fetchReports ERROR:", err);
+  }finally {
+    loadingReports.value = false
   }
 }
 
 async function fetchInviteLink() {
-  try {
-    const jwt = localStorage.getItem("jwt");
+    if (!auth.jwt || !profId.value) return
 
-    console.log("📡 fetchInviteLink() start");
+  if (inviteLink.value) return // ⛔ déjà en mémoire
+
+  const jwt = auth.jwt
+  if (!jwt) return
 
   const res = await fetch(getProxyPostURL(), {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    route: "createInviteLink",
-    jwt
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      route: "createInviteLink",
+      jwt
+    })
   })
-})
-;
 
-    const data = await res.json();
+  const data = await res.json()
+  if (auth.isLoggingOut) return
 
-    console.log("📨 fetchInviteLink RESPONSE:", data);
-
-    if (data.success) {
-      inviteLink.value = data.invite_link;
-    }
-  } catch (err) {
-    console.error("❌ fetchInviteLink ERROR:", err);
+  if (data.success) {
+    inviteLink.value = data.invite_link
   }
 }
+
 
 async function regenInviteLink() {
   regenLoading.value = true
@@ -551,46 +650,11 @@ let isBootstrapping = false
 // ======================================================================
 // 🚀 INIT
 // ======================================================================
-const showOnboarding = ref(false)
-
-watch(
-  () => auth.onboardingSnapshot?.completed,
-  (completed) => {
-    if (typeof completed === "number" && completed < 4) {
-      showOnboarding.value = true
-    }
-  },
-  { immediate: true }
-)
 
 
-watch(
-  () => auth.onboardingReady,
-  async (ready) => {
-    if (!ready) return
-
-    loading.value = true
-
-    try {
-      profId.value = auth.user?.prof_id || ""
-      if (!profId.value) return
-
-const hasCache = loadFromStore()
-if (hasCache && isCacheFresh()) {
-  loading.value = false
-  return
-}
 
 
-      await refreshDashboard()
-    } catch (e) {
-      console.error("❌ dashboard init failed", e)
-    } finally {
-      loading.value = false
-    }
-  },
-  { immediate: true }
-)
+
 
 </script>
 
@@ -864,6 +928,19 @@ margin-top:10px;
 
 .highlight-invite {
   animation: pulseInvite 1.2s ease-out;
+}
+.mini-loader {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 </style>

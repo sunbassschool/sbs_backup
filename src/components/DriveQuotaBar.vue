@@ -10,6 +10,22 @@ const error = ref(false)
 
 const usedMb = ref(0)
 const maxMb = ref(0)
+const hasValidAuthQuota = computed(() => {
+  return Number.isFinite(auth.user?.quota_mb) && auth.user.quota_mb > 0
+})
+const resolvedMaxMb = computed(() => {
+  if (hasValidAuthQuota.value) {
+    return auth.user.quota_mb
+  }
+  return maxMb.value || 2000
+})
+const formatMb = (mb: number) => {
+  if (mb >= 1024) {
+    return `${(mb / 1024).toFixed(1)} Go`
+  }
+  return `${mb} Mo`
+}
+
 
 /* =======================
    Computed
@@ -30,15 +46,18 @@ const statusLabel = computed(() => {
   if (percent.value >= 90) return "Quota presque atteint"
   return null
 })
+const quotaSource = ref<"auth" | "api" | "default">("default")
 
 /* =======================
    API
 ======================= */
-async function fetchQuota({ force = false } = {}) {
+async function fetchQuota() {
   loading.value = true
   error.value = false
 
   try {
+    const needFallback = !hasValidAuthQuota.value
+
     const res = await gasPost("getDriveQuota", {
       jwt: auth.jwt,
       user_id: auth.user?.user_id
@@ -47,14 +66,31 @@ async function fetchQuota({ force = false } = {}) {
     if (!res?.success) throw new Error()
 
     usedMb.value = Number(res.used_mb) || 0
-    maxMb.value = Number(res.max_mb) || 0
+
+    if (needFallback) {
+      maxMb.value = Number(res.max_mb) || 2000
+    }
 
   } catch {
-    error.value = true
+    if (!hasValidAuthQuota.value) {
+      maxMb.value = 2000
+    }
   } finally {
     loading.value = false
+
+   console.log("📦 [DriveQuota] resolved", {
+  auth_quota: auth.user?.quota_mb,
+  usedMb: usedMb.value,
+  maxMb_api: maxMb.value,
+  resolved: resolvedMaxMb.value,
+  privileges: auth.user?.privileges
+})
+
   }
 }
+
+
+
 
 defineExpose({ refreshQuota: fetchQuota })
 onMounted(fetchQuota)
@@ -76,7 +112,7 @@ onMounted(fetchQuota)
       <div class="d-flex justify-content-between align-items-center mb-1">
         <span class="small text-muted">Stockage utilisé</span>
    <strong class="small">
-  {{ usedMb }} Mo / {{ maxMb }} Mo · {{ percent }}%
+{{ formatMb(usedMb) }} / {{ formatMb(resolvedMaxMb) }} · {{ percent }}%
 </strong>
 
       </div>

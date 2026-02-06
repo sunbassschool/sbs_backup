@@ -1,56 +1,30 @@
-/* =========================================================
-   🧠 SBS – Service Worker auto-update (mobile safe)
-   ========================================================= */
+import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching"
+import { registerRoute } from "workbox-routing"
+import { NetworkFirst, CacheFirst } from "workbox-strategies"
 
-import { precacheAndRoute } from "workbox-precaching";
+self.skipWaiting()
+self.clients.claim()
 
-// Precaching Vite / Workbox
-precacheAndRoute(self.__WB_MANIFEST);
+precacheAndRoute(self.__WB_MANIFEST)
 
-// =========================================================
-// 🚀 INSTALL → active immédiatement + reload app
-// =========================================================
-self.addEventListener("install", () => {
-  console.log("[SW] install → skipWaiting");
-  self.skipWaiting();
-
-  self.clients
-    .matchAll({ type: "window", includeUncontrolled: true })
-    .then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: "SW_UPDATED" });
-      });
-    });
-});
-
-// =========================================================
-// ✅ ACTIVATE → claim + reload sécurité
-// =========================================================
-self.addEventListener("activate", (event) => {
-  console.log("[SW] activate → claim");
-
-  event.waitUntil(
-    self.clients.claim().then(async () => {
-      const clients = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-
-      clients.forEach((client) => {
-        client.postMessage({ type: "SW_UPDATED" });
-      });
-    })
-  );
-});
-
-// =========================================================
-// 🔁 Compat (au cas où)
-// =========================================================
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") {
-    console.log("[SW] skipWaiting forcé");
-    self.skipWaiting();
+// SPA navigation avec fallback offline → index.html
+registerRoute(
+  ({ request }) => request.mode === "navigate",
+  async ({ event }) => {
+    try {
+      return await new NetworkFirst({
+        cacheName: "pages",
+        networkTimeoutSeconds: 3,
+      }).handle({ event })
+    } catch {
+      return await createHandlerBoundToURL("/index.html")({ event })
+    }
   }
-});
+)
 
-console.log("[SW] SBS AUTO UPDATE READY", Date.now());
+// assets → cache first
+registerRoute(
+  ({ request }) =>
+    ["style", "script", "image", "font"].includes(request.destination),
+  new CacheFirst({ cacheName: "assets" })
+)

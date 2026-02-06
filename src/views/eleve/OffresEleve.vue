@@ -250,6 +250,8 @@ const fetchOffersNetwork = async (profId) => {
         name: p.product_name,
         description: p.description,
         category: p.category,
+            droit_code: p.droit_code,   // ✅ ICI
+
         prices: []
       }))
 
@@ -339,6 +341,11 @@ const pay = async (price, product) => {
       return
     }
 
+       // 🔒 GUARD MÉTIER (ICI)
+    if (!product?.droit_code) {
+      console.error("❌ droit_code manquant", product)
+      return
+    }
 const route =
   price.mode === "subscription"
     ? "createcheckoutsessionmultiprofsubscription"
@@ -347,7 +354,10 @@ const route =
 const payload = {
   route,
   prof_id: profId,
-  eleve_email: eleveEmail
+  eleve_email: eleveEmail,
+    droit_code: product.droit_code   // ✅ OBLIGATOIRE
+
+
 }
 
 if (price.mode === "subscription") {
@@ -360,7 +370,6 @@ if (price.mode === "one_time") {
   // 💳 ONE-TIME
   payload.product_id = price.product_id
   payload.price_id = price.price_id
-  payload.price_amount_cents = price.amount
 }
 
 

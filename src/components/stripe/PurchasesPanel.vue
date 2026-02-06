@@ -8,40 +8,37 @@
       <h2 class="section-title">Mon abonnement</h2>
 
       <!-- Loading -->
-<div v-if="loading && !abonnement">
+<div v-if="!ready">
         <div class="skeleton" />
       </div>
 
       <!-- Abonnement -->
-      <div v-else-if="abonnement" class="item">
-        <div class="item-main">
-          <h3>{{ abonnement.product?.name || "Abonnement" }}</h3>
+<div v-else-if="abonnement" class="item abonnement-card">
+  <div class="item-main">
+    <h3>{{ abonnement.product_name || "Abonnement" }}</h3>
 
-          <p v-if="abonnement.product?.description" class="desc">
-            {{ abonnement.product.description }}
-          </p>
+    <p class="desc">
+      Montant : {{ abonnement["Montant (€)"] }} €
+    </p>
+  </div>
 
-          <p class="desc">
-            Montant : {{ abonnement.amount }} €
-          </p>
-        </div>
+  <div class="item-meta">
+    <span class="badge ok">Abonnement</span>
+    <span>
+      payé le {{ formatDate(abonnement.date_paiement) }}
+    </span>
+  </div>
 
-        <div class="item-meta">
-          <span class="badge ok">Abonnement</span>
-          <span>
-            payé le {{ formatDate(abonnement.date_paiement) }}
-          </span>
-        </div>
+  <a
+    v-if="abonnement.facture_url"
+    :href="abonnement.facture_url"
+    target="_blank"
+    class="link"
+  >
+    Voir la facture →
+  </a>
+</div>
 
-        <a
-          v-if="abonnement.invoice_url"
-          :href="abonnement.invoice_url"
-          target="_blank"
-          class="link"
-        >
-          Voir la facture →
-        </a>
-      </div>
 
       <!-- Aucun abonnement -->
       <p v-else class="muted">Aucun abonnement</p>
@@ -60,30 +57,52 @@
   <transition name="accordion">
     <div v-if="achatsOpen">
       <!-- Loading -->
-      <div v-if="loading && !achats.length">
+<div v-if="!ready">
         <div class="skeleton" />
         <div class="skeleton" />
       </div>
 
       <!-- Liste achats -->
-      <div v-else-if="achats.length">
-        <div
-          v-for="a in achats"
-          :key="a.session_id"
-          class="item clickable"
-          @click.stop="openDrawer(a)"
-        >
-          <div class="item-main">
-            <h3>{{ a.product?.name || "Produit" }}</h3>
-          </div>
+ <div v-else-if="achats.length" class="purchases-list">
+  <div
+    v-for="a in achats"
+    :key="a.session_id"
+    class="purchase-card"
+    @click.stop="openDrawer(a)"
+  >
+    <!-- LEFT -->
+    <div class="purchase-main">
+      <h3 class="title">
+        {{ a["Nom du produit"] || "Produit" }}
+      </h3>
 
-          <div class="item-meta">
-            <span>
-              acheté le {{ formatDate(a.date_paiement) }}
-            </span>
-          </div>
-        </div>
+      <div class="meta">
+        <span class="date">
+          {{ formatDate(a.date_paiement) }}
+        </span>
+        <span class="amount">
+          {{ a["Montant (€)"] }} €
+        </span>
       </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="purchase-actions">
+      <a
+        v-if="a['Facture PDF']"
+        :href="a['Facture PDF']"
+        target="_blank"
+        class="invoice-link"
+        @click.stop
+      >
+        Facture
+      </a>
+
+      <span class="chevron">›</span>
+    </div>
+  </div>
+</div>
+
 
       <p v-else class="muted">Aucun achat</p>
     </div>
@@ -113,14 +132,18 @@ import ProductDrawer from "@/components/stripe/ProductDrawer.vue"
 const auth = useAuthStore()
 const proxyUrl = getProxyPostURL()
 const activeProduct = ref(null)
-const achatsOpen = ref(false)
+const achatsOpen = ref(true)
+const ready = ref(false)
 
 const abonnement = ref(null)
 const achats = ref([])
 const loading = ref(false)
 
-const formatDate = d =>
-  new Date(d).toLocaleDateString("fr-FR")
+const formatDate = d => {
+  const date = d instanceof Date ? d : new Date(d)
+  return isNaN(date.getTime()) ? "—" : date.toLocaleDateString("fr-FR")
+}
+
 const CACHE_KEY = computed(() =>
   auth.user
     ? `purchases_${auth.user.prof_id}_${auth.user.email}`
@@ -136,9 +159,25 @@ function getCache() {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY.value)
     if (!raw) return null
+
     const { data, ts } = JSON.parse(raw)
     if (Date.now() - ts > CACHE_TTL) return null
-    return data
+
+    return {
+      abonnement: data.abonnement
+        ? {
+            ...data.abonnement,
+            date_paiement: parseDateSafe(data.abonnement.date_paiement)
+          }
+        : null,
+
+      achats: Array.isArray(data.achats)
+        ? data.achats.map(a => ({
+            ...a,
+            date_paiement: parseDateSafe(a.date_paiement)
+          }))
+        : []
+    }
   } catch {
     return null
   }
@@ -171,51 +210,100 @@ async function fetchPurchases() {
 
   // 1️⃣ cache instantané
   const cached = getCache()
-  if (cached) {
-    console.log("⚡ cache hit")
-    abonnement.value = cached.abonnement
-    achats.value = cached.achats
-    loading.value = false
+if (cached) {
+  abonnement.value = cached.abonnement || null
+  achats.value = Array.isArray(cached.achats) ? cached.achats : []
 
-    // refresh silencieux
-    refreshPurchases()
-    return
-  }
+  ready.value = true
+  refreshPurchases()
+  return
+}
+
 
   // 2️⃣ pas de cache → fetch normal
   await refreshPurchases()
 }
+
 async function refreshPurchases() {
   loading.value = true
-  console.log("🌐 refreshPurchases")
+  console.log("🌐 refreshPurchases → START")
 
   try {
-const res = await fetch(proxyUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    route: "getElevePurchases",
-    prof_id: auth.user.prof_id,
-    email: auth.user.email
-  })
-}).then(r => r.json())
+    const payload = {
+      route: "getElevePurchases",
+      email: auth.user.email
+    }
 
+    console.log("📤 payload =", payload)
 
-    if (!res.success) return
+    const res = await fetch(proxyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(r => r.json())
 
-    abonnement.value = res.abonnement || null
-    achats.value = res.achats || []
+    console.log("📥 raw response =", res)
 
+    if (!res?.success) {
+      console.warn("⚠️ getElevePurchases failed", res)
+      return
+    }
+
+    const rows = res.rows || []
+    console.log("🧾 rows count =", rows.length)
+    console.table(rows)
+
+    // =========================
+    // 🔧 NORMALISATION
+    // =========================
+    const mapped = rows.map(r => ({
+      ...r,
+      mode_paiement: r["Mode de paiement"],
+      product_name: r["Nom du produit"] || null,
+      facture_url: r["Facture PDF"] || null,
+      date_paiement: parseDateSafe(r["Date paiement"]),
+      session_id:
+        r["Session ID / PaymentIntent"] ||
+        r["Session ID"] ||
+        Math.random().toString(36)
+    }))
+
+    // =========================
+    // 📦 ABONNEMENT (dernier)
+    // =========================
+    abonnement.value =
+      mapped
+        .filter(r => r.mode_paiement === "subscription")
+        .sort(
+          (a, b) =>
+            (b.date_paiement?.getTime() || 0) -
+            (a.date_paiement?.getTime() || 0)
+        )[0] || null
+
+    // =========================
+    // 🛒 ACHATS (hors abo)
+    // =========================
+    achats.value = mapped.filter(
+      r => r.mode_paiement !== "subscription"
+    )
+
+    // =========================
+    // 💾 CACHE
+    // =========================
     setCache({
       abonnement: abonnement.value,
       achats: achats.value
     })
 
     console.log("💾 cache updated")
+
   } catch (e) {
     console.error("🔥 refreshPurchases error", e)
   } finally {
     loading.value = false
+      ready.value = true
+
+    console.log("🌐 refreshPurchases → END")
   }
 }
 
@@ -223,6 +311,12 @@ const res = await fetch(proxyUrl, {
 // =====================================================
 // TOGGLE ITEM DETAILS
 // =====================================================
+function parseDateSafe(v) {
+  if (!v) return null
+  const d = new Date(v)
+  return isNaN(d.getTime()) ? null : d
+}
+
 function toggle(item) {
   item.show = !item.show
 }
@@ -403,5 +497,154 @@ function openDrawer(item) {
 .item.clickable:hover {
   background: #111217;
 }
+.purchases-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.purchase-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--card-bg, #fff);
+  box-shadow: 0 4px 14px rgba(0,0,0,.05);
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+    overflow: hidden;            /* 🔒 anti débordement */
+
+}
+
+.purchase-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+}
+
+.purchase-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+    white-space: normal;         /* 🔥 */
+  word-break: break-word;      /* 🔥 */
+  text-overflow: ellipsis;
+}
+
+.meta {
+  display: flex;
+    flex-wrap: wrap;             /* 🔥 */
+
+  gap: 10px;
+  font-size: 13px;
+  color: #777;
+}
+
+.amount {
+  font-weight: 500;
+  color: #111;
+}
+
+.purchase-actions {
+  display: flex;
+  align-items: center;
+    justify-content: space-between; /* 🔥 */
+
+  gap: 10px;
+}
+
+.invoice-link {
+  font-size: 13px;
+  color: #0074d4;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.invoice-link:hover {
+  text-decoration: underline;
+}
+
+.chevron {
+  font-size: 18px;
+  color: #aaa;
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+  .purchase-card {
+    padding: 16px 18px;
+  }
+}
+
+/* =========================
+   ABONNEMENT — HORIZONTAL
+   ========================= */
+
+.abonnement-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;          /* 🔥 clé anti overflow */
+}
+
+/* COLONNE GAUCHE */
+.abonnement-card .item-main {
+  flex: 1 1 180px;          /* grow + shrink */
+  min-width: 0;
+}
+
+/* COLONNE CENTRE */
+.abonnement-card .item-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* COLONNE DROITE */
+.abonnement-card .link {
+  flex: 0 0 auto;
+  margin-left: auto;       /* pousse à droite */
+  white-space: nowrap;
+}
+
+/* TEXTE SAFE */
+.abonnement-card h3 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abonnement-card .desc {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* MOBILE TIGHT */
+@media (max-width: 480px) {
+  .abonnement-card {
+    gap: 10px;
+  }
+
+  .abonnement-card .item-meta {
+    font-size: 0.75rem;
+  }
+
+  .abonnement-card .link {
+    font-size: 0.75rem;
+  }
+}
+
 
 </style>

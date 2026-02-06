@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from "vue"
+import { ref, onMounted, computed, watch } from "vue"
 import { useAuthStore } from "@/stores/authStore.js"
 import { getValidToken } from "@/utils/api.ts"
 import { getProxyPostURL } from "@/config/gas"
@@ -127,6 +127,8 @@ const applyStripeState = (res) => {
 }
 
 const checkStatusNetwork = async () => {
+    if (auth.isLoggingOut) return   // ⛔ clé
+
   loading.value = !stripeReady.value && !stripePending.value
   logStripe("Vérification du statut Stripe…")
 
@@ -148,6 +150,8 @@ const checkStatusNetwork = async () => {
     logStripe(`Réponse serveur (${resp.status})`)
 
     const text = await resp.text()
+    if (auth.isLoggingOut) return    // ⛔ réponse tardive ignorée
+
 
     if (!text.trim().startsWith("{")) {
       logStripe("Erreur serveur Stripe ❌")
@@ -155,19 +159,45 @@ const checkStatusNetwork = async () => {
     }
 
     const res = JSON.parse(text)
+if (auth.isLoggingOut) return
 
     applyStripeState(res)
     saveStripeToCache(auth.user.user_id, res)
+if (res.stripe_ready) {
+  logStripe("Paiements Stripe activés ✅")
 
-    if (res.stripe_ready) {
-      logStripe("Paiements Stripe activés ✅")
-    } else if (res.stripe_account_id) {
-      logStripe("Compte Stripe créé — onboarding requis ⏳")
-    } else {
-      logStripe("Stripe non initialisé ❌")
-    }
+  const auth = useAuthStore()
+if (auth.isLoggingOut) return
+
+  // 🔥 SYNCHRO ONBOARDING
+  auth.user = {
+    ...(auth.user || {}),
+    stripe_charges_enabled: true,
+    stripe_account_id: res.stripe_account_id || auth.user?.stripe_account_id
+  }
+}
+ else if (res.stripe_account_id) {
+  logStripe("Compte Stripe créé — onboarding requis ⏳")
+
+  // optionnel : explicite
+  if (auth.onboardingSnapshot) {
+    auth.onboardingSnapshot.stripeOk = false
+  }
+
+} else {
+  logStripe("Stripe non initialisé ❌")
+
+  if (auth.onboardingSnapshot) {
+    if (auth.isLoggingOut) return
+
+    auth.onboardingSnapshot.stripeOk = false
+  }
+}
+
 
   } catch (e) {
+    if (auth.isLoggingOut) return
+
     console.error("❌ stripeconnectstatus ERROR", e)
     logStripe("Erreur de communication avec Stripe ❌")
   } finally {
@@ -181,6 +211,8 @@ const checkStatusNetwork = async () => {
 // 🔎 CHECK STATUS
 // =====================================================
 const checkStatus = () => {
+    if (!auth.authReady) return   // 🔒 clé
+
 const userId = auth.user?.user_id
 if (!userId) return
 
@@ -303,10 +335,16 @@ const openStripeDashboard = () => {
 // INIT
 // =====================================================
 onMounted(() => {
-  console.log("💳 StripeConnectCard mounted")
-  console.log("auth.user =", auth.user)
-  checkStatus()
+  watch(
+    () => auth.authReady,
+    (ready) => {
+      if (!ready) return
+      checkStatus()
+    },
+    { immediate: true }
+  )
 })
+
 </script>
 
 <style scoped>

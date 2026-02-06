@@ -69,10 +69,7 @@ if (!dbReady) {
     preventIndexedDBCleanup();
     checkIndexedDBStatus();
     // 🌐 Mode offline + données en cache ?
-    if (!navigator.onLine && getCache("userData_sunny")) {
-        console.warn("⚠️ Mode hors ligne détecté. Utilisation du cache...");
-        // (optionnel : afficher une bannière ou toast)
-    }
+
     const app = createApp(App);
     app.use(createPinia());
     app.use(router);

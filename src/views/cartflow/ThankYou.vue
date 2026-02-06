@@ -114,7 +114,7 @@ onUnmounted(() => {
 
 
     <div class="actions" v-if="!isPending">
-      <button class="btn btn-primary" @click="router.push('/')">
+      <button class="btn btn-primary" @click="router.push('/login')">
         Accéder à mon espace
       </button>
     </div>

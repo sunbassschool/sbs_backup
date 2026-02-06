@@ -1,42 +1,62 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue"
-import { useRoute,useRouter  } from "vue-router"
-import { useAuthStore } from "@/stores/authStore.js"
-import { getProxyPostURL } from "@/config/gas"
-import MarketingHeader from "@/components/MarketingHeader.vue"
+type StripeSuccessRes = {
+  paymentIntent?: any
+  setupIntent?: any
+}
 
-import EmbeddedCheckout from "@/components/cartflow/Payments/EmbeddedCheckout.vue"
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue"
+import { useRoute, useRouter } from "vue-router"
+import { useAuthStore } from "@/stores/authStore.js"
+import { getProxyPostURL, gasPost } from "@/config/gas"
+import { useHead } from "@vueuse/head"
+
+import MarketingHeader from "@/components/MarketingHeader.vue"
 import OfferSelector from "@/components/cartflow/Payments/OfferSelector.vue"
 import OfferRecap from "@/components/cartflow/Payments/OfferRecap.vue"
-import type { PaymentIntent } from "@stripe/stripe-js"
+import PaymentElement from "@/components/cartflow/Payments/PaymentElement.vue"
 
-
-import { useHead } from "@vueuse/head"
 const route = useRoute()
-
 const router = useRouter()
 const auth = useAuthStore()
+const loading = ref(false)
+
+const stickyCta = ref<HTMLElement | null>(null)
+let checkoutObserver: IntersectionObserver | null = null
+let shown = false
+let onScroll: ((this: Window, ev: Event) => any) | null = null
+
+// =====================
+// SEO
+// =====================
 useHead({
   title: "Cours de basse en ligne avec professeur | SunBassSchool",
   meta: [
     {
       name: "description",
       content:
-        "Cours de basse en ligne en visioconférence (1h/semaine). Programme personnalisé, feedbacks, devoirs et replay sur SunBassApp. Pour bassistes avec au moins 6 mois de pratique."
+        "Cours de basse en ligne en visioconférence avec un professeur musicien professionnel. Suivi personnalisé, replay, feedback et progression rapide."
     },
-    { property: "og:title", content: "Cours de basse en ligne – Formation personnalisée | SunBassSchool" },
     {
-      property: "og:description",
-      content:
-        "Cours individuels en visio avec un musicien pro. Technique, groove, harmonie, répertoire. Suivi complet via SunBassApp."
-    },
-    { property: "og:type", content: "website" },
-    { property: "og:url", content: "https://www.sunbassschool.com/cours-de-basse-en-ligne" }
+      name: "robots",
+      content: "index, follow"
+    }
   ],
   link: [
-    { rel: "canonical", href: "https://www.sunbassschool.com/cours-de-basse-en-ligne" }
+    {
+      rel: "canonical",
+      href: "https://www.sunbassschool.com/cours-de-basse-en-ligne"
+    }
   ]
 })
+
+
+
+
+// =====================
+// CONST
+// =====================
+const funnel =
+  (route.query.funnel as string) || "cours_basse"
 // =====================
 // STATE
 // =====================
@@ -45,14 +65,16 @@ const selectedOffer = ref<any | null>(null)
 
 const guestEmail = ref("")
 const clientSecret = ref<string | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const onPaymentSuccess = (pi: PaymentIntent) => {
-  clientSecret.value = null
-  router.push("/thankyou")
-}
+const setupCustomerId = ref<string | null>(null)
+
+const preparing = ref(false)
+const paying = ref(false)
+const paymentDone = ref(false)
+const subscriptionInProgress = ref(false)
+const checkoutLocked = ref(false)
 
 const offersLoading = ref(true)
+const error = ref<string | null>(null)
 
 // =====================
 // COMPUTED
@@ -65,111 +87,180 @@ const resolvedEmail = computed(() =>
 // FETCH OFFERS
 // =====================
 onMounted(async () => {
+
   document.documentElement.classList.add("landing-mode")
-document.body.classList.add("landing-mode")
-
-  console.log("🟢 [OfferPage] mount → fetch offers")
-
-
-
-
-
-
-
-
-
+  document.body.classList.add("landing-mode")
 
   try {
-    console.log("➡️ POST getOffersForCheckout", {
-      route: "getOffersForCheckout",
-      mode: "one_time"
-    })
-
     const res = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         route: "getOffersForCheckout",
-        mode: "one_time"
+        funnel
       })
     })
 
-    console.log("⬅️ response status", res.status)
-
     const json = await res.json()
-    console.log("📦 response json", json)
-
-    if (!json.ok) {
-      throw new Error(json.error?.message || "Erreur chargement offres")
-    }
+    if (!json.ok) throw new Error(json.error?.message || "Erreur chargement offres")
 
     offers.value = json.data
-    console.log("✅ offers loaded", offers.value)
-
   } catch (e: any) {
-    console.error("❌ fetch offers failed", e)
     error.value = e.message
-  }
-  finally {
+  } finally {
     offersLoading.value = false
   }
+
+    const el = stickyCta.value
+  const checkoutEl = document.getElementById("checkout")
+  if (!el) return
+
+  // 1) apparition retardée (1.2s)
+  setTimeout(() => {
+    el.classList.add("is-visible")
+    shown = true
+  }, 1200)
+
+  // 2) changement de texte après scroll
+onScroll = () => {
+  if (!el || !shown) return
+  el.textContent =
+    window.scrollY > 420
+      ? "🎸 Rejoindre les cours"
+      : "🎸 Voir les formules"
+}
+
+  window.addEventListener("scroll", onScroll, { passive: true })
+
+  // 3) hide auto quand checkout visible
+  if (checkoutEl) {
+    checkoutObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (!el) return
+        el.style.opacity = entry.isIntersecting ? "0" : "1"
+        el.style.pointerEvents = entry.isIntersecting ? "none" : "auto"
+      },
+      { threshold: 0.25 }
+    )
+    checkoutObserver.observe(checkoutEl)}
 })
+
 onUnmounted(() => {
   document.documentElement.classList.remove("landing-mode")
   document.body.classList.remove("landing-mode")
-})
 
-// =====================
-// CREATE PAYMENT INTENT
-// =====================
-const createIntent = async () => {
-  console.log("🟢 [createIntent] called")
-
-  error.value = null
-
-  if (!selectedOffer.value || !resolvedEmail.value) {
-    console.warn("⛔ abort: missing offer or email")
-    return
+  if (onScroll) {
+    window.removeEventListener("scroll", onScroll)
   }
 
-  loading.value = true
+  checkoutObserver?.disconnect()
+})
+
+
+
+// =====================
+// SCROLL RECAP
+// =====================
+const onContinue = () => {
+  requestAnimationFrame(() => {
+    document.getElementById("recap")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    })
+  })
+}
+
+// =====================
+// CREATE INTENT
+// =====================
+const createIntent = async () => {
+  if (checkoutLocked.value) return
+  if (!selectedOffer.value || !resolvedEmail.value) return
+
+  checkoutLocked.value = true
+  preparing.value = true
+  error.value = null
 
   try {
-    const payload = {
-      route: "createEmbeddedIntent",
-      offer_code: selectedOffer.value.product_id,
-      email: resolvedEmail.value,
-      pricing_mode: "one_time"
-    }
+    const isSubscription =
+      selectedOffer.value.pricing_mode === "subscription"
 
-    console.log("➡️ POST createEmbeddedIntent", payload)
+    const json = await gasPost(
+      isSubscription
+        ? "createEmbeddedSetupIntent"
+        : "createEmbeddedIntent",
+      {
+        product_id: selectedOffer.value.product_id,
+        droit_code: selectedOffer.value.droit_code,
+        email: resolvedEmail.value
+      }
+    )
 
-    const res = await fetch(getProxyPostURL(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    })
+    if (!json?.ok) throw new Error("Erreur paiement")
 
-    console.log("⬅️ HTTP status", res.status)
+    clientSecret.value =
+      json.data?.client_secret || json.client_secret
 
-    const json = await res.json()
-    console.log("💳 createEmbeddedIntent response", json)
-
-    if (!json.ok) {
-      throw new Error(json.error?.message || "Erreur paiement")
-    }
-
-    clientSecret.value = json.data.client_secret
-    console.log("✅ clientSecret SET =", clientSecret.value)
-
+    setupCustomerId.value =
+      json.data?.customer_id || json.customer_id
   } catch (e: any) {
-    console.error("❌ createIntent failed", e)
+    checkoutLocked.value = false
     error.value = e.message
   } finally {
-    loading.value = false
+    preparing.value = false
   }
 }
 
+// =====================
+// STRIPE CALLBACKS
+// =====================
+const onStripeSuccess = async (res: StripeSuccessRes) => {
+  // ONE TIME
+  if (selectedOffer.value?.pricing_mode === "one_time") {
+    const pi = res?.paymentIntent
+    if (pi?.status !== "succeeded") return
+    if (paymentDone.value) return
+
+    paymentDone.value = true
+    paying.value = false
+    router.replace("/thankyou")
+    return
+  }
+
+  // SUBSCRIPTION
+  if (paymentDone.value) return
+  paymentDone.value = true
+
+  const si = res?.setupIntent
+  if (!si || si.status !== "succeeded") return
+  if (!setupCustomerId.value) return
+  if (subscriptionInProgress.value) return
+
+  subscriptionInProgress.value = true
+
+  await gasPost("createSubscriptionFromSetup", {
+    product_id: selectedOffer.value.product_id,
+    droit_code: selectedOffer.value.droit_code,
+    email: resolvedEmail.value,
+    customer_id: setupCustomerId.value,
+    setup_intent_id: si.id
+  })
+
+  router.replace(
+    `/thankyou?pending=1&email=${encodeURIComponent(resolvedEmail.value)}`
+  )
+}
+
+const onStripeError = (msg: string) => {
+  error.value = msg
+  checkoutLocked.value = false
+  paying.value = false
+}
+
+// =====================
+// DEBUG
+// =====================
+watch(paying, v => console.log("🧠 paying =", v))
 </script>
 
 <template>
@@ -192,15 +283,17 @@ const createIntent = async () => {
         </p>
 
         <div class="hero-video">
-      <video
+<video
   src="https://www.sunbassschool.com/wp-content/uploads/2023/11/promo-cours-en-visio.mp4"
   autoplay
   muted
   loop
   playsinline
-  controls
->
-</video>
+  preload="none"
+  poster="/hero-cours-basse.jpg"
+></video>
+
+
 
         </div>
 
@@ -210,7 +303,7 @@ const createIntent = async () => {
           <p>📱 Matériel : basse + ampli + téléphone + bonne connexion</p>
         </div>
 
-        <a href="#checkout" class="cta-main">S’inscrire aux cours</a>
+        <a href="#checkout" class="cta-main">Voir les formules</a>
       </div>
 
       <!-- RIGHT -->
@@ -349,10 +442,15 @@ const createIntent = async () => {
       <section class="content-block block-b bio-block">
         <div class="two-cols">
           <div class="bio-photo">
-            <img
-              src="https://i.ibb.co/8L3qDSVD/IMG-0866-jpeg.jpg"
-              alt="Sunny Adroit – professeur de basse et musicien professionnel"
-            />
+         <img
+  src="https://i.ibb.co/8L3qDSVD/IMG-0866-jpeg.jpg"
+  alt="Sunny Adroit – professeur de basse et musicien professionnel"
+  width="250"
+  height="250"
+  loading="lazy"
+  decoding="async"
+/>
+
           </div>
 
           <div class="bio-text">
@@ -460,6 +558,12 @@ const createIntent = async () => {
     </section>
   </div>
 
+  <!-- SEO SÉMANTIQUE -->
+<p class="seo-hook">
+  Ces cours de basse en ligne en visioconférence s’adressent aux bassistes souhaitant
+  travailler avec un professeur de basse à distance, dans un cadre structuré et personnalisé.
+</p>
+
   <!-- CHECKOUT (réutilise ton bloc existant) -->
 <div id="checkout_bg">
 <section class="checkout-section" id="checkout">
@@ -535,13 +639,37 @@ const createIntent = async () => {
         <span>Merci de patienter quelques secondes</span>
       </div>
     </div>
+<!-- OVERLAY preparation paiement -->
+<div v-if="preparing" class="checkout-overlay">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p>Connexion au paiement sécurisé…</p>
+    <span>Merci de patienter</span>
+  </div>
+</div>
+
+<!-- OVERLAY paiement -->
+<div v-if="paying" class="checkout-overlay">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p>Paiement en cours…</p>
+    <span>Ne fermez pas la page</span>
+  </div>
+</div>
 
     <!-- STRIPE -->
-    <EmbeddedCheckout
-      v-if="clientSecret"
-      :client-secret="clientSecret"
-      @success="onPaymentSuccess"
-    />
+<Transition name="slide-fade">
+  <PaymentElement
+    v-if="clientSecret && !paymentDone"
+    :client-secret="clientSecret"
+    :mode="selectedOffer?.pricing_mode === 'one_time' ? 'payment' : 'setup'"
+    :email="resolvedEmail"
+    @paying="paying = $event"
+    @success="onStripeSuccess"
+    @error="onStripeError"
+  />
+</Transition>
+
 
     <!-- FOOTER -->
     <div class="checkout-footer">
@@ -552,17 +680,36 @@ const createIntent = async () => {
 
 </section>
 </div>
+<!-- CTA STICKY MOBILE -->
+<!-- CTA STICKY MOBILE -->
+<a
+  href="#checkout"
+  class="cta-sticky-mobile"
+  ref="stickyCta"
+>
+  🎸 Voir les formules
+</a>
+
+
 </template>
 
 
 <style scoped>
+.bio-photo img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+
 /* =========================
    THEME (copié offer page)
 ========================= */
 .offer-page {
-  --bg: #000000;
-  --panel: #000000;
-  --panel-soft: #000000;
+--bg: #0b0b0f;
+--panel: #13131a;
+--panel-soft: #1b1b25;
+
   --text: #f8fafc;
   --muted: #9ca3af;
   --accent: #f59e0b;
@@ -576,7 +723,7 @@ const createIntent = async () => {
   display: flex;
   justify-content: center;
   flex-direction: column;
-  align-items: center;
+align-items: flex-start;
   background: radial-gradient(1200px 600px at 50% -10%, #000000, #0b0b0f);
   color: var(--text);
   padding: clamp(3rem, 6vh, 6rem) 1.2rem;
@@ -1075,4 +1222,102 @@ const createIntent = async () => {
     height: 260px;
   }
 }
+
+.checkout-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    180deg,
+    rgba(11,11,15,0.85),
+    rgba(11,11,15,0.95)
+  );
+  backdrop-filter: blur(4px);
+  border-radius: 22px;
+}
+
+.overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.6rem 1.8rem;
+  background: linear-gradient(180deg, var(--panel), var(--panel-soft));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+}
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.12);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+.seo-hook {
+  max-width: 780px;
+  margin: 2.5rem auto 2.5rem;
+  padding: 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #e5e7eb; /* visible sur fond noir */
+  text-align: center;
+  opacity: 0.85;
+}
+
+/* =========================
+   CTA STICKY MOBILE
+========================= */
+.cta-sticky-mobile {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 0.6rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(16px) scale(0.98);
+  z-index: 9999;
+
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0.85rem 1.6rem;
+  min-width: 220px;
+
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #0b0b0f;
+  font-weight: 900;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+
+  border-radius: 999px;
+  box-shadow:
+    0 10px 28px rgba(245,158,11,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.4);
+
+  opacity: 0;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s cubic-bezier(.2,.8,.2,1);
+}
+
+/* visible */
+.cta-sticky-mobile.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* Mobile only */
+@media (max-width: 768px) {
+  .cta-sticky-mobile {
+    display: inline-flex;
+  }
+}
+
+
+
 </style>

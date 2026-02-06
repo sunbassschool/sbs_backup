@@ -459,17 +459,17 @@ cut: clipboard.mode === 'cut' &&
     v-if="previewVideoUrl"
     class="video-overlay"
     @click.self="previewVideoUrl = null"
-  ><button class="video-close" @click="previewVideoUrl = null">✕</button>
+  >
+    <button class="video-close" @click="previewVideoUrl = null">✕</button>
 
-    <video
-      controls
-      autoplay
-      playsinline
-      preload="metadata"
-      :src="previewVideoUrl"
-    />
+<VideoPreview
+  :key="previewVideoUrl"
+  :src="previewVideoUrl"
+/>
   </div>
 </teleport>
+
+
 
 <!-- CORE UPLOAD VIVANT (INVISIBLE) -->
 <div style="display:none">
@@ -502,6 +502,7 @@ cut: clipboard.mode === 'cut' &&
 import Layout from "@/views/Layout.vue"
 import { gasPost } from "@/config/gas.ts"
 import DriveQuotaBar from "@/components/DriveQuotaBar.vue"
+import VideoPreview from "@/components/VideoPreview.vue"
 
 import { ref, computed, onMounted, watch, onUnmounted,nextTick,watchEffect } from "vue"
 import axios from "axios"
@@ -589,6 +590,11 @@ const showUploadModal = ref(false)
 const hideUploadUI = ref(false)
 
 const openUploadUI = () => {
+  if (isCurrentFolderOptimistic.value) {
+  toast.info("Dossier en cours de création…")
+  return
+}
+
   if (isSharedMode.value) return
   if (isReadOnlyShared.value) return
 
@@ -605,6 +611,10 @@ const openUploadUI = () => {
 }
 
 
+const isCurrentFolderOptimistic = computed(() => {
+  const f = foldersById.value[currentFolderId.value]
+  return !!f?._optimistic
+})
 
 const openAddMenuFromButton = (e) => {
   const rect = e.currentTarget.getBoundingClientRect()
@@ -879,6 +889,11 @@ const hardDeleteFile = async (file) => {
 
 
 const handleModalDrop = (e) => {
+  if (isCurrentFolderOptimistic.value) {
+  toast.info("Dossier en cours de création…")
+  return
+}
+
   const files = Array.from(e.dataTransfer?.files || [])
   if (!files.length) return
 
@@ -2066,9 +2081,15 @@ const searchBreadcrumb = computed(() => {
 
 const showLoader = computed(() => {
   if (eleveBlocked.value) return false
+
+  // ✅ cache présent → jamais bloquer l’UI
   if (hydratedFromCache.value) return false
+
+  if (navigationLocked.value) return true
+
   return creatingWorkspace.value || !foldersLoaded.value
 })
+
 
 
 
@@ -2103,10 +2124,7 @@ const breadcrumb = computed(() => {
   if (navigationLocked.value) return []
 
   if (isSharedMode.value && currentFolderId.value === SHARED_ROOT_ID) {
-    return [{
-      folder_id: SHARED_ROOT_ID,
-      name: "🔗 Partagé avec moi"
-    }]
+    return [{ folder_id: SHARED_ROOT_ID, name: "🔗 Partagé avec moi" }]
   }
 
   if (!currentFolderId.value) return []
@@ -2118,7 +2136,12 @@ const breadcrumb = computed(() => {
   while (cur && guard++ < 20) {
     const f = foldersById.value[cur]
     if (!f) break
+
     chain.unshift(f)
+
+    // 🔥 STOP BREADCRUMB ÉLÈVE
+    if (!isProfLike.value && cur === eleveRootId.value) break
+
     cur = f.parent_id
   }
 
@@ -3300,6 +3323,11 @@ const closeContextMenu = () => {
 }
 const handleExplorerDrop = (e) => {
   isDragging.value = false
+  if (isCurrentFolderOptimistic.value) {
+  toast.info("Dossier en cours de création…")
+  return
+}
+
   if (isSharedMode.value || isReadOnlyShared.value) return
 
   const files = Array.from(e.dataTransfer?.files || [])
@@ -4560,6 +4588,11 @@ watch(
 
 
 const triggerUploadCore = () => {
+  if (isCurrentFolderOptimistic.value) {
+  toast.info("Dossier en cours de création…")
+  return
+}
+
   if (isSharedMode.value || isReadOnlyShared.value) return
   uploader.value?.openPicker?.()
 }
@@ -4762,7 +4795,10 @@ if (!restored && !currentFolderId.value) {
 
 
     // --- fetch folders (SOURCE DE VÉRITÉ)
-    loaderStep.value = "folders"
+if (!hydratedFromCache.value) {
+  loaderStep.value = "folders"
+}
+
  if (!hydratedFromCache.value) {
   await fetchFolders(true)
   console.log("📁 AFTER fetchFolders", {
@@ -4785,37 +4821,23 @@ if (!restored && !currentFolderId.value) {
 
 
     // --- fetch uploads GLOBAL (UNE FOIS)
-    loaderStep.value = "uploads"
-    console.log("🚀 trigger global uploads fetch (élève)")
-    await fetchAllUploadsOnce()
+// --- fetch uploads GLOBAL
+if (!hydratedFromCache.value) {
+  loaderStep.value = "uploads"
+  await fetchAllUploadsOnce()   // ⏳ bloquant UNIQUEMENT sans cache
+} else {
+  fetchAllUploadsOnce()         // ⚡ background si cache
+}
+
 // 🔥 AUTO-OPEN dossier contenant des uploads (élève)
 // 🔥 AUTO-OPEN SAFE (ÉLÈVE ONLY)
-if (!isProfLike.value) {
-  const foldersWithFiles = Object.keys(uploadsByFolder.value)
-    .filter(fid => {
-      const f = foldersById.value[fid]
-      return (
-        f &&
-        f.owner_type === "eleve" &&
-        f.owner_id === userId.value &&
-        uploadsByFolder.value[fid]?.length
-      )
-    })
-
-  if (foldersWithFiles.length) {
-    isAutoOpening.value = true
-    console.log("🎯 auto-open folder (SAFE) =", foldersWithFiles[0])
-
-    currentFolderId.value = foldersWithFiles[0]
-
-    await nextTick()
-    isAutoOpening.value = false
-  }
-}
 
 
     console.log("📁 folders élève =", folders.value.length)
     console.log("📦 uploadsByFolder =", Object.keys(uploadsByFolder.value).length)
+    await nextTick()
+
+navigationLocked.value = false
 
     console.log("✅ ÉLÈVE READY")
     console.groupEnd()
@@ -4892,7 +4914,10 @@ if (!restored) {
 // -------------------------------------------------
 // 4️⃣ fetchFolders (SOURCE UNIQUE)
 // -------------------------------------------------
-loaderStep.value = "folders"
+if (!hydratedFromCache.value) {
+  loaderStep.value = "folders"
+}
+
 console.log("📦 fetchFolders (prof)")
 
 if (!hydratedFromCache.value) {
@@ -4935,7 +4960,9 @@ if (!hydratedFromCache.value) {
 } else {
   fetchAllUploadsOnce()
 }
-
+// 🔓 UNLOCK ICI (🔥 CLÉ)
+await nextTick()
+navigationLocked.value = false
 
   console.log("📁 folders prof =", folders.value.length)
   console.log("📦 uploadsByFolder =", Object.keys(uploadsByFolder.value).length)
@@ -4961,7 +4988,6 @@ if (!currentFolderId.value) {
   }
 }
 
-navigationLocked.value = false
 
 
   mountedDone.value = true

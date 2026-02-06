@@ -1,5 +1,5 @@
 // src/main.ts
-import { createApp,watch } from "vue";
+import { createApp,watch,nextTick } from "vue";
 import piniaPersist from "pinia-plugin-persistedstate";
 import App from "@/App.vue";
 
@@ -26,7 +26,22 @@ import {
   isJwtExpired,
   safeIsJwtExpired,
 } from "@/utils/api.ts";
-let uiReady = false
+
+
+
+
+// ============================================================
+// 🔐 GA4 – restore consent RGPD
+// ============================================================
+const restoreGaConsent = () => {
+  const consent = localStorage.getItem("ga_consent")
+  if (consent === "granted" && (window as any).gtag) {
+    ;(window as any).gtag("consent", "update", {
+      analytics_storage: "granted",
+    })
+  }
+}
+
 
 /* ============================================================
    🌍 Helpers globaux
@@ -60,6 +75,26 @@ if ("serviceWorker" in navigator) {
   })
 }
 
+if ("serviceWorker" in navigator) {
+  let swReloading = false
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (swReloading) return
+    swReloading = true
+    document.body.classList.add("sw-updating")
+    setTimeout(() => location.reload(), 700)
+  })
+}
+
+
+function canReloadForSW() {
+  return !!navigator.serviceWorker.controller
+}
+function getHome(authStore: any) {
+  return ["prof", "admin"].includes(authStore.user?.role)
+    ? "/dashboard-prof"
+    : "/dashboard"
+}
 
 /* ============================================================
    🚀 INITIALISATION APP (SAFE)
@@ -68,144 +103,216 @@ if ("serviceWorker" in navigator) {
    🚀 INITIALISATION APP (SAFE + FLOW CONSERVÉ)
    ============================================================ */
 export async function initializeApp() {
-
   if (appMounted) return
   appMounted = true
+if ("serviceWorker" in navigator) {
+  const purged = localStorage.getItem("sw_purged_v1")
+  if (!purged) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister())
+      localStorage.setItem("sw_purged_v1", "true")
+    })
+  }
+}
 
-  // IndexedDB (non bloquant)
+  /* =====================================================
+     IndexedDB (non bloquant)
+  ===================================================== */
   verifyIndexedDBSetup()
     .then(() => {
       preventIndexedDBCleanup()
       checkIndexedDBStatus()
     })
     .catch(() => {})
-const head = createHead()
+
+  const head = createHead()
+  restoreGaConsent()
+
+
+
 
   const app = createApp(App)
 
   pinia.use(piniaPersist)
   app.use(pinia)
-
   const authStore = useAuthStore()
+
+  if (import.meta.env.DEV) {
+    ;(window as any).__auth = useAuthStore()
+  }
+
   sessionStorage.removeItem("AUTH_ABORTED")
 
-  // init auth (async)
+  // 🔐 init auth async
   const authPromise = authStore.initAuth()
+watch(
+  () => authStore.authReady,
+  async (ready) => {
+    if (!ready) return
+    await router.isReady()
 
-  // routes landing
-  const LANDING_ROUTES = ["/", "/home", "/pricing", "/intro"]
-
- const applyScrollMode = (path: string) => {
-  const isLanding = LANDING_ROUTES.includes(path)
-
-  document.documentElement.classList.toggle("landing-mode", isLanding)
-  document.body.classList.toggle("landing-mode", isLanding)
-  document.documentElement.classList.toggle("app-mode", !isLanding)
-  document.body.classList.toggle("app-mode", !isLanding)
-
-  // 🔒 scroll UNIQUEMENT en app-mode
-  if (!isLanding) {
-    document.documentElement.style.overflow = "hidden"
-    document.body.style.overflow = "hidden"
-  } else {
-    document.documentElement.style.overflow = ""
-    document.body.style.overflow = ""
+    const route = router.currentRoute.value
+    if (authStore.jwt && route.meta?.guestOnly) {
+      router.replace(getHome(authStore))
+    }
   }
-}
+)
 
-app.use(head)
 
+  /* =====================================================
+     Router + Head
+  ===================================================== */
+  app.use(head)
   app.use(router)
 
-  // redirection post-auth uniquement
-const auth = useAuthStore()
-auth.$subscribe(
-  (_: unknown, state: any) => {
-    if (!state.authReady) return
 
-    const curPath = router.currentRoute.value.path as string
-    if (curPath !== "/") return
+  /* =====================================================
+     🎯 REDIRECTION POST-AUTH (ROOT UNIQUEMENT)
+     ❌ PAS d’onboarding ici
+  ===================================================== */
+  const auth = useAuthStore()
+watch(
+  () => authStore.postAuthResolved,
+  async (done) => {
+    if (!done) return
 
-    if (!state.jwt) {
-      router.replace("/home")
+    const isProf = ["prof", "admin"].includes(authStore.user?.role)
+    if (isProf) return // ⛔ PROF → CE WATCH NE FAIT RIEN
+
+    const onboardingDone = authStore.user?.onboarding_done === true
+    const path = router.currentRoute.value.path
+
+    if (!onboardingDone && path !== "/onboarding") {
+      router.replace("/onboarding")
       return
     }
 
-    const role = state.user?.role
-    if (!role) return
-
- const target: string =
-  role === "prof" || role === "admin"
-    ? "/dashboard-prof"
-    : "/dashboard"
-
-    if (curPath !== target) {
-      router.replace(target)
+    if (onboardingDone && path === "/onboarding") {
+      router.replace("/dashboard")
     }
-  },
-  { detached: true }
+  }
 )
 
+
+
+
+
+
+let initialRouteResolved = false
+
+router.isReady().then(() => {
+  initialRouteResolved = true
+})
+
+authStore.$subscribe(
+  (_mutation: any, state: any) => {  if (!state.isInitDone) return
+  if (router.currentRoute.value.path !== "/") return
+  router.replace(getHome(authStore))
+}, { detached: true })
+
+
+
+
+  /* =====================================================
+     UI / Plugins
+  ===================================================== */
   app.directive("privilege", privilege)
   app.use(Toast)
   const toast = useToast()
 
-  // mount INVISIBLE
   app.mount("#app")
 
+  /* =====================================================
+     Splash / UI ready
+  ===================================================== */
   const appEl = document.getElementById("app")
-
   let uiReady = false
+  const SPLASH_MIN_DURATION = 700
+  const splashStart = Date.now()
+
   const showUI = () => {
     if (uiReady) return
     uiReady = true
-    document.body.classList.add("app-ready")
-    appEl?.classList.add("app-visible")
-    window.__HIDE_SPLASH__?.()
+
+    const elapsed = Date.now() - splashStart
+    const delay = Math.max(0, SPLASH_MIN_DURATION - elapsed)
+
+    setTimeout(() => {
+      document.body.classList.add("app-ready")
+      appEl?.classList.add("app-visible")
+      window.__HIDE_SPLASH__?.()
+
+
+    }, delay)
   }
 
-  // scroll mode dynamique
+  /* =====================================================
+     Scroll / Analytics
+  ===================================================== */
+  const LANDING_ROUTES = ["/", "/home", "/pricing", "/intro","offerpage","cours-de-basse-en-ligne"]
+
+  const applyScrollMode = (path: string) => {
+    const isLanding = LANDING_ROUTES.includes(path)
+
+    document.documentElement.classList.toggle("landing-mode", isLanding)
+    document.body.classList.toggle("landing-mode", isLanding)
+    document.documentElement.classList.toggle("app-mode", !isLanding)
+    document.body.classList.toggle("app-mode", !isLanding)
+
+    if (!isLanding) {
+      document.documentElement.style.overflow = "hidden"
+      document.body.style.overflow = "hidden"
+    } else {
+      document.documentElement.style.overflow = ""
+      document.body.style.overflow = ""
+    }
+  }
+
   applyScrollMode(router.currentRoute.value.path)
-router.afterEach((to) => {
-  if (to.meta.layout === "landing") {
+
+  router.afterEach((to) => {
+    applyScrollMode(to.path)
+
+    if (to.meta.layout === "landing") {
+      requestAnimationFrame(() => {
+        if (to.hash) return
+        window.scrollTo(0, 0)
+        document.documentElement.scrollTop = 0
+        document.body.scrollTop = 0
+      })
+    }
+
+    if ((window as any).gtag) {
+      ;(window as any).gtag("event", "page_view", {
+        page_path: to.fullPath,
+        page_title: document.title,
+      })
+    }
+  })
+
+  /* =====================================================
+     Show UI when router ready
+  ===================================================== */
+  router.isReady().then(() => {
     requestAnimationFrame(() => {
-      // ✅ si ancre → on ne reset pas en haut
-      if (to.hash) return
-
-      window.scrollTo(0, 0)
-
-      const app = document.getElementById("app")
-      if (app) app.scrollTop = 0
-
-      document.documentElement.scrollTop = 0
-      document.body.scrollTop = 0
+      requestAnimationFrame(showUI)
     })
-  }
-})
+  })
 
-
-  // attente auth + router AVANT affichage
-  Promise.allSettled([authPromise, router.isReady()]).then(() => {
-    showUI()
-
-    // SW reload éventuel
-    const stop = watch(
-      () => authStore.authReady,
-      (ready) => {
-        if (!ready) return
-
-        if (pendingSWReload) {
-          pendingSWReload = false
-          toast.info("Nouvelle version disponible", {
-            timeout: false,
-            closeOnClick: true,
-            onClose: () => location.reload(),
-          })
-        }
-      },
-      { immediate: true }
-    )
+  /* =====================================================
+     Auth continue en arrière-plan
+  ===================================================== */
+  authPromise.then(() => {
+    if (pendingSWReload) {
+      pendingSWReload = false
+      toast.info("Nouvelle version disponible", {
+        timeout: false,
+        closeOnClick: true,
+        onClose: () => location.reload(),
+      })
+    }
   })
 }
+
 
 

@@ -11,30 +11,18 @@ import IntroView from "@/views/IntroView.vue";
 import BassTuner from "@/views/BassTuner.vue";
 import Dashboard from "@/views/Dashboard.vue";
 import Partitions from "@/views/Partitions.vue";
+import onboarding from "@/views/OnBoardingEleve.vue";
 import Planning from "@/views/Planning.vue";
 import Replay from "@/views/Replay.vue";
 import Videos from "@/views/Videos.vue";
-import Cours from "@/views/Cours.vue";
 import Login from "@/views/Login.vue";
 import MonEspace from "@/views/MonEspace.vue";
-import RegisterForm from "@/views/RegisterForm.vue";
-import Prendreuncours from "@/views/Prendreuncours.vue";
-import RegisterCursus from "@/views/RegisterCursus.vue";
 import ForgotPassword from "@/views/ForgotPassword.vue";
 import ResetPassword from "@/views/resetPassword.vue";
-import Metronome from "@/views/Metronome.vue";
-import MesRessources from "@/views/MesRessources.vue";
 import Feedback from "@/views/Feedback.vue";
-import FeedBackProf from "@/views/AdminFeedBack.vue";
-import GestionEleves from "@/views/GestionEleves.vue";
-import AdminFeedback from "@/views/AdminFeedback.vue";
 import moncompte from "@/views/moncompte.vue";
-import dashboardreports from "@/views/dashboardreports.vue";
-import LinkProf from "@/views/LinkProf.vue";
 import DashboardProf from "@/views/dashboard-prof.vue";
-import Abonnements from "@/views/Abonnements.vue";
 import NotFound from "@/views/NotFound.vue";
-import UploadFile from '@/views/UploadFile.vue';
 import MagicAccess from "@/views/MagicAccess.vue";
 import createplanning from "@/views/createplanning.vue"
 
@@ -42,10 +30,15 @@ import createplanning from "@/views/createplanning.vue"
 // =============================================================
 // 🌍 Base URL (prod = /app/)
 // =============================================================
-const baseUrl = import.meta.env.MODE === "production" ? "/app/" : "/";
+const getCachedOnboarding = () =>
+  localStorage.getItem("onboarding_done") === "true"
 
+console.log(
+  "💾 cache onboarding_done =",
+  localStorage.getItem("onboarding_done")
+)
 const router = createRouter({
-  history: createWebHistory(baseUrl),
+history: createWebHistory("/"),
 
   scrollBehavior(to, from, savedPosition) {
     // ✅ ancres
@@ -61,276 +54,264 @@ const router = createRouter({
   },
 
   routes: [
-
+// PUBLIC SANS JWT
 {
   path: "/",
-  name: "root",
   component: () => import("@/views/RootLoader.vue")
 }
-,
-{
-  path: "/home",
-  name: "home",
-  component: () => import("@/views/home.vue"),
-    meta: { layout: "landing" }
-
-}
-,
-{
-  path: "/pricing",
-  name: "pricing",
-  component: () => import("@/views/pricing.vue"),
-    meta: { layout: "landing" }
-
-}
-,
-{
-  path: "/cours-de-basse-en-ligne",
-  name: "cours-de-basse-en-ligne",
-  component: () => import("@/views/cartflow/cours-de-basse-en-ligne.vue"),
-    meta: { layout: "landing" }
-
-}
-,
 
 
 
-{
-  path: "/offerpage",
-  name: "offerpage",
-  component: () => import("@/views/cartflow/OfferPage.vue"),
-    meta: { layout: "landing" }
-
-}
-,
-{
-  path: "/magic-access",
-  name: "magic-access",
-  component: MagicAccess,
-  meta: {
-    layout: "landing"
-  }
-}
 ,
 
 {
   path: "/secure-account",
-  component: () => import("@/views/SecureAccount.vue")
+  component: () => import("@/views/SecureAccount.vue"),
+  meta: { public: true, layout: "landing" }
+}
+
+,
+{
+  path: "/home",
+  component: () => import("@/views/home.vue"),
+  meta: { public: true, layout: "landing" }
+},
+{
+  path: "/pricing",
+  name: "pricing", // 👈 MANQUANT
+  component: () => import("@/views/pricing.vue"),
+  meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/cours-de-basse-en-ligne",
+  component: () => import("@/views/cartflow/cours-de-basse-en-ligne.vue"),
+  meta: { public: true, layout: "landing" }
+},
+{
+  path: "/offerpage",
+  component: () => import("@/views/cartflow/OfferPage.vue"),
+  meta: { public: true, layout: "landing" }
 }
 ,
 
-
+{
+  path: "/magic-access",
+  component: MagicAccess,
+  meta: { public: true, layout: "landing" }
+},
 {
   path: "/thankyou",
-  name: "thankyou",
-  component: () => import("@/views/cartflow/ThankYou.vue")
-},
-
-    // =========================================================
-    // 🛂 AUTH
-    // =========================================================
-    { path: "/login", name: "login", component: Login },
-    { path: "/forgot-password", name: "Forgotpassword", component: ForgotPassword },
-    { path: "/reset-password", name: "Resetpassword", component: ResetPassword },
-
-    // =========================================================
-    // 👑 ADMIN ONLY
-    // =========================================================
-    {
-      path: "/register-cursus",
-      name: "RegisterCursus",
-      component: RegisterCursus,
-      meta: { requiresAuth: true, role: "admin" },
-    },
-{
-  path: "/admin",
-  name: "Admin",
-  component: () => import("@/views/Admin.vue"),
-  meta: { requiresAuth: true, role: "admin" }
-},
-
-    {
-      path: "/AdminFeedback",
-      name: "AdminFeedback",
-      component: AdminFeedback,
-      meta: { requiresAuth: true, role: "admin" },
-    },
-
-
-
-    // =========================================================
-    // 👨‍🏫 PROF (et ADMIN aussi)
-    // =========================================================
-{
-  path: "/prof/revenus",
-  name: "ProfRevenus",
-  component: () => import("@/views/dashboard-prof/ProfRevenus.vue"),
-  meta: { requiresAuth: true, role: "prof" }
-}
-,
- {
-      path: "/dashboardreports",
-      name: "dashboardreports",
-      component: dashboardreports,
-      meta: { requiresAuth: true, role: "prof" },
-    },
-{
-  path: "/prof/partitions",
-  name: "PartitionsProf",
-  component: () => import("@/views/Partitions_prof.vue"),
-  meta: {
-    requiresAuth: true,
-    role: "prof"
-  }
-}
-,
-
-    {
-      path: "/dashboard-prof",
-      name: "dashboard-prof",
-      component: DashboardProf,
-      meta: { requiresAuth: true, requiresProf: true },
-    },
-    {
-      path: "/GestionEleves",
-      name: "GestionEleves",
-      component: GestionEleves,
-      meta: { requiresAuth: true, requiresProf: true },
-    },
-    {
-      path: "/FeedBackProf",
-      name: "FeedBackProf",
-      component: FeedBackProf,
-      meta: { requiresAuth: true, requiresProf: true },
-    },
-
-        {
-      path: "/cours",
-      name: "cours",
-      component: Cours,
-      meta: { requiresAuth: true, requiresProf: true },
-    },
-
-
-
-
-{
-    path: "/prof/planning/create",
-    name: "createplanning",
-    component: createplanning,
-    meta: { requiresAuth: true, requiresProf: true },
-    },
-
-{
-  path: "/stripe-success",
-  name: "stripe-success",
-  component: () => import("@/components/stripe/StripeSucess.vue"),
-  meta: {
-    requiresAuth: true,
-    requiresProf: true
-  }
+  component: () => import("@/views/cartflow/ThankYou.vue"),
+  meta: { public: true }
 },
 {
-  path: "/stripe-success-eleve",
-  name: "stripe-success-eleve",
-  component: () => import("@/components/stripe/StripeSucessEleve.vue"),
-  meta: { requiresAuth: true }
-}
-,
-{
-  path: "/mes-achats",
-  name: "mes-achats",
-  component: () => import("@/views/eleve/MesAchats.vue"),
-  meta: { requiresAuth: true }
-}
-,
-
-
-{
-  path: "/dashboard-prof/offres",
-  name: "dashboard-prof-offres",
-  component: () => import("@/views/dashboard-prof/Offres.vue"),
-  meta: {
-    requiresAuth: true,
-    requiresProf: true
-  }
+  path: "/register",
+  component: () => import("@/views/RegisterChoice.vue"),
+  meta: { public: true, guestOnly: true }
 },
 {
-  path: "/eleve/offres",
-  name: "eleve-offres",
-  component: () => import("@/views/eleve/OffresEleve.vue"),
-  meta: {
-    requiresAuth: true,
-    requiresEleve: true
-  }
-}
-,
+  path: "/register/prof",
+  component: () => import("@/views/RegisterProf.vue"),
+  meta: { public: true, guestOnly: true }
+},
 
-    // =========================================================
-    // 👤 USER (tout utilisateur connecté)
-    // =========================================================
-    { path: "/dashboard", name: "dashboard", component: Dashboard, meta: { requiresAuth: true } },
-    { path: "/mon-espace", name: "mon-espace", component: MonEspace, meta: { requiresAuth: true } },
-    { path: "/planning", name: "planning", component: Planning, meta: { requiresAuth: true } },
-    { path: "/replay", name: "replay", component: Replay, meta: { requiresAuth: true } },
-        { path: "/LinkProf", name: "LinkProf", component: LinkProf, meta: { requiresAuth: true } },
+{
+  path: "/registerform",
+  component: () => import("@/views/RegisterForm.vue"),
+  meta: { public: true }
+},
+
+{
+  path: "/login",
+  component: Login,
+  meta: { public: true, guestOnly: true }
+},
+{
+  path: "/forgot-password",
+  component: ForgotPassword,
+  meta: { public: true }
+},
+{
+  path: "/reset-password",
+  component: ResetPassword,
+  meta: { public: true }
+},
+{
+  path: "/intro",
+  component: IntroView,
+  meta: { public: true }
+},
+
+{
+  path: "/videos",
+  component: Videos,
+  meta: { public: true }
+},
 {
   path: "/partitions",
-  name: "PartitionsEleve",
-  component: () => import("@/views/PartitionsEleve.vue"),
-  meta: {
-    requiresAuth: true,
-  }
+  component: Partitions,
+  meta: { public: true }
 },
 
-    {
-  path: '/upload-test',
-  name: 'UploadTest',
-  component: UploadFile,
-  meta: {
-    requiresAuth: true
-  }
-},
+
+{
+  path: "/basstuner",
+  component: BassTuner,
+  meta: { public: true }
+}
+,
+
+// AUTH
 {
   path: "/mes-uploads",
   name: "EleveUploads",
   component: () => import("@/views/EleveUploads.vue"),
   meta: { requiresAuth: true }
+},
+
+
+{
+  path: "/feedback",
+  component: Feedback,
+  meta: { requiresAuth: true }
 }
 ,
-    { path: "/moncompte", name: "moncompte", component: moncompte, meta: { requiresAuth: true } },
-    { path: "/MesRessources", name: "MesRessources", component: MesRessources },
 
-    // =========================================================
-    // 🌐 PUBLIC
-    // =========================================================
-    {
-  path: "/register",
-  component: () => import("@/views/RegisterChoice.vue")
+{
+  path: "/linkProf",
+  name: "linkProf",
+  component: () => import("@/views/LinkProf.vue"),
+  meta: { requiresAuth: true }
+},
+
+{
+  path: "/eleve/offres",
+  component: () => import("@/views/eleve/OffresEleve.vue"),
+  meta: { requiresAuth: true }
+}
+,
+{
+  path: "/dashboard",
+  component: Dashboard,
+  meta: { requiresAuth: true }
 },
 {
-  path: "/register/prof",
-  component: () => import("@/views/RegisterProf.vue")
+  path: "/mon-espace",
+  component: MonEspace,
+  meta: { requiresAuth: true }
 },
-    { path: "/intro", name: "intro", component: IntroView },
-{ path: "/feedback", name: "Feedback", component: Feedback, meta: { requiresAuth: true } },
-{ path: "/feedback-prof", name: "feedBackProf", component: FeedBackProf, meta: { requiresAuth: true } },
+{
+  path: "/planning",
+  component: Planning,
+  meta: { requiresAuth: true }
+},
+{
+  path: "/replay",
+  component: Replay,
+  meta: { requiresAuth: true }
+},
+{
+  path: "/moncompte",
+  component: moncompte,
+  meta: { requiresAuth: true }
+},
+{
+  path: "/onboarding",
+  component: () => import("@/views/OnBoardingEleve.vue"),
+  meta: {
+    requiresAuth: true,
+    requiresOnboarding: true
+  }
+}
 
-    { path: "/partitions", name: "partitions", component: Partitions },
-    { path: "/videos", name: "videos", component: Videos },
-    { path: "/Metronome", name: "Metronome", component: Metronome },
-    { path: "/BassTuner", name: "BassTuner", component: BassTuner },
+,
+{
+  path: "/mes-achats",
+  component: () => import("@/views/eleve/MesAchats.vue"),
+  meta: { requiresAuth: true }
+},
+{
+  path: "/stripe-success-eleve",
+  component: () => import("@/components/stripe/StripeSucessEleve.vue"),
+  meta: { requiresAuth: true }
+},
 
-    { path: "/prendreuncours", name: "prendreuncours", component: Prendreuncours },
 
-    { path: "/registerform", name: "registerform", component: RegisterForm },
-        { path: "/Abonnements", name: "Abonnements", component: Abonnements },
+// PROF ADMIN
+{
+  path: "/admin",
+  name: "admin",
+  component: () => import("@/views/Admin.vue"),
+  meta: {
+    requiresAuth: true,
+    requiresPrivilege: "admin"
+  }
+}
+
+,
+{
+  path: "/admin/InAppMessagesAdmin",
+  name: "InAppMessagesAdmin",
+  component: () => import("@/components/admin/InAppMessagesAdmin.vue"),
+  meta: { requiresAuth: true,     requiresPrivilege: "admin" }
+}
+,
 
 
-    // =========================================================
-    // ❌ 404
-    // =========================================================
-    { path: "/:pathMatch(.*)*", name: "NotFound", component: NotFound },
+{
+  path: "/gestioneleves",
+  name: "GestionEleves",
+  component: () => import("@/views/GestionEleves.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/FeedBackProf",
+  name: "FeedBackProf",
+  component: () => import("@/views/AdminFeedBack.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/cours",
+  name: "cours",
+  component: () => import("@/views/Cours.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/dashboard-prof",
+  component: DashboardProf,
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/prof/revenus",
+  component: () => import("@/views/dashboard-prof/ProfRevenus.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/dashboard-prof/offres",
+  component: () => import("@/views/dashboard-prof/Offres.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/prof/planning/create",
+  component: createplanning,
+  meta: { requiresAuth: true, requiresProf: true }
+},
+{
+  path: "/stripe-success",
+  component: () => import("@/components/stripe/StripeSucess.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+
+{
+  path: "/dashboardreports",
+  component: () => import("@/views/dashboardreports.vue"),
+  meta: { requiresAuth: true, requiresProf: true }
+},
+
+// 404
+
+
   ],
 });
 
@@ -338,59 +319,107 @@ const router = createRouter({
 // =============================================================
 // 🔐 GLOBAL GUARD MULTI-PROF / ADMIN + STRIPE
 // =============================================================
+const sleep = (ms: number): Promise<void> =>
+  new Promise(resolve => setTimeout(resolve, ms))
 router.beforeEach((to) => {
   const store = useAuthStore()
 
-  if (store.isLoggingOut) return true
-
-  // ⛔ rien tant que l’auth n’est pas prête
-  if (!store.authReady) return true
-
-  // 🎯 ROOT → dashboard selon état
-if (to.path === "/") {
- if (!store.jwt) {
-    return {
-      path: "/offerpage",
-      query: { funnel: "cours_basse" },
-      replace: true
-    }
-  }
-
-  // ⏳ user pas encore hydraté → on attend
-  const role = store.user?.role
-  if (!role) {
-    return true
-  }
-
-  if (["prof", "admin"].includes(role)) {
-    return { path: "/dashboard-prof", replace: true }
-  }
-
-  return { path: "/dashboard", replace: true }
+  // ⛔ attendre auth
+if (!store.authReady) {
+  return true
 }
 
 
-  const requiresAuth = to.meta.requiresAuth === true
-  const isLoggedIn = !!store.jwt
 
-  if (!requiresAuth) return true
+  const isLogged = !!store.jwt
+ // 🚫 pages guest-only interdites si connecté
+  if (isLogged && to.meta?.guestOnly) {
+    const isProf = ["prof", "admin"].includes(store.user?.role)
+    return {
+      path: isProf ? "/dashboard-prof" : "/dashboard",
+      replace: true
+    }}
 
-  if (!isLoggedIn) {
-    return { name: "login", replace: true }
+
+  const isProf = ["prof", "admin"].includes(store.user?.role)
+
+  // invité
+if (!store.jwt) {
+  if (to.meta?.public) return true
+  return { path: "/cours-de-basse-en-ligne", replace: true }
+}
+
+
+  const cachedOnboarding =
+    localStorage.getItem("onboarding_done") === "true"
+
+  // ⏳ backend pas encore résolu → ÉLÈVES SEULEMENT
+  if (!store.onboardingResolved && !isProf) {
+    if (cachedOnboarding) return true
+    if (to.path === "/onboarding") return true
+    return { path: "/onboarding", replace: true }
   }
 
-  const role = store.user?.role
+  // 🔐 backend = vérité finale
+  const onboardingDone = store.user?.onboarding_done === true
 
-  if (to.meta.requiresProf && !["prof", "admin"].includes(role)) {
-    return { path: "/" }
+  if (!isProf && !onboardingDone && to.path !== "/onboarding") {
+    return { path: "/onboarding", replace: true }
   }
 
-  if (to.meta.role === "admin" && role !== "admin") {
-    return { path: "/" }
+  if (!isProf && onboardingDone && to.path === "/onboarding") {
+return true
   }
+
+  // 🚫 onboarding interdit aux profs
+  if (isProf && to.path === "/onboarding") {
+    return { path: "/dashboard-prof", replace: true }
+  }
+
+
+// 🔐 PRIVILÈGE REQUIS (PAGE PROTÉGÉE)
+const required = to.meta?.requiresPrivilege
+
+if (required) {
+  const privileges = store.user?.privileges || []
+
+  const hasPrivilege = Array.isArray(required)
+    ? required.some(p => privileges.includes(p))
+    : privileges.includes(required)
+
+  if (!hasPrivilege) {
+    store.showUpgradeCTA({ privilege: Array.isArray(required) ? required[0] : required })
+    return false // ⛔ blocage navigation
+  }
+}
+
+
 
   return true
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -16,11 +16,15 @@
 <div class="avatar-placeholder mb-2 position-relative">
   <label for="avatar-upload" class="avatar-label">
 <img
-  v-if="userData.avatar_url"
-  :src="getAvatarSrc(userData.avatar_url)"
+  v-if="avatarSrc"
+  :src="avatarSrc"
   :class="['rounded-circle avatar-image', { 'avatar-uploading': isUploadingAvatar }]"
   alt="Avatar"
 />
+<!--<pre v-if="auth.user">
+{{ JSON.stringify(auth.user, null, 2) }}
+</pre> -->
+
 
     <i v-else class="bi bi-person-circle text-secondary" style="font-size: 120px;"></i>
     <input
@@ -39,9 +43,9 @@
 
 
 
-    <h2 class="fw-bold mb-0">{{ userData.prenom }}</h2>
+<h2 class="fw-bold mb-0">{{ displayPrenom }}</h2>
+<p class="text-muted small">{{ displayEmail }}</p>
 
-<p class="text-muted small">{{ userData.email }}</p>
     <p>
       <span @click="showModal = true" class="editable text-warning" style="cursor: pointer;">
         ✏️ Modifier mes infos
@@ -64,34 +68,59 @@
 <!-- 🧾 Abonnement -->
 <div class="account-card flex-fill p-3 shadow-sm rounded h-100">
 
-    <h5 class="fw-semibold mb-2">Abonnement</h5>
-    <template v-if="isSubscribed">
-      <span class="badge bg-success text-uppercase fw-bold px-3 py-2 mb-2">✅ Abonnement actif</span>
-      <div class="text-muted small">
-        Type : <strong>{{ userData.type_abonnement }}</strong><br />
-        Expire le : <strong>{{ formattedFinAcces }}</strong><br />
-        <span v-if="isRecurrent" class="badge bg-warning text-dark mt-2">🔁 Renouvellement automatique</span><br />
-        Cursus : <strong>{{ userData.cursus || "Non défini" }}</strong>
-        <span v-if="userData.trimestre"> ( {{ userData.trimestre }})</span>
- <a href="#" @click.prevent="handleResiliation" class="text-muted small d-block mt-2" style="font-size: 0.85rem;">
-  Résilier mon abonnement
-</a>
-<router-link
-  to="/mes-achats"
-  class="account-action d-flex align-items-center justify-content-between text-decoration-none mt-2"
->
-  <span class="text-muted small" style="font-size: 0.85rem;">
-    Consulter mes achats
+    <h5 class="fw-semibold mb-2">Statut </h5>
+
+<template v-if="!privilegesResolved">
+
+  <div class="skeleton-wrap">
+    <div class="skeleton badge-skel mb-2"></div>
+    <div class="skeleton line-skel w-75 mb-1"></div>
+    <div class="skeleton line-skel w-50 mb-3"></div>
+    <div class="skeleton line-skel w-40 mb-2"></div>
+    <div class="skeleton line-skel w-60"></div>
+  </div>
+
+
+</template>
+
+<template v-else-if="hasPrivileges">
+  <div class="sub-card">
+
+    <div class="sub-header">
+  <span class="sub-status is-premium">
+    Accès privilégié
   </span>
-  <span class="ms-2 text-warning small">→</span>
-</router-link>
+</div>
+
+
+    <div class="sub-main">
+    <div class="sub-line">
+  <span class="label">Cursus : </span>
+  <span class="value">
+    {{ userData.cursus || "Non défini" }}
+    <span v-if="userData.trimestre"> · {{ userData.trimestre }}</span>
+  </span>
+</div>
+
+    </div>
+
+  <div class="sub-actions">
+  <button class="sub-action" @click="show = true">
+    Gérer l’abonnement
+  </button>
+
+  <RouterLink to="/mes-achats" class="sub-action sub-action-muted">
+    Voir mes achats
+  </RouterLink>
+</div>
+
+
+  </div>
+</template>
 
 
 
 
-
-      </div>
-    </template>
     <template v-else>
       <span class="badge bg-danger text-uppercase fw-bold px-3 py-2 mb-2">❌ Abonnement expiré</span>
       <div class="text-muted small">
@@ -105,7 +134,7 @@
 
       </div>
     <RouterLink
-  to="/abonnements"
+  to="/eleve/offres"
   class="btn btn-sm mt-2 fw-bold"
   style="background-color: #333; color: white;"
 >
@@ -128,7 +157,7 @@
 
 
 <!-- 🎯 Objectif éditable -->
-<div v-if="isReady" class="account-card p-3 mb-3 shadow-sm rounded goal-box" :class="{ 'shake': isSaving, 'pulse': savedAnimation }">
+<div class="account-card p-3 mb-3 shadow-sm rounded goal-box" :class="{ 'shake': isSaving, 'pulse': savedAnimation }">
   <h5 class="fw-semibold mb-2">Objectif</h5>
 
 <div v-if="isEditing">
@@ -159,37 +188,37 @@
 
   <ul class="list-unstyled mb-0">
 
-    <template v-if="!isReady">
-      <!-- ⏳ Skeleton pendant chargement -->
-      <li class="skeleton-item w-75 mb-2"></li>
-      <li class="skeleton-item w-50"></li>
-    </template>
 
-    <template v-else-if="!hasRessources">
-      <!-- 🥲 Données chargées mais vides -->
-<li class="text-muted small d-flex flex-column align-items-start">
-  <span>🤷‍♂️ Aucune ressource disponible pour le moment.</span>
-    <RouterLink
-  to="/abonnements"
-  class="btn btn-sm mt-2 fw-bold"
-  style="background-color: #333; color: white;"
->
-  🔓 Débloquer avec un abonnement
-</RouterLink>
-</li>
+<!-- PAS de skeleton ici -->
+
+ <template v-if="!ressourcesReady">
+    <li class="text-muted small">
+      Chargement des ressources…
+    </li>
+  </template>
+<!-- 🤷‍♂️ prêt mais vide -->
+  <template v-else-if="!hasAnyRessource">
+    <li class="text-muted small d-flex flex-column align-items-start">
+      <span>🤷‍♂️ Aucune ressource disponible pour le moment.</span>
+    </li>
+  </template>
+<template v-else>
+  <li v-if="playlistYoutube">
+    ▶️
+    <a :href="playlistYoutube" target="_blank">
+      Playlist YouTube
+    </a>
+  </li>
+
+  <li v-if="espaceGoogleDrive">
+    📁
+    <a :href="espaceGoogleDrive" target="_blank">
+      Espace Google Drive
+    </a>
+  </li>
+</template>
 
 
-    </template>
-
-    <template v-else>
-      <!-- ✅ Données réelles -->
-      <li v-if="userData.playlist_youtube">
-        ▶️ <a :href="userData.playlist_youtube" target="_blank">Playlist YouTube</a>
-      </li>
-      <li v-if="userData.espace_google_drive">
-        📁 <a :href="userData.espace_google_drive" target="_blank">Espace Google Drive</a>
-      </li>
-    </template>
   </ul>
 </div>
 
@@ -336,6 +365,13 @@
         </div>
       </div>
     </teleport>
+    <teleport to="body">
+  <SubscriptionsModal
+    v-if="show"
+    @close="show = false"
+  />
+</teleport>
+
   </Layout>
 </template>
 <script setup>
@@ -346,6 +382,7 @@ import VueCropper from "vue-cropperjs";
 import "@/assets/styles/cropper.css";
 import { getProxyPostURL, getProxyGetURL } from "@/config/gas"
 import ProfProfileForm from "@/components/Profs/ProfProfileForm.vue"
+import SubscriptionsModal from "@/components/User/SubscriptionsModal.vue"
 
 
 
@@ -355,17 +392,70 @@ import { useAuthStore } from "@/stores/authStore.js";
 // === STORES ===
 
 const authStore = useAuthStore();
+const auth = useAuthStore()
+
 const isAuthReady = computed(
   () => authStore.authReady && authStore.onboardingReady
 )
+const ressourcesReady = ref(
+  !!localStorage.getItem(`userData_${localStorage.getItem("email")}`)
+)
+
+
+
+const avatarSrc = computed(() => {
+  // 1️⃣ cache en priorité (instantané)
+  const email = authStore.user?.email || localStorage.getItem("email")
+  if (email) {
+    const cached = JSON.parse(
+      localStorage.getItem(`userData_${email}`) || "{}"
+    )
+    if (cached.avatar_url) {
+      return getAvatarSrc(cached.avatar_url)
+    }
+  }
+
+  // 2️⃣ store ensuite
+  if (authStore.user?.avatar_url) {
+    return getAvatarSrc(authStore.user.avatar_url)
+  }
+
+  return ""
+})
 
 const canEditProfProfile = computed(() => {
   return authStore.user?.role === "prof" || authStore.user?.role === "admin"
 })
+const show = ref(false)
 
 const showProfModal = ref(false)
+const statusReady = computed(() =>
+  authStore.authReady &&
+  userDataLoaded &&        // ex: userData !== null
+  privilegesChecked       // ex: hasPrivileges !== null
+)
 
+const privilegesResolved = computed(() =>
+  authStore.privilegesStatus === "active" ||
+  authStore.privilegesStatus === "expired"
+)
+const displayPrenom = computed(() =>
+  authStore.user?.prenom ||
+  userData.value?.prenom ||
+  localStorage.getItem("prenom") ||
+  ""
+)
 
+const displayEmail = computed(() =>
+  authStore.user?.email ||
+  userData.value?.email ||
+  localStorage.getItem("email") ||
+  ""
+)
+
+const isPrivilegesPending = computed(
+  () => authStore.privilegesStatus === "pending"
+)
 // === ROUTER ===
 const router = useRouter();
 
@@ -375,8 +465,61 @@ const telephoneInput = ref(null);
 
 // === OBJECTIF = UNE SEULE SOURCE : LE STORE ===
 const objectif = computed(() => {
-  return authStore.user?.objectif || "🎯 Aucun objectif défini";
-});
+  // 1️⃣ store = source de vérité
+  if (authStore.user?.objectif) {
+    return authStore.user.objectif
+  }
+
+  // 2️⃣ fallback cache (si store vide)
+  const email = authStore.user?.email
+  if (email) {
+    const cached = JSON.parse(
+      localStorage.getItem(`userData_${email}`) || "{}"
+    )
+    if (cached.objectif) return cached.objectif
+  }
+
+  return "🎯 Aucun objectif défini"
+})
+
+const playlistYoutube = computed(() => {
+  if (authStore.user?.playlist_youtube) {
+    return authStore.user.playlist_youtube
+  }
+
+  const email = authStore.user?.email
+  if (email) {
+    const cached = JSON.parse(
+      localStorage.getItem(`userData_${email}`) || "{}"
+    )
+    if (cached.playlist_youtube) return cached.playlist_youtube
+  }
+
+  return ""
+})
+
+const espaceGoogleDrive = computed(() => {
+  if (authStore.user?.espace_google_drive) {
+    return authStore.user.espace_google_drive
+  }
+
+  const email = authStore.user?.email
+  if (email) {
+    const cached = JSON.parse(
+      localStorage.getItem(`userData_${email}`) || "{}"
+    )
+    if (cached.espace_google_drive) return cached.espace_google_drive
+  }
+
+  return ""
+})
+
+const hasAnyRessource = computed(() => {
+  return !!(
+    playlistYoutube.value ||
+    espaceGoogleDrive.value
+  )
+})
 
 // Texte editable
 const editableObjectif = ref(objectif.value);
@@ -424,58 +567,32 @@ if (infosRaw) {
 
 // 🔥 SECOND SOURCE : userData_<email> (si existant)
 if (email) {
-  const dataKey = `userData_${email}`;
-  const dataRaw = localStorage.getItem(dataKey);
+  const dataKey = `userData_${email}`
+  const dataRaw = localStorage.getItem(dataKey)
 
   if (dataRaw) {
     try {
-      const data = JSON.parse(dataRaw);
+      const data = JSON.parse(dataRaw)
 
-    if (data.objectif) {
-  // MAJ STORE
-  if (authStore.user) {
-    authStore.user = {
-      ...authStore.user,
-      objectif: data.objectif
-    };
-  }
+      if (data.objectif) {
+        // ✅ MAJ STORE SAFE
+        authStore.$patch(state => {
+          if (state.user) {
+            state.user.objectif = data.objectif
+          }
+        })
 
-  // MAJ TEXTAREA
-  editableObjectif.value = data.objectif;
-}
+        // ✅ MAJ UI
+        editableObjectif.value = data.objectif
+      }
 
     } catch {}
   }
 }
 
+
 // 🔥 SYNC STORE → OBJECTIF quand le store finit de charger
-watch(
-  () => authStore.user?.objectif,
-  (val) => {
-    if (!val) return;
 
-
-    editableObjectif.value = val;
-
-    // sauvegarde
-    if (email) {
-      const key = `userData_${email}`;
-      const cached = JSON.parse(localStorage.getItem(key) || "{}");
-      cached.objectif = val;
-      localStorage.setItem(key, JSON.stringify(cached));
-    }
-
-    if (prenom) {
-      const infosKey = `userInfos_${prenom}`;
-      const cachedInfos = JSON.parse(localStorage.getItem(infosKey) || "{}");
-      cachedInfos.objectif = val;
-      localStorage.setItem(infosKey, JSON.stringify(cachedInfos));
-    }
-
-    console.log("🟢 Objectif mis à jour via store :", val);
-  },
-  { immediate: false }
-);
 
 
 
@@ -493,9 +610,8 @@ const toastMessage = ref("");
 
 const ressources = ref([]);
 const isLoadingResources = ref(true);
-const isReady = ref(
-  !!localStorage.getItem(`userData_${localStorage.getItem("email")}`)
-)
+const isReady = ref(false)
+
 
 const isRefreshing = ref(false);
 const isPageMounted = ref(false);
@@ -520,7 +636,16 @@ const isSubscribed = computed(() => {
     !!userData.value?.fin_acces
   );
 });
+const hasPrivileges = computed(() =>
+  authStore.privilegesStatus === "active"
+)
 
+
+;
+const isPro = computed(() => {
+  return auth.user?.plan === "premium" || auth.user?.abo === "pro"
+})
+;
 const hasRessources = computed(() => {
   const yt = (userData.value.playlist_youtube || "").trim();
   const drive = (userData.value.espace_google_drive || "").trim();
@@ -568,12 +693,16 @@ function editField(field) {
 }
 
 function getAvatarSrc(url) {
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)\//);
+  if (!url || typeof url !== "string") return ""
+
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)\//)
   if (match) {
-    return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+    return `https://drive.google.com/uc?export=view&id=${match[1]}`
   }
-  return url;
+
+  return url
 }
+
 function handleResiliation() {
   if (confirm("❗ Voulez-vous vraiment résilier votre abonnement ?")) {
     resilierAbonnementStripe(email);
@@ -669,17 +798,17 @@ const proxyURL = getProxyPostURL();
         const data = await res.json();
 
         if (data.success && data.url) {
-          userData.value.avatar_url = data.url;
-
-const userDataKey = `userData_${email}`;
-
-    const safeLocal = JSON.parse(JSON.stringify(userData.value || {}));
-safeLocal.avatar_url = data.url;
-
-localStorage.setItem(userDataKey, JSON.stringify(safeLocal));
+        patchUserData({
+  avatar_url: data.url
+})
 
 
-          localStorage.setItem(userDataKey, JSON.stringify(updatedData));
+;
+
+
+
+
+
 
           triggerToast("🖼️ Avatar mis à jour !");
         } else {
@@ -700,6 +829,30 @@ localStorage.setItem(userDataKey, JSON.stringify(safeLocal));
 
   }, selectedFile.type || "image/png");
 
+}
+function patchUserData(patch) {
+  const email =
+    authStore.user?.email ||
+    localStorage.getItem("email")
+
+  if (!email) return
+
+  const key = `userData_${email}`
+  const current = JSON.parse(localStorage.getItem(key) || "{}")
+
+  const updated = { ...current, ...patch }
+
+  localStorage.setItem(key, JSON.stringify(updated))
+
+  // sync UI + store
+  userData.value = { ...updated }
+
+  authStore.$patch({
+    user: {
+      ...authStore.user,
+      ...patch
+    }
+  })
 }
 
 function formatTelephone(number) {
@@ -813,10 +966,9 @@ const email = computed(() => authStore.user?.email || "");
   }
 
 const finalURL = getProxyGetURL(
-  `route=revoke_session` +
-  `&email=${encodeURIComponent(email)}` +
-  `&sessionId=${encodeURIComponent(sessionId)}`
-);
+  `route=revoke_session&sessionId=${encodeURIComponent(sessionId)}`
+)
+;
 
   console.log("🧪 URL de révocation :", finalURL);
 
@@ -1015,12 +1167,7 @@ const userDataKey = `userData_${email}`;
   userInfos.objectif = objectifValue;
   localStorage.setItem(userInfosKey, JSON.stringify(userInfos));
 
-  const userData = JSON.parse(localStorage.getItem(userDataKey) || "{}");
-  if (Object.keys(userData).length > 0) {
-    userData.objectif = objectifValue;
-    localStorage.setItem(userDataKey, JSON.stringify(userData));
-    console.log(`✅ Objectif mis à jour dans ${userDataKey}`);
-  }
+
 
   // 🔔 2. Event custom pour réagir ailleurs dans l'app
   window.dispatchEvent(new CustomEvent("userDataUpdated", {
@@ -1121,10 +1268,10 @@ async function saveObjectif() {
     infosCache.objectif = newObjectif;
     localStorage.setItem(infosKey, JSON.stringify(infosCache));
 
-    const dataKey = `userData_${emailLocal}`;
-    const dataCache = JSON.parse(localStorage.getItem(dataKey) || "{}");
-    dataCache.objectif = newObjectif;
-    localStorage.setItem(dataKey, JSON.stringify(dataCache));
+patchUserData({
+  objectif: newObjectif
+})
+
   }
 
   console.log("⚡ Objectif MAJ instantanément dans localStorage:", newObjectif);
@@ -1157,166 +1304,157 @@ authStore.user.objectif = newObjectif;
 
 
 onMounted(async () => {
-   if (!authStore.isInitDone || !authStore.user) {
-    console.warn("⏳ moncompte: auth pas prête, on attend");
-    await new Promise(resolve => {
-      const stop = watch(
-        () => authStore.isInitDone && authStore.user,
-        (ready) => {
-          if (ready) {
-            stop()
-            resolve()
-          }
-        },
-        { immediate: true }
-      )
+  // 1️⃣ AUTH READY (OBLIGATOIRE)
+  if (!authStore.isInitDone) {
+    await authStore.initAuth()
+  }
+
+  const email =
+    authStore.user?.email ||
+    localStorage.getItem("email") ||
+    sessionStorage.getItem("email")
+
+const cached = JSON.parse(
+  localStorage.getItem(`userData_${email}`) || "{}"
+)
+
+if (cached.objectif) {
+  ressourcesReady.value = true
+}
+
+  if (!email) return
+
+  const prenom =
+    authStore.user?.prenom ||
+    localStorage.getItem("prenom") ||
+    ""
+
+  const userDataKey = `userData_${email}`
+  const userInfosKey = `userInfos_${prenom}`
+
+  // 2️⃣ TENTATIVE CACHE (PRIORITÉ)
+  const cachedRaw = localStorage.getItem(userDataKey)
+  if (cachedRaw) {
+    const cached = JSON.parse(cachedRaw)
+
+    // hydrate store depuis cache (AVANT RENDER)
+    authStore.$patch({
+      user: {
+        ...authStore.user,
+        avatar_url: cached.avatar_url || authStore.user.avatar_url,
+        playlist_youtube: cached.playlist_youtube || authStore.user.playlist_youtube,
+        espace_google_drive: cached.espace_google_drive || authStore.user.espace_google_drive,
+        objectif: cached.objectif || authStore.user.objectif
+      }
+
     })
-  }
-const email = authStore.user?.email
-           || localStorage.getItem("email")
-           || sessionStorage.getItem("email")
-           || "";
 
-const prenom = authStore.user?.prenom || localStorage.getItem("prenom") || "";
+    // hydrate UI locale
+    userData.value = { ...cached }
+  ressourcesReady.value = true
 
-console.log("📡 authStore.email =", authStore.user?.email);
-console.log("📡 authStore.user =", authStore.user);
+    if (cached.fin_acces) {
+      formattedFinAcces.value = formatDateFR(cached.fin_acces)
+    }
 
-
-  const handleRefresh = async () => {
-  console.log("🔁 Pull‑to‑refresh MonCompte déclenché");
-  isRefreshing.value = true;
-
-  // Force un rechargement des données utilisateur
-  await safeSyncUserData(); // ta fonction existante
-  isRefreshing.value = false;
-};
-
-  fetchSessions();
-const userInfosKey = `userInfos_${prenom}`;
-const infosCache = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
-
-
-
-const userDataKey = `userData_${email}`;
-
-
-  const rawUserData = localStorage.getItem(userDataKey);
-
-if (rawUserData) {
-  const data = JSON.parse(rawUserData);
-
-userData.value = { ...data };
-
-// 👇 AJOUTER CES 2 LIGNES
-if (data.objectif) {
-  authStore.user.objectif = data.objectif;
-  editableObjectif.value = data.objectif;
-}
-
-  // 🔥 Injection immédiate de la date (fix du bug)
-  if (data.fin_acces) {
-    formattedFinAcces.value = formatDateFR(data.fin_acces);
-    console.log("⚡ fin_acces chargée instantanément :", formattedFinAcces.value);
   }
 
-  await safeSyncUserData();
-  return;
-}
-
-
-
-else {
-    // ✅ Fallback si aucune donnée en localStorage
-    console.warn("⏳ userData manquant — tentative de rechargement depuis Google Sheets");
-
- const proxyURL = getProxyGetURL(
-  `route=getelevebyemail&email=${encodeURIComponent(email)}`
-);
-
+  // 3️⃣ PAS DE CACHE → FETCH BACKEND
+  if (!cachedRaw) {
     try {
-      const res = await fetch(proxyURL);
-      const data = await res.json();
+      const res = await fetch(
+        getProxyGetURL(
+          `route=getelevebyemail&email=${encodeURIComponent(email)}`
+        )
+      )
 
-if (data && data.email) {
-  // données sheets OK
-  userData.value = data;
-  localStorage.setItem(userDataKey, JSON.stringify(data));
-  await safeSyncUserData();
-} else if (authStore.user?.email) {
-  // fallback store (déjà chargé par initAuth)
-  console.log("📥 Fallback sur authStore.user");
-  userData.value = authStore.user;
-  localStorage.setItem(userDataKey, JSON.stringify(authStore.user));
-  await safeSyncUserData();
-} else {
-  console.warn("📭 Aucun fallback possible — ni Sheets ni authStore");
-}
+      const data = await res.json()
+      if (!data?.email) return
 
-    } catch (err) {
-      console.error("❌ Erreur lors du fetch de la fiche utilisateur :", err);
+      // hydrate store
+      authStore.$patch({
+        user: {
+          ...authStore.user,
+          ...data
+        }
+      })
+
+      // hydrate UI
+      userData.value = { ...data }
+
+      if (data.fin_acces) {
+        formattedFinAcces.value = formatDateFR(data.fin_acces)
+      }
+
+      // sauvegarde cache
+const prev = JSON.parse(localStorage.getItem(userDataKey) || "{}")
+
+localStorage.setItem(
+  userDataKey,
+  JSON.stringify({ ...prev, ...data })
+)
+    ressourcesReady.value = true
+
+
+
+    } catch (e) {
+      console.error("❌ fetch userData failed", e)
+          ressourcesReady.value = true // pour ne jamais bloquer
+
     }
   }
 
-async function safeSyncUserData() {
-  const email = authStore.user?.email
-              || localStorage.getItem("email")
-              || sessionStorage.getItem("email")
-              || "";
+  // 4️⃣ SYNC OBJECTIF (userInfos_<prenom> prioritaire)
+  const infosRaw = localStorage.getItem(userInfosKey)
+  if (infosRaw) {
+    const infos = JSON.parse(infosRaw)
+    if (infos.objectif) {
+      authStore.$patch(state => {
+        if (state.user) state.user.objectif = infos.objectif
+      })
 
-  const prenom = authStore.user?.prenom
-               || localStorage.getItem("prenom")
-               || "";
+      const cached = JSON.parse(
+        localStorage.getItem(userDataKey) || "{}"
+      )
+      cached.objectif = infos.objectif
+      localStorage.setItem(userDataKey, JSON.stringify(cached))
+      ressourcesReady.value = true
 
-  if (!email || !prenom) {
-    console.warn("⚠️ safeSyncUserData annulé : email ou prénom manquant");
-    return;
+    }
   }
 
-  const userDataKey = `userData_${email}`;
-  const userInfosKey = `userInfos_${prenom}`;
+  // 5️⃣ SESSIONS
+  fetchSessions()
 
-  const cachedUserData = JSON.parse(localStorage.getItem(userDataKey) || "{}");
-  const cachedInfos    = JSON.parse(localStorage.getItem(userInfosKey) || "{}");
+  // 6️⃣ EVENT GLOBAL (UPDATE OBJECTIF / AVATAR / ETC)
+  window.addEventListener("userDataUpdated", (event) => {
+    if (event.detail?.prenom !== prenom) return
 
-  // 🧠 priorité à userInfos pour l’objectif
-  if (cachedInfos.objectif) {
-    cachedUserData.objectif = cachedInfos.objectif;
-  }
+    const cached = JSON.parse(
+      localStorage.getItem(userDataKey) || "{}"
+    )
 
-  // ✅ Mise à jour uniquement si différence
-  if (JSON.stringify(userData.value) !== JSON.stringify(cachedUserData)) {
-    userData.value = { ...cachedUserData };
-    console.log("✅ userData synchronisé proprement.");
-  }
+    userData.value = { ...cached }
 
-  // ✅ MAJ affichage
-  editableObjectif.value = cachedUserData.objectif || "🎯 Aucun objectif défini";
+    authStore.$patch({
+      user: {
+        ...authStore.user,
+        avatar_url: cached.avatar_url || authStore.user.avatar_url,
+        playlist_youtube: cached.playlist_youtube || authStore.user.playlist_youtube,
+        espace_google_drive: cached.espace_google_drive || authStore.user.espace_google_drive,
+        objectif: cached.objectif || authStore.user.objectif
+      }
+    })
 
-  if (cachedUserData.fin_acces) {
-    formattedFinAcces.value = formatDateFR(cachedUserData.fin_acces);
-  }
+    if (cached.fin_acces) {
+      formattedFinAcces.value = formatDateFR(cached.fin_acces)
+    }
+  })
 
-  isRecurrent.value = (cachedUserData.recurrent || "").toLowerCase() === "oui";
+  await nextTick()
+  isReady.value = true
+})
 
-  // ✅ DERNIÈRE LIGNE SEULEMENT
-  await nextTick();
-  isReady.value = true;
-}
-
-
-await nextTick();
-
-
-
-
-window.addEventListener('userDataUpdated', (event) => {
-  if (event.detail.prenom === prenom) {
-    console.log("🔁 userDataUpdated event reçu dans moncompte");
-    safeSyncUserData();
-  }
-});
-});
 
 
 
@@ -1701,5 +1839,147 @@ a:hover,
   text-decoration: underline;
 }
 
+.skeleton {
+background: linear-gradient(
+  90deg,
+  rgba(255,255,255,0.06) 25%,
+  rgba(255,255,255,0.12) 37%,
+  rgba(255,255,255,0.06) 63%
+);
+  background-size: 400% 100%;
+  animation: skel 1.4s ease infinite;
+  border-radius: 6px;
+}
+.badge-skel { height: 32px; width: 180px; }
+.line-skel { height: 14px; }
+.w-75 { width: 75%; }
+.w-60 { width: 60%; }
+.w-50 { width: 50%; }
+.w-40 { width: 40%; }
+
+@keyframes skel {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+.subs-link {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  padding: 8px 14px;
+  border-radius: 10px;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.subs-link:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.25);
+  color: #fff;
+}
+
+.sub-card {
+  margin-top: 10px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.sub-header {
+  margin-bottom: 8px;
+}
+
+.sub-status {
+  font-size: 0.7rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.sub-main {
+  margin-bottom: 12px;
+}
+
+.sub-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.sub-line .label {
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.sub-line .value {
+  color: #e5e7eb;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.sub-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.sub-action {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #e5e7eb;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+  cursor: pointer;
+}
+
+.sub-action:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.25);
+}
+
+.sub-action-muted {
+  border-color: rgba(255,255,255,0.08);
+  color: #cbd5f5;
+}
+
+.sub-action-muted:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.18);
+}
+
+
+.sub-link {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  text-decoration: none;
+  transition: color .15s ease;
+}
+
+.sub-link:hover {
+  color: #e5e7eb;
+}
+.sub-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.sub-status.is-premium {
+  color: #f5d08a;
+  background: linear-gradient(
+    135deg,
+    rgba(245,208,138,0.14),
+    rgba(245,208,138,0.04)
+  );
+  border: 1px solid rgba(245,208,138,0.35);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
 
 </style>

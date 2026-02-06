@@ -392,6 +392,7 @@ hasEleveChanged(eleve) {
 
   return keys.some(k => eleve[k] !== this.originalEleve[k])
 }
+
 ,
 loadFromStore() {
   const TTL = 5 * 60 * 1000
@@ -445,85 +446,69 @@ disableEdit(email, key) {
 }
 ,
 async updateEleve(eleve) {
-  if (!this.hasEleveChanged(eleve)) {
-    return
-  }
+  if (!this.hasEleveChanged(eleve)) return
+const prevEleves = JSON.parse(JSON.stringify(this.eleves))
 
-  const jwt = await getValidToken();
-  if (!jwt) {
-    alert("JWT invalide ou expiré.");
-    return;
-  }
+  const jwt = await getValidToken()
+  if (!jwt || !eleve?.user_id) return
 
-  if (!eleve?.user_id) {
-    alert("Identifiant élève manquant.");
-    return;
-  }
+  const keys = [
+    "email",
+    "nom",
+    "prenom",
+    "telephone",
+    "statut",
+    "objectif",
+    "trimestre",
+    "cursus",
+    "drive",
+    "youtube"
+  ]
 
-  const url = getProxyPostURL();
+  const diff = {}
+  keys.forEach(k => {
+    if (eleve[k] !== this.originalEleve[k]) {
+      diff[k] = eleve[k]
+    }
+  })
+
+  if (Object.keys(diff).length === 0) return
+this.eleves = this.eleves.map(e =>
+  e.user_id === eleve.user_id ? { ...e, ...diff } : e
+)
+this.saveToStore()
 
   const payload = {
     route: "updateelevecomplet",
     jwt,
     prof_id: this.auth.user.prof_id,
-
-    // ✅ clé primaire
     eleve_id: eleve.user_id,
-
-    // champs éditables
-    email: eleve.email,
-    nom: eleve.nom,
-    prenom: eleve.prenom,
-    telephone: eleve.telephone,
-    statut: eleve.statut,
-    objectif: eleve.objectif,
-    trimestre: eleve.trimestre,
-    cursus: eleve.cursus,
-    drive: eleve.drive,
-    youtube: eleve.youtube
-  };
-
-  console.log("📤 Payload updateEleveComplet :", payload);
-  console.log("🌐 URL POST :", url);
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    const result = await res.json();
-    console.log("📥 Réponse API :", result);
-    this.originalEleve = JSON.parse(JSON.stringify(eleve))
-
-
-    if (!result.success) {
-      console.warn("❌ Erreur update élève :", result.message);
-      alert(result.message || "Erreur lors de la mise à jour.");
-      return;
-    }
-
-    const profId = this.auth?.user?.prof_id;
-    if (!profId) return;
-
-    // 🔹 update liste locale (UUID)
-    const i = this.eleves.findIndex(e => e.user_id === eleve.user_id);
-    if (i !== -1) {
-      this.eleves[i] = { ...eleve };
-    }
-
-    // 🔹 update cache Pinia
-    if (this.store.elevesByProf?.[profId] && i !== -1) {
-      this.store.elevesByProf[profId][i] = { ...eleve };
-      this.store.tsByProf[profId] = Date.now();
-    }
-
-  } catch (err) {
-    console.error("❌ Erreur API updateEleve :", err);
-    alert("Erreur de communication avec le serveur.");
+    ...diff
   }
+
+  const res = await fetch(getProxyPostURL(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+
+const result = await res.json()
+if (!result.success) {
+  this.eleves = prevEleves
+  this.saveToStore()
+  return alert(result.message)
 }
+
+
+  this.originalEleve = JSON.parse(JSON.stringify(eleve))
+  this.eleves = this.eleves.map(e =>
+  e.user_id === eleve.user_id ? { ...eleve } : e
+)
+
+this.saveToStore()
+
+}
+
 
 
 

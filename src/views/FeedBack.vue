@@ -689,59 +689,102 @@ if (
           return dateString;
         }
       },
-      async sendFeedback() {
-  if (!this.nouveauFeedback.trim()) return;
+async sendFeedback() {
+  if (!this.nouveauFeedback.trim()) return
 
-  this.sendingFeedback = true;
-  this.feedbackSentMessage = "";
-const auth = useAuthStore()
+  const auth = useAuthStore()
+  if (!auth.jwt) return
 
-if (!auth.jwt) return
+  const tempId = `TEMP_${Date.now()}`
+  const contenu = this.nouveauFeedback
 
-  const url = getProxyPostURL()
+  const optimisticFb = {
+    ID: tempId,
+    _optimistic: true,
+    Type: "Élève",
+    Statut: "en attente",
+    Nom_Cours: "",
+    Contenu: contenu,
+    contenuformate: contenu,
+    Auteur: auth.user?.prenom,
+    Date_Publication: new Date().toISOString(),
+    reponses: []
+  }
 
-const payload = {
-  route: "addfeedback",
-jwt: auth.jwt,
-  id_cours: "",
-id_eleve: auth.user?.id || auth.user?.email,
-  prenom: auth.user?.prenom,
-  email: auth.user?.email,   // 🔥 OBLIGATOIRE
-  contenu: this.nouveauFeedback.trim(),
-  type: "Élève"
-};
+  /* ---------- OPTIMISTIC UI ---------- */
+  this.feedbacks.unshift(optimisticFb)
+  this.openedFeedbackId = tempId
+  this.filterStatut = "ALL"
+  this.showNewFeedbackForm = false
+  this.nouveauFeedback = "<p></p>"
 
+  this.$nextTick(() => {
+    this.selectedMonth = this.availableMonths[0]?.value || ""
+  })
 
-console.log("📡 URL POST :", url);
-
-console.log("🧾 Payload envoyé :", payload);
+  this.saveFeedbackToCache(this.feedbacks)
+  this.sendingFeedback = true
 
   try {
-    const response = await fetch(url, {
+    const res = await fetch(getProxyPostURL(), {
       method: "POST",
-        headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        route: "addfeedback",
+        jwt: auth.jwt,
+        id_cours: "",
+        id_eleve: auth.user?.id || auth.user?.email,
+        prenom: auth.user?.prenom,
+        email: auth.user?.email,
+        contenu,
+        type: "Élève"
+      })
+    })
 
-    const result = await response.json();
-    if (result.success) {
-      this.feedbackSentMessage = "✅ Feedback envoyé !";
- this.nouveauFeedback = "<p></p>";
-      localStorage.removeItem(this.feedbackCacheKey)
+    const result = await res.json()
+    if (!result.success) throw new Error("API error")
 
-      await this.fetchFeedbacks(); // Recharge les feedbacks
-    } else {
-      console.warn("❌ Erreur API :", result.message);
-    }
-  } catch (error) {
-    console.error("❌ Erreur d'envoi de feedback :", error);
-  } finally {
-    this.sendingFeedback = false;
-    setTimeout(() => (this.feedbackSentMessage = ""), 3000);
+    /* ---------- RESYNC BACKEND ---------- */
+    localStorage.removeItem(this.feedbackCacheKey)
+    await this.fetchFeedbacks({ silent: true })
+
+    this.$nextTick(() => {
+const realIndex = this.feedbacks.findIndex(
+  fb => fb.Contenu === contenu && !fb._optimistic
+)
+
+if (realIndex !== -1) {
+  // remplace le TEMP par le vrai
+  const real = this.feedbacks[realIndex]
+
+  this.feedbacks.splice(realIndex, 1) // enlève le vrai
+  this.feedbacks = this.feedbacks.filter(fb => fb.ID !== tempId)
+
+  this.feedbacks.unshift(real)
+  this.openedFeedbackId = real.ID
+} else {
+  // backend pas encore prêt → on garde l’optimistic
+  if (!this.feedbacks.some(fb => fb.ID === tempId)) {
+    this.feedbacks.unshift(optimisticFb)
+    this.openedFeedbackId = tempId
   }
-},
+}
+
+
+
+      this.saveFeedbackToCache(this.feedbacks)
+    })
+
+  } catch (e) {
+    // ❌ rollback total
+    this.feedbacks = this.feedbacks.filter(fb => fb.ID !== tempId)
+    this.saveFeedbackToCache(this.feedbacks)
+  } finally {
+    this.sendingFeedback = false
+  }
+}
+
+,
 async markAsRead(feedbackId) {
   console.log("📤 feedbackId reçu dans front :", feedbackId, typeof feedbackId);
 

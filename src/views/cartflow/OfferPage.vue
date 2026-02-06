@@ -31,21 +31,13 @@ const auth = useAuthStore()
 const subscriptionInProgress = ref(false)
 
 useHead({
-  title: 'Cours de basse en ligne avec professeur | SunBassSchool',
+  title: "Inscription aux cours – SunBassSchool",
   meta: [
-    {
-      name: 'description',
-      content:
-        'Cours de basse en ligne en visioconférence avec professeur expérimenté. Formation personnalisée, suivi via SunBassApp et accès immédiat.'
-    }
-  ],
-  link: [
-    {
-      rel: "canonical",
-      href: "https://www.sunbassschool.com/"
-    }
+    { name: "robots", content: "noindex, nofollow" }
   ]
 })
+
+
 // =====================
 // STATE
 // =====================
@@ -1945,20 +1937,6 @@ margin-top:25px;
   margin-top: 0.8rem;
   padding: 0.7rem 1rem;
   font-size: 0.85rem;
-}
-
-/* transistion animation composant payment element stripe */
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: all 0.35s ease;
-}
-.slide-fade-enter-from {
-  opacity: 0;
-  transform: translateY(16px);
-}
-.slide-fade-enter-to {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 </style>

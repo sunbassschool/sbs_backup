@@ -1,7 +1,6 @@
 <template>
   <div class="app-container">
 
-
     <!-- 🔐 Logout loader -->
     <div v-if="showLogoutMessage" class="logout-container">
       <div class="logout-spinner"></div>
@@ -10,24 +9,29 @@
 
     <!-- 🚦 App -->
 <router-view />
-<UpgradeModal v-if="auth.upgradeCTA" />
 
+    <!-- 📣 In-app messaging -->
+    <InAppMessageRenderer v-if="auth.authReady" />
+
+    <UpgradeModal v-if="auth.upgradeCTA && auth.authReady" />
   </div>
 </template>
 
 
+
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useAuthStore } from "@/stores/authStore.js";
 import { registerSW } from "virtual:pwa-register";
 import { useMetronomeStore } from "@/stores/useMetronomeStore";
 import UpgradeModal from "@/components/UpgradeModal.vue";
+import { useRouter } from "vue-router"
+import InAppMessageRenderer from "@/components/InAppMessageRenderer.vue"
 
 
 
 const auth = useAuthStore();
 const showLogoutMessage = ref(false);
-
 onMounted(() => {
 
   window.addEventListener("show-logout-message", () => {
@@ -55,11 +59,21 @@ onMounted(() => {
 
   useMetronomeStore().initVisibilityRecovery();
 });
+
+
+
 </script>
 
 
 
 <style scoped>
+.auth-blocker {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 999999;
+}
+
 /* ============================================================================
    TRANSITIONS PAGE
    ============================================================================ */
@@ -71,6 +85,10 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+.fade-enter-to,
+.fade-leave-from {
+  opacity: 1;
 }
 
 /* ============================================================================

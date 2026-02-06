@@ -4,11 +4,15 @@
 // Compatibilité totale avec Apps Script (refresh, recupinfosmembres, logout).
 // ============================================================================
 import { getProxyGetURL,getProxyPostURL,gasPost   } from "@/config/gas.ts"
+import { getCachedUser } from "@/utils/userCache.ts"
+import { backgroundFetch } from "@/utils/backgroundFetcher"
 
 import { getDeviceId } from "@/utils/device"
 import router from "@/router/index.ts"
 import {buildUserFromJwt} from "@/utils/jwt_manager.js"
 import { defineStore } from "pinia";
+import { setCachedUser } from "@/utils/userCache.ts"
+
 import { readKV, saveSessionData, getSessionIdFromDB } from "@/utils/AuthDBManager.ts";
 import {
   getValidToken,
@@ -32,8 +36,9 @@ const SAFE_USER_CACHE_KEYS = [
   "objectif",
   "playlist_youtube",
   "espace_google_drive",
-  "avatar"
+  "avatar_url"
 ]
+
 
 let _refreshTimer = null;
 let _refreshPromise = null;
@@ -50,7 +55,17 @@ export const useAuthStore = defineStore("auth", {
   // --------------------------------------------------------------------------
   state: () => ({
       authReady: false,
-  onboardingReady: false,
+      _prewarmDone: false,
+authFullyReady: false,
+
+          isLoggingOut: false,
+            privilegesStatus: "pending", // "pending" | "active" | "expired"
+             userLoaded: false,
+_onboardingResolved: false,
+  user: null,
+userLoaded: false,
+postAuthResolved: false,
+  onboardingStable: false,
   upgradeCTA: null,
       stripe_ready: null,
   elevesByProf: {},
@@ -58,6 +73,7 @@ export const useAuthStore = defineStore("auth", {
   hasActiveOfferByProf: {},
 dashboardElevesCount: null,
 isLoggingIn: false,
+    refreshPromise: null,
 
 hasSaleByProf: {},
  stripe: {
@@ -85,6 +101,8 @@ hasSaleByProf: {},
     isRefreshingToken: false,   // Flag pour empêcher un double refresh simultané
     refreshFailed: false,       // Indique si un refresh a échoué (1 fois)
     isLoggingOut: false,        // Flag pour empêcher double logout
+      authReadyLight: false, // 👈 JWT + user mini ok
+
     isInitDone: false,          // initAuth est terminé
 
     _refreshInterval: null,     // Timer pour auto-refresh
@@ -117,19 +135,37 @@ hasSaleByProf: {},
         return false;
       }
     },
+onboardingReady(state) {
+  const profId = state.user?.prof_id
+  if (!profId) return false
 
+  const stripeKnown =
+    !!state.user && (
+      state.user.stripe_charges_enabled === true ||
+      state.user.stripe_charges_enabled === false ||
+      !state.user.stripe_account_id
+    )
 
+  return (
+    stripeKnown &&
+    typeof state.dashboardElevesCount === "number" &&
+    typeof state.hasActiveOfferByProf?.[profId] === "boolean" &&
+    typeof state.hasSaleByProf?.[profId] === "boolean"
+  )
+}
+
+,
 
 onboardingSnapshot: (state) => {
   const profId = state.user?.prof_id
+const stripeOk = state.stripe.status === "ready"
 
-  const stripeOk =
-    state.stripe?.status === "ready" &&
-    !!state.stripe?.accountId
+
 
 const hasStudent =
-  state.dashboardElevesCount > 0 ||
-  state.dashboardElevesCount == null
+  typeof state.dashboardElevesCount === "number" &&
+  state.dashboardElevesCount > 0
+
 
 
 
@@ -140,9 +176,12 @@ const hasStudent =
   const hasSale =
     state.hasSaleByProf?.[profId] === true
 
-  const isReady =
-    typeof hasOffer === "boolean" &&
-    typeof hasSale === "boolean"
+const isReady =
+  typeof stripeOk === "boolean" &&
+  typeof hasOffer === "boolean" &&
+  typeof hasSale === "boolean" &&
+  typeof state.dashboardElevesCount === "number"
+
 
   const completed =
     [stripeOk, hasStudent, hasOffer, hasSale].filter(v => v === true).length
@@ -171,8 +210,11 @@ onboardingNextAction(state) {
   const profId = state.user?.prof_id
   if (!profId) return null
 
-  const stripeOk = state.stripe?.status === "connected"
-  const hasStudent = (state.dashboardElevesCount || 0) > 0
+const stripeOk = !!(
+  state.user?.stripe_account_id &&
+  state.user?.stripe_charges_enabled === true
+)
+  const hasStudent = (state.dashboardElevesCount || 0) > 1
   const hasOffer = !!state.hasActiveOfferByProf?.[profId]
   const hasSale = !!state.hasSaleByProf?.[profId]
 
@@ -331,8 +373,6 @@ async fetchHasSale() {
     this.hasSaleByProf[profId] = json.hasSale === true
   } catch (e) {
     console.error("❌ fetchHasSale failed", e)
-  } finally {
-    this.onboardingReady = true
   }
 }
 
@@ -366,17 +406,27 @@ async fetchHasSale() {
 setLoginSuccess({ jwt, user }) {
   this.jwt = jwt
   this.jwtReady = true
-  this.user = user
+
+  this.user = {
+    ...user,
+    privileges: Array.isArray(user?.privileges)
+      ? user.privileges
+      : [],
+    quota_mb: Number(user?.quota_mb) || 0
+  }
+
   this.isInitDone = true
   this.refreshFailed = false
 }
+
 ,
 
     // 📥 Charge le nombre de demandes de report de cours via un endpoint externe
-   async fetchPendingReports() {
+async fetchPendingReports() {
   try {
-const jwt = await this.ensureValidJwt()
+    const jwt = await this.ensureValidJwt()
     if (!jwt) return
+    if (this.isLoggingOut) return
 
     const url = getProxyGetURL(
       `route=getReports&jwt=${encodeURIComponent(jwt)}`
@@ -389,11 +439,11 @@ const jwt = await this.ensureValidJwt()
       this.pendingReportsCount =
         data.reports.filter(r => r.status === "DEMANDE").length
     }
-
   } catch (e) {
     console.error("❌ fetchPendingReports error:", e)
   }
 },
+
 
     // ♻️ Essaye de restaurer la session depuis IndexedDB (ou fallback localStorage)
 async restoreSessionFromStorage() {
@@ -409,13 +459,58 @@ async restoreSessionFromStorage() {
   this.jwt = jwt
   this.refreshToken = rt
   this.sessionId = sid
+  // 🔐 état métier INCONNU tant que serveur pas passé
+if (jwt) {
+  if (!this.privilegesStatus || this.privilegesStatus === "pending") {
+  this.privilegesStatus = "loading"
+}
+}
+// 🔒 sécurité : JWT sans refreshToken = session invalide
+if (jwt && !rt) {
+  console.warn("⛔ JWT présent sans refreshToken → logout")
+  await logoutUser()
+  return false
+}
+
 
   // 👤 USER = TOUJOURS reconstruit depuis JWT
   if (jwt && !this.user) {
     this.user = buildUserFromJwt(jwt)
     console.log("👤 user reconstruit depuis JWT (restore)")
   }
+// ⚡ CACHE USER (si dispo)
+if (jwt) {
+  const payload = decodeJwt(jwt)
+  const cachedUser = getCachedUser(payload.email)
 
+if (cachedUser) {
+this.user = {
+  ...(this.user || {}),
+  ...cachedUser,
+  quota_mb: Number(cachedUser.quota_mb) || 0, // ✅
+  avatar_url:
+    cachedUser.avatar_url ?? this.user?.avatar_url,
+  playlist_youtube:
+    cachedUser.playlist_youtube ?? this.user?.playlist_youtube,
+  espace_google_drive:
+    cachedUser.espace_google_drive ?? this.user?.espace_google_drive
+}
+
+
+
+  // ⚠️ uniquement si POSITIF
+if (cachedUser.abo === "active" || (cachedUser.privileges?.length || 0) > 0) {
+  this.privilegesStatus = "active"
+} else {
+  // ✅ état connu (pas premium)
+  this.privilegesStatus = "expired"
+}
+
+
+  console.log("⚡ user hydraté depuis cache (optimiste)")
+}
+
+}
   // 💾 sync IndexedDB (tokens seulement)
   if (jwt && rt && sid) {
     await saveSessionData({
@@ -432,13 +527,48 @@ async restoreSessionFromStorage() {
 
 ,
 async restoreSessionFromPayload({ jwt, refreshToken, sessionId, email }) {
-  // 🔐 set en mémoire
+  if (!jwt || !refreshToken || !sessionId) {
+    console.warn("⚠️ restoreSessionFromPayload incomplet")
+    return false
+  }
+
+  // 🔐 mémoire
   this.jwt = jwt
   this.refreshToken = refreshToken
   this.sessionId = sessionId
 
   // 👤 user depuis JWT
   this.user = buildUserFromJwt(jwt)
+
+  // 🔄 statut privilèges (inconnu tant que backend pas passé)
+  if (!this.privilegesStatus || this.privilegesStatus === "pending") {
+  this.privilegesStatus = "loading"
+}
+
+  // ⚡ cache user (optimiste)
+  const payload = decodeJwt(jwt)
+  const cachedUser = payload?.email ? getCachedUser(payload.email) : null
+  if (cachedUser) {
+this.user = {
+  ...(this.user || {}),
+  ...cachedUser,
+
+    quota_mb: Number(cachedUser.quota_mb) || 0, //
+  avatar_url:
+    cachedUser.avatar_url ?? this.user?.avatar_url,
+
+  playlist_youtube:
+    cachedUser.playlist_youtube ?? this.user?.playlist_youtube,
+
+  espace_google_drive:
+    cachedUser.espace_google_drive ?? this.user?.espace_google_drive
+}
+
+
+    if (cachedUser.abo === "active" || (cachedUser.privileges?.length || 0) > 0) {
+      this.privilegesStatus = "active"
+    }
+  }
 
   // 💾 persistance
   localStorage.setItem("jwt", jwt)
@@ -451,31 +581,43 @@ async restoreSessionFromPayload({ jwt, refreshToken, sessionId, email }) {
     sessionId
   })
 
+  // 📣 notify UI / watchers
+  window.dispatchEvent(new Event("user-data-updated"))
+
   console.log("✅ session restaurée depuis magic link")
+  return true
 }
+
 ,
 
 async ensureValidJwt() {
   if (this.isLoggingOut) return null
-  if (!this.jwt) return null
+
+  // ⛔ session incomplète
+  if (!this.jwt || !this.refreshToken || !this.sessionId) {
+    return null
+  }
 
   // ✅ JWT encore valide
   if (!safeIsJwtExpired(this.jwt)) {
     return this.jwt
   }
 
-  // ⏳ refresh déjà en cours → on attend
-  if (this.isRefreshingToken) {
-    while (this.isRefreshingToken) {
-      await new Promise(r => setTimeout(r, 50))
-    }
-    return this.jwt && !safeIsJwtExpired(this.jwt) ? this.jwt : null
+  // ⏳ refresh déjà en cours
+  if (this.refreshPromise) {
+    await this.refreshPromise
+    return this.jwt || null
   }
 
   // 🔄 refresh nécessaire
-  const refreshed = await this.refreshJwt()
-  return refreshed && !safeIsJwtExpired(refreshed) ? refreshed : null
+  await this.refreshJwt()
+
+  // ❌ refresh KO
+  if (!this.jwt) return null
+
+  return this.jwt
 }
+
 
 ,
     // 🧪 (Compat legacy) Permet de définir un JWT manuellement depuis l'extérieur (ex: api.ts)
@@ -526,6 +668,7 @@ localStorage.setItem("sessionId", sessionId)
     },
 
     // 👤 Récupère les données utilisateur depuis l'API (Apps Script) en utilisant JWT
+
 async fetchUserData() {
   if (!this.jwt) return false
 
@@ -535,134 +678,158 @@ async fetchUserData() {
 
   this.authLoading = true
 
+  // ⛔ ne PAS repasser à loading si l'état est déjà connu
+  if (
+    this.privilegesStatus !== "active" &&
+    this.privilegesStatus !== "expired"
+  ) {
+    this.privilegesStatus = "loading"
+  }
+
   try {
     const res = await gasPost("recup_infos_membres", { jwt: jwtString })
-
-    // 🔧 support GAS flat OU { data }
     const data = res?.data ?? res
-
-    if (!data?.email) {
-      console.warn("⚠️ fetchUserData : données invalides", res)
-      return false
-    }
+    if (!data?.email) return false
 
     const payload = decodeJwt(jwtString)
 
-    const builtUser = {
-      ...data,
+    const onboarding_done =
+      typeof data.onboarding_done === "boolean"
+        ? data.onboarding_done
+        : false
 
-      playlist_youtube: data.youtube || "",
-      espace_google_drive: data.drive || "",
-      objectif: data.objectif || "",
+const builtUser = {
+  ...data,
+  avatar_url: data.avatar_url || "",
+  playlist_youtube: data.youtube || "",
+  espace_google_drive: data.drive || "",
+  objectif: data.objectif || "",
+  role: data.role ?? payload?.role,
+  prof_id: data.prof_id ?? payload?.prof_id,
+  onboarding_done,
+  privileges: Array.isArray(data.privileges) ? data.privileges : [],
+  quota_mb: Number(data.quota_mb) || 0   // ✅ ICI
+}
 
-      // priorité JWT
-      role: payload?.role ?? data.role,
-      prof_id: payload?.prof_id ?? data.prof_id,
 
-      privileges: Array.isArray(data.privileges)
-        ? data.privileges
-        : []
-    }
+    // ✅ source de vérité user
+    this.user = builtUser
+    this.userLoaded = true
+    this.onboardingResolved = true
 
-    this.user = {
-      ...(this.user || {}),
-      ...builtUser
-    }
-
+    // ✅ cache UX
     localStorage.setItem(
-      `userData_${data.email}`,
-      JSON.stringify(builtUser)
+      "onboarding_done",
+      onboarding_done ? "true" : "false"
     )
+
+    // ✅ état privilèges FINAL (connu)
+    this.privilegesStatus =
+      builtUser.abo === "active" || builtUser.privileges.length > 0
+        ? "active"
+        : "expired"
 
     return true
 
   } catch (e) {
-    console.error("❌ fetchUserData", e)
+    console.error("❌ fetchUserData error", e)
+
+    // ⚠️ en cas d'erreur, on considère l'état comme connu (non premium)
+    this.privilegesStatus = "expired"
     return false
+
   } finally {
-    this.authLoading = false
-  }
+  this.privilegesStatus =
+    this.privilegesStatus === "loading"
+      ? "expired"
+      : this.privilegesStatus
+
+  this.authLoading = false
 }
+
+}
+
+
+
+
 ,
 
     // 🔄 Rafraîchit le JWT + éventuellement refreshToken & sessionId
     // retry = true permet un second essai après échec
 async refreshJwt() {
+  // ⛔ aborts
   if (this.isLoggingOut || this.refreshFailed) {
     console.warn("⛔ refreshJwt annulé")
     return null
   }
 
-
-  if (this.isLoggingOut) {
-    console.warn("⛔ refreshJwt annulé → logout en cours")
-    return null
+  // 🔒 VERROU GLOBAL (PRIORITAIRE)
+  if (this.refreshPromise) {
+    console.warn("⏳ refreshJwt → attente promesse existante")
+    return await this.refreshPromise
   }
 
-  if (this.isRefreshingToken) {
-    console.warn("⏳ refreshJwt ignoré → déjà en cours")
+  // 🔥 pose le verrou AVANT tout async
+  this.isRefreshingToken = true
+
+  this.refreshPromise = (async () => {
+    console.log("🔄 refreshJwt → start")
+
+    try {
+      const result = await refreshToken({
+        refreshToken: this.refreshToken,
+        sessionId: this.sessionId,
+        deviceId: getDeviceId()
+      })
+
+  if (!result || typeof result.jwt !== "string") {
+  if (this.jwt && !safeIsJwtExpired(this.jwt)) {
+    console.warn("⚠️ refresh KO mais JWT encore valide → IGNORE")
     return this.jwt
   }
 
-  this.isRefreshingToken = true
-  console.log("🔄 refreshJwt → start")
-
-  try {
-    const result = await refreshToken({
-      refreshToken: this.refreshToken,
-      sessionId: this.sessionId,
-      deviceId: getDeviceId() // ✅ CORRECT
-    })
-
-    console.log("🧪 refreshJwt result =", result)
-
-    // ❌ réponse invalide → on garde la session
-if (!result || !result.jwt || typeof result.jwt !== "string") {
-
-
-
-  // 🔥 SESSION MORTE
-console.warn("⛔ refresh KO + JWT expiré → HARD LOGOUT GLOBAL")
-await logoutUser()
-return null
-
+  console.warn("⛔ refresh KO + JWT expiré → HARD LOGOUT")
+  this.refreshFailed = true
+  this.stopAutoRefresh()
+  await logoutUser()
+  return null
 }
 
+      // ✅ mise à jour session
+      this.jwt = result.jwt
+      this.refreshToken = result.refreshToken || this.refreshToken
+      this.sessionId = result.sessionId || this.sessionId
 
+      localStorage.setItem("jwt", this.jwt)
+      if (this.refreshToken) {
+        localStorage.setItem("refreshToken", this.refreshToken)
+      }
+      if (this.sessionId) {
+        localStorage.setItem("sessionId", this.sessionId)
+      }
 
-    // ✅ SUCCÈS
-    this.jwt = result.jwt
-    this.refreshToken = result.refreshToken || this.refreshToken
-    this.sessionId = result.sessionId || this.sessionId
+      this.refreshFailed = false
+      console.log("✅ refreshJwt succès")
+      return this.jwt
 
-    localStorage.setItem("jwt", this.jwt)
-    if (this.refreshToken) localStorage.setItem("refreshToken", this.refreshToken)
-    if (this.sessionId) localStorage.setItem("sessionId", this.sessionId)
+    } catch (err) {
+      console.error("⚠️ refreshJwt FAILED", err)
 
-    const payload = decodeJwt(this.jwt)
-    console.log("🧠 refreshJwt payload =", payload)
+      if (!this.jwt || safeIsJwtExpired(this.jwt)) {
+        this.refreshFailed = true
+        this.stopAutoRefresh()
+      }
 
-    this.refreshFailed = false
-    console.log("✅ refreshJwt succès → JWT mis à jour")
+      return this.jwt || null
 
-    return this.jwt
-
-  } catch (err) {
-    console.error("⚠️ refreshJwt FAILED (session conservée)", err)
-
-    // arrêt auto-refresh seulement si session réellement morte
-    if (!this.jwt || safeIsJwtExpired(this.jwt)) {
-      this.refreshFailed = true
-      console.warn("⛔ AutoRefresh stoppé → JWT expiré")
-      this.stopAutoRefresh()
+    } finally {
+      this.isRefreshingToken = false
+      this.refreshPromise = null
+      console.log("🔚 refreshJwt → end")
     }
+  })()
 
-    return this.jwt || null
-
-  } finally {
-    this.isRefreshingToken = false
-    console.log("🔚 refreshJwt → end")
-  }
+  return await this.refreshPromise
 }
 ,
 
@@ -672,7 +839,7 @@ return null
 
 
 startAutoRefresh() {
-  const LEEWAY = 60_000        // refresh 1 min avant exp
+  const LEEWAY = 3 * 60_000
   const MIN_DELAY = 15_000
   const MAX_DELAY = 10 * 60_000
 
@@ -681,20 +848,14 @@ startAutoRefresh() {
   // ===============================
   // 🧱 GUARDS
   // ===============================
-  if (!this.isInitDone) {
-    console.log("⛔ init non terminée")
+  if (!this.isInitDone || this.isLoggingOut || this.refreshFailed || !this.jwt) {
+    console.log("⛔ guard stop")
     console.groupEnd()
     return
   }
 
-  if (this.isLoggingOut || this.refreshFailed) {
-    console.log("⛔ logout ou refreshFailed")
-    console.groupEnd()
-    return
-  }
-
-  if (!this.jwt) {
-    console.log("⛔ pas de JWT")
+  if (this._autoRefreshArmed) {
+    console.log("⏳ auto-refresh déjà armé")
     console.groupEnd()
     return
   }
@@ -707,7 +868,7 @@ startAutoRefresh() {
   const now = Date.now()
 
   if (!expMs) {
-    console.warn("⚠️ exp JWT introuvable → abort")
+    console.warn("⚠️ exp JWT introuvable")
     console.groupEnd()
     return
   }
@@ -727,47 +888,52 @@ startAutoRefresh() {
   if (_refreshTimer) {
     clearTimeout(_refreshTimer)
     _refreshTimer = null
-    console.log("🧹 ancien timer nettoyé")
   }
 
   // ===============================
   // ⏱️ ARM TIMER
   // ===============================
+  this._autoRefreshArmed = true
   console.log("⏱️ timer armé")
 
   _refreshTimer = setTimeout(async () => {
     console.group("🔥 [AutoRefresh] TIMER FIRED")
+    this._autoRefreshArmed = false
 
-    // ---------- GUARDS TIMER ----------
     if (this.isLoggingOut || this.refreshFailed) {
-      console.log("⛔ abort (logout / refreshFailed)")
+      console.log("⛔ abort")
       console.groupEnd()
       return
     }
 
     if (!navigator.onLine) {
       console.log("📡 offline → attente réseau")
-      window.addEventListener(
-        "online",
-        () => this.startAutoRefresh(),
-        { once: true }
-      )
+      window.addEventListener("online", () => this.startAutoRefresh(), { once: true })
       console.groupEnd()
       return
     }
 
-    if (this.isRefreshingToken) {
-      console.log("⏳ refresh déjà en cours → skip")
+    if (this.refreshPromise) {
+      console.log("⏳ refresh déjà en cours")
       console.groupEnd()
       return
     }
 
-    // ---------- REFRESH ----------
+    // ===============================
+    // 🔄 REFRESH
+    // ===============================
     console.log("🔄 refreshJwt() call")
     const jwt = await this.refreshJwt()
 
     if (!jwt) {
-      console.warn("⛔ refresh KO → arrêt définitif")
+      if (this.jwt && !safeIsJwtExpired(this.jwt)) {
+        console.warn("⚠️ refresh KO mais JWT valide → retry")
+        this.startAutoRefresh()
+        console.groupEnd()
+        return
+      }
+
+      console.warn("⛔ refresh KO + JWT expiré → stop")
       this.stopAutoRefresh()
       console.groupEnd()
       return
@@ -776,11 +942,11 @@ startAutoRefresh() {
     console.log("✅ refresh OK → replanification")
     this.startAutoRefresh()
     console.groupEnd()
-
   }, delay)
 
   console.groupEnd()
 }
+
 
 
 
@@ -826,168 +992,178 @@ stopAutoRefresh() {
       localStorage.removeItem("logout_in_progress");
     },
 
-// 🚀 Initialisation complète de l’auth au boot app
-// 🚀 Initialisation complète de l’auth au boot app (SAFE)
-async initAuth() {
-  console.log("🔐 initAuth → START")
 
-  // =============================
-  // 🔒 LOCK
-  // =============================
-  if (this._initAuthRunning) return false
-  this._initAuthRunning = true
 
-  // =============================
-  // 🌍 APP TOUJOURS VISIBLE
-  // =============================
-  this.authReady = false          // ⚠️ JAMAIS remis à false
+async restoreFast() {
   this.authLoading = true
-  this.jwtReady = false
-  this.isInitDone = false
 
-  const end = () => {
+  if (sessionStorage.getItem("AUTH_ABORTED")) {
+    this.authReady = true
     this.authLoading = false
-    this.isInitDone = true
-    this._initAuthRunning = false
-    console.log("🏁 initAuth → END")
-  }
-
-  // =============================
-  // ⛔ ABORTS
-  // =============================
-  if (this.isLoggingOut || this.isLoggingIn) {
-    end()
     return false
   }
 
-  const storedJwt = localStorage.getItem("jwt")
-if (!storedJwt || sessionStorage.getItem("AUTH_ABORTED")) {
-  this.authReady = true   // 👈 AUTH PRÊTE (guest)
-  end()
-  return false
+  await this.restoreSessionFromStorage()
+
+  // ⛔ TRIPLET OBLIGATOIRE
+  if (!this.jwt || !this.refreshToken || !this.sessionId) {
+    console.warn("⛔ restoreFast aborted: tokens incomplets")
+    this.authReady = true
+    this.authLoading = false
+    return false
+  }
+
+  // user minimal sync
+  this.user = buildUserFromJwt(this.jwt)
+  this.user.onboarding_done ??= false
+
+  this.prof_id = this.user.prof_id || null
+
+  this.authReady = true
+  this.authLoading = false
+  return true
 }
 
-
+,
+async finalizeAuthAsync() {
   try {
-    // =============================
-    // 1️⃣ RESTORE SESSION
-    // =============================
-    await this.restoreSessionFromStorage()
-
+    // 🔐 JWT / refresh
     let jwt = this.jwt
-    let expired = true
-    try {
-      expired = jwt ? isJwtExpired(jwt) : true
-    } catch {}
-
-    // =============================
-    // 2️⃣ REFRESH SI BESOIN
-    // =============================
-    if (jwt && expired) {
+    if (jwt && safeIsJwtExpired(jwt)) {
       jwt = await this.refreshJwt()
-      if (!jwt) {
-        await logoutUser("refresh_failed")
-        end()
-        return false
-      }
+      if (!jwt) return
     }
+    this.jwt = jwt
 
-    // =============================
-    // 3️⃣ NORMALISATION JWT
-    // =============================
-    const finalJwt =
-      typeof jwt === "string"
-        ? jwt
-        : (jwt && jwt.jwt) || null
-
- if (!finalJwt) {
-  await logoutUser("jwt_missing_after_restore")
-  end()
-  return false
-}
-
-
-    this.jwt = finalJwt
-    localStorage.setItem("jwt", finalJwt)
-    this.jwtReady = true
-
+    // 👤 user + privileges
     const ok = await this.fetchUserData()
-if (!ok) {
-  await logoutUser("fetch_user_failed")
-  end()
-  return false
+    if (!ok || !this.user) return
+
+    // 🔁 onboarding / données secondaires (non bloquant)
+const tasks = []
+
+if (["prof", "admin"].includes(this.user.role) && this.user.prof_id) {
+  tasks.push(useProfStore().fetchProf(true))
 }
 
-    // =============================
-    // 4️⃣ USER MINIMAL (SYNC)
-    // =============================
-    const payload = decodeJwt(finalJwt) || {}
+tasks.push(
+  this.fetchHasOffer(),
+  this.fetchHasSale(),
+  this.fetchPendingReports()
+)
 
-// ✅ USER GARANTI
-if (!this.user && finalJwt) {
-  this.user = buildUserFromJwt(finalJwt)
+if (typeof this.fetchStripeStatus === "function") {
+  tasks.push(this.fetchStripeStatus())
 }
 
+await Promise.allSettled(tasks)
 
-    this.prof_id = this.user.prof_id || null
 
-    // =============================
-    // 5️⃣ FETCH MÉTIER (ASYNC / NON BLOQUANT)
-    // =============================
-    if (!this.onboardingReady) {
-      const tasks = []
-
-      if (["prof", "admin"].includes(this.user.role) && this.user.prof_id) {
-        const profStore = useProfStore()
-        tasks.push(profStore.fetchProf(true))
-        tasks.push(this.fetchHasOffer())
-      }
-
-      tasks.push(this.fetchPendingReports())
-
-  Promise.allSettled(tasks)
-  .catch(() => {}) // sécurité
-  .finally(() => {
-    this.onboardingReady = true
-    console.log("🧠 onboarding ready (forced)")
-  })
-
+    // 🔒 ÉTAT FINAL GARANTI (anti-skeleton)
+    if (this.privilegesStatus === "loading" || !this.privilegesStatus) {
+      this.privilegesStatus =
+        this.user.abo === "active" || (this.user.privileges?.length ?? 0) > 0
+          ? "active"
+          : "expired"
     }
 
-    // =============================
-    // 6️⃣ AUTO REFRESH
-    // =============================
-    const refreshToken = localStorage.getItem("refreshToken")
-    const sessionId = localStorage.getItem("sessionId")
-    if (refreshToken && sessionId) {
-      this._shouldStartAutoRefresh = true
-    }
+    this.authFullyReady = true
+    console.log("🟢 AUTH FULLY READY")
 
-    // =============================
-    // 7️⃣ REDIRECT LOGIN
-    // =============================
-    if (router.currentRoute.value.name === "login") {
+    // 🔀 redirection post-login uniquement
+    const route = router.currentRoute.value
+    if (route.path === "/login") {
       router.replace(
         ["prof", "admin"].includes(this.user.role)
           ? "/dashboard-prof"
           : "/dashboard"
       )
     }
-this.authReady = true
-
-    console.log("🟢 initAuth → SUCCESS")
-    end()
-    return true
 
   } catch (e) {
-    console.error("❌ initAuth CRASH", e)
-    localStorage.clear()
-    sessionStorage.clear()
-    sessionStorage.setItem("AUTH_ABORTED", "1")
-    end()
-    return false
+    console.error("❌ finalizeAuthAsync error", e)
   }
 }
+
+
+
+
+,
+// 🚀 Initialisation complète de l’auth au boot app
+// 🚀 Initialisation complète de l’auth au boot app (SAFE)
+// 🚀 Initialisation auth V2 (FAST BOOT + ASYNC FINALIZE)
+async initAuth() {
+  if (this._initAuthRunning) {
+  console.warn("⛔ initAuth déjà en cours → skip")
+  return this._initPromise
+}
+
+if (this.isInitDone) {
+  console.warn("⛔ initAuth déjà terminé → skip")
+  return true
+}
+
+  console.log("🔐 initAuth → START")
+
+  if (this._initAuthRunning) return this._initPromise
+
+  this._initAuthRunning = true
+  this._initPromise = (async () => {
+
+    this.authLoading = true
+
+    // 🔒 NE PAS casser l’UI si déjà initialisée
+    if (!this.isInitDone) {
+      this.authReady = false
+      this.authReadyLight = false
+    }
+
+    try {
+      const hasSession = await this.restoreFast()
+
+      // onboarding cache sync OK
+      const cached = localStorage.getItem("onboarding_done")
+      if (cached === "true") {
+        this.user = { ...(this.user || {}), onboarding_done: true }
+      }
+
+      // 🔁 hydratation réelle en background
+      if (hasSession) {
+        await this.finalizeAuthAsync()
+      }
+
+      console.log("🟢 initAuth → SUCCESS")
+      return true
+
+    } catch (e) {
+      console.error("❌ initAuth CRASH", e)
+      return false
+
+    } finally {
+      // ✅ ready seulement si pas déjà prêt
+      if (!this.authReadyLight) this.authReadyLight = true
+      if (!this.authReady) this.authReady = true
+
+      this.authLoading = false
+      this.isInitDone = true
+      this._initAuthRunning = false
+
+      if (this.jwt && !_refreshTimer && !this.refreshFailed) {
+        this.startAutoRefresh()
+      }
+
+      console.log("🏁 initAuth → END")
+    }
+  })()
+
+  return this._initPromise
+}
+
+
+
+
+
+
 
 
 ,
@@ -1000,10 +1176,7 @@ _endInitAuth(cb) {
   this.isInitDone = true
   this.authReady = true
 
-  requestAnimationFrame(() => {
-    window.__HIDE_SPLASH__?.()
-    cb?.()
-  })
+cb?.()
 
   console.log("🏁 initAuth → END (authReady = true)")
 }

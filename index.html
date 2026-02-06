@@ -2,6 +2,7 @@
 <html lang="fr" style="background-color: black;">
   
   <head>
+
     <meta charset="UTF-8" />
 
 <title>Cours de basse en ligne – Formation personnalisée avec professeur | SunBassSchool</title>
@@ -9,15 +10,31 @@
   name="viewport"
   content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
 />
+<link rel="canonical" href="https://www.sunbassschool.com/" />
+
+<link
+  rel="apple-touch-startup-image"
+  href="/launch-black.png"
+  media="(prefers-color-scheme: dark)"
+>
+<link
+  rel="apple-touch-startup-image"
+  href="/launch-black.png"
+  media="(prefers-color-scheme: light)"
+>
+
+
 
 <meta
   name="description"
   content="Cours de basse en ligne en visioconférence avec professeur expérimenté. Formation personnalisée, suivi via application dédiée et accès immédiat. Idéal pour bassistes débutants, intermédiaires et avancés."
 />
 
-
+<meta name="google-site-verification" content="CPBMFFPR3Ik3_zBbMopJAqZ5xPsbB_iPQkkhTb-YFv8" />
 <meta name="theme-color" content="#000000" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="robots" content="index,follow">
+
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
 
 <!-- Open Graph -->
 <meta property="og:title" content="Cours de basse en ligne – Formation personnalisée | SunBassSchool" />
@@ -26,8 +43,10 @@
   content="Apprends la basse en ligne avec un professeur dédié. Cours en visio, programme personnalisé, feedbacks et suivi via SunBassApp."
 />
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://www.sunbassschool.com" />
-
+<meta
+  property="og:url"
+  content="https://www.sunbassschool.com/cours-de-basse-en-ligne"
+/>
 
 <!-- 🔥 VIEWPORT FIX : désactive zoom + scroll -->
 
@@ -36,58 +55,43 @@
 <meta name="mobile-web-app-capable" content="yes" />
 
    <style>
+
 /* ===============================
-   BASE — DÉSACTIVE SCROLL GLOBAL
+   BASE — GLOBAL
    =============================== */
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
-  background: #000;
-  width: 100%;
-  
-  /* Désactive le bounce scroll iOS */
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: auto;
-}
-
-
-/* ===============================
-   APP (⚠️ CRITIQUE)
-   =============================== */
-#app {
-  display: block !important;
-  background-color: black;
-
-  /* 🔥 FIX SCROLL VERTICAL */
   width: 100%;
   min-height: 100vh;
-  opacity: 1;
-  
-  /* Désactive le bounce scroll iOS */
+  background: #000;
+
   overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* iOS uniquement */
-@supports (-webkit-touch-callout: none) {
-  #app {
-    height: 100dvh;
-  }
+/* Racine Vue */
+#app {
+  width: 100%;
+  min-height: 100vh;
+  background: #000;
 }
 
+/* ===============================
+   RESET / UX
+   =============================== */
 * {
   box-sizing: border-box;
-  
-  /* 🔥 Désactive le zoom sur double-tap iOS */
+
+  /* 🔥 désactive le zoom double-tap iOS */
   touch-action: manipulation;
 }
 
-img, video, canvas {
+img,
+video,
+canvas {
   max-width: 100%;
-}
-
-.app-visible { 
-  opacity: 1; 
-  transition: opacity .15s ease; 
 }
 
 /* ===============================
@@ -96,29 +100,40 @@ img, video, canvas {
 #loading-screen {
   position: fixed;
   inset: 0;
-  background: black;
-  display: none;
+  z-index: 9999;
+  background: #000;
+
+  display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
 
-  transition: opacity 0.3s ease;
+  opacity: 1;          /* 👈 visible dès le 1er paint */
+  pointer-events: none;
+  transition: opacity 0.35s ease;
 }
 
-/* splash masqué (piloté UNIQUEMENT en JS) */
+#loading-screen.hidden {
+  opacity: 0;
+}
+
+
+
+
+/* splash masqué (piloté en JS) */
 #loading-screen.hidden {
   opacity: 0;
   pointer-events: none;
 }
 
 /* ===============================
-   LOGO
+   LOGO SPLASH
    =============================== */
 #loading-logo {
   width: 80px;
   opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  transform: scale(0.96);
+
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 #loading-logo.logo-visible {
@@ -127,19 +142,18 @@ img, video, canvas {
 }
 
 /* ===============================
-   FIX LARGEUR LAYOUT
+   LAYOUT FULL WIDTH
    =============================== */
-html, body, #app {
-  width: 100%;
-}
-
-/* le layout racine doit occuper tout l'écran */
+html,
+body,
+#app,
 .app-container,
 .layout,
 .layout-root {
   width: 100%;
   min-width: 100%;
 }
+
 
 </style>
 <script type="application/ld+json">
@@ -190,6 +204,21 @@ html, body, #app {
   ]
 }
 </script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || []
+  function gtag(){dataLayer.push(arguments)}
+
+  gtag('js', new Date())
+
+  // 🔒 REFUS PAR DÉFAUT (RGPD)
+  gtag('consent', 'default', {
+    analytics_storage: 'denied'
+  })
+
+  // SPA → pas de page_view auto
+  gtag('config', 'G-XXXXXXXXXX', { send_page_view: false })
+</script>
 
   </head>
 
@@ -203,24 +232,62 @@ html, body, #app {
         <div class="refresh-bar"></div>
       </div>
     </div>
-
+<h1 style="display:none">
+Cours de basse en ligne avec professeur – SunBassSchool
+</h1>
     <div id="app"></div>
+    <script>
+  if (location.pathname === "/" || location.pathname === "/app/") {
+    document.documentElement.classList.add("boot-redirect")
+  }
+</script>
+
 <script type="module" src="src/init/mainLoader.ts"></script>
 
-    <script>
-const splash = document.getElementById("loading-screen");
-const logo = document.getElementById("loading-logo");
+<script>
+const splash = document.getElementById("loading-screen")
+const logo = document.getElementById("loading-logo")
 
+const MIN_VISIBLE_MS = 400
+const startTime = performance.now()
+
+let appPainted = false
+
+// logo fade-in garanti (2 frames)
 requestAnimationFrame(() => {
-  splash.classList.add("visible");
-  logo.classList.add("logo-visible");
-});
+  requestAnimationFrame(() => {
+    logo.classList.add("logo-visible")
+  })
+})
 
-window.__HIDE_SPLASH__ = () => {
-  splash.classList.remove("visible");
-  setTimeout(() => splash.remove(), 300);
-};
+window.__APP_PAINTED__ = () => {
+  appPainted = true
+  tryHide()
+}
 
-    </script>
+function tryHide() {
+  if (!splash || !appPainted) return
+
+  const elapsed = performance.now() - startTime
+  const delay = Math.max(0, MIN_VISIBLE_MS - elapsed)
+
+  setTimeout(() => {
+    splash.classList.add("hidden")
+    setTimeout(() => splash.remove(), 350)
+  }, delay)
+}
+
+// sécurité
+setTimeout(() => {
+  appPainted = true
+  tryHide()
+}, 800)
+</script>
+
+
+
+
+
+
   </body>
 </html>

@@ -1,6 +1,6 @@
 <template>
 <div
-  v-if="snapshot.isReady && !snapshot.isDone"
+v-if="authStore.authFullyReady && !snapshot.isDone"
   :key="`onboarding-${snapshot.completed}-${snapshot.stripeOk}`"
   class="onboarding-card"
 >
@@ -32,18 +32,35 @@
 <details class="onboarding-details">
 
     <ul class="onboarding-list">
-<li :class="{ done: snapshot.stripeOk && snapshot.isReady }">
+<li>
   <span>Paiements activés</span>
 
+  <!-- ⏳ SKELETON -->
   <span
-    v-if="!snapshot.stripeOk"
-    class="status-badge warn"
-        @click="goInvite"
+    v-if="!authStore.onboardingReady"
+    class="status-badge skeleton"
+  >
+    Vérification…
+  </span>
 
+  <!-- ❌ PAS CONNECTÉ -->
+  <span
+    v-else-if="!snapshot.stripeOk"
+    class="status-badge warn"
+    @click="scrollToStripe"
   >
     À connecter
   </span>
+
+  <!-- ✅ OK -->
+  <span
+    v-else
+    class="status-badge ok"
+  >
+    Connecté
+  </span>
 </li>
+
 
 
 <li :class="{ done: snapshot.hasStudent }">
@@ -79,9 +96,7 @@
     </ul>
     </details>
   </div>
-   <div v-else-if="!snapshot.isReady" class="onboarding-card loading">
-    <p>Vérification de ton compte…</p>
-  </div>
+
 </template>
 
 
@@ -121,6 +136,9 @@ const studentsLoaded = computed(() =>
 
 
 const snapshot = computed(() => authStore.onboardingSnapshot)
+const scrollToStripe = () =>
+  document.querySelector(".stripe-card")
+    ?.scrollIntoView({ behavior: "smooth", block: "start" })
 
 const goInvite = () => {
   const el = document.getElementById("invite-link")
@@ -502,5 +520,21 @@ watch(
   text-decoration: line-through;
 }
 
+.status-badge.skeleton {
+  background: linear-gradient(
+    90deg,
+    #2a2a2a 25%,
+    #3a3a3a 37%,
+    #2a2a2a 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.2s infinite;
+  color: transparent;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
 
 </style>

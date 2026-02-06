@@ -43,7 +43,7 @@
 import { ref } from "vue"
 import { useRouter } from "vue-router"
 import { useAuthStore } from "@/stores/authStore.js"
-import { getValidToken } from "@/utils/api"
+import { getValidToken } from "@/utils/api.ts"
 import { getProxyPostURL } from "@/config/gas"
   import Layout from "@/views/Layout.vue";
 import { onMounted } from "vue"

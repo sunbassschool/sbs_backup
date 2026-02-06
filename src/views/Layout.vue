@@ -190,49 +190,51 @@
         <!-- Auth desktop -->
         <div v-if="!isLoggedIn && !isMobile" class="desktop-auth-buttons">
           <router-link to="/login" class="btn-auth login-btn">Se connecter</router-link>
-          <router-link to="/register" class="btn-auth trial-btn">Essai Gratuit</router-link>
+          <router-link to="/register" class="btn-auth trial-btn">s'inscrire</router-link>
         </div>
 
         <!-- Abonnement + compte desktop -->
           <div v-if="isLoggedIn && !isMobile" class="account-info-block">
             <!-- CTA PROF -->
-             <div class="cta_header">
-<router-link
-  v-if="!hasPrivileges && auth.user?.role === 'prof'"
-  :to="{ name: 'pricing' }"
-  class="sub-pill cta"
->
-  Passer Premium
-</router-link>
+<div class="cta_header">
+  <!-- RIEN tant que pas prêt -->
+  <span v-if="!auth.isInitDone" class="sub-pill placeholder"></span>
 
-<!-- INFO ÉLÈVE -->
-<router-link
-  v-else-if="!hasPrivileges && auth.user && auth.user.role !== 'prof' && auth.user.role !== 'admin'"
-  to="/eleve/offres"
-  class="sub-pill cta"
->
-  Non abonné
-</router-link>
+  <!-- CONTENU (fade-in) -->
+  <transition name="fade">
+    <router-link
+      v-if="auth.isInitDone && !hasPrivileges && auth.user?.role === 'prof'"
+      :to="{ name: 'pricing' }"
+      class="sub-pill cta"
+    >
+      Passer Premium
+    </router-link>
 
+    <router-link
+      v-else-if="auth.isInitDone && !hasPrivileges && auth.user && !['prof','admin'].includes(auth.user.role)"
+      to="/eleve/offres"
+      class="sub-pill cta"
+    >
+      Non abonné
+    </router-link>
 
+    <span
+      v-else-if="auth.isInitDone && hasPrivileges && isPro"
+      class="sub-pill pro"
+    >
+      ⭐ Premium
+    </span>
 
-<!-- PREMIUM -->
-<span
-  v-else-if="hasPrivileges && isPro"
-  class="sub-pill pro"
->
-  ⭐ Premium
-</span>
-
-<!-- ABONNÉ -->
-<span
-  v-else-if="hasPrivileges"
-  class="sub-pill subscriber"
->
-  Abonné
-</span>
-
+    <span
+      v-else-if="auth.isInitDone && hasPrivileges"
+      class="sub-pill subscriber"
+    >
+      Abonné
+    </span>
+  </transition>
 </div>
+
+
           <router-link to="/moncompte" class="account-link">
             <i class="bi bi-person-gear"></i>
           </router-link>
@@ -353,6 +355,10 @@
 
 
       <!-- Prof -->
+        <router-link v-if="isAdmin" to="/admin" class="nav-link">
+          <i class="bi bi-speedometer2"></i>
+          <span>Admin</span>
+        </router-link>
         <router-link v-if="isProf" to="/dashboard" class="nav-link">
         <i class="bi bi-house"></i><span>Accueil</span>
       </router-link>
@@ -470,10 +476,7 @@ export default {
 
 // Normaliser le rôle en minuscule
 const role = computed(() => (authStore.user?.role || "").toLowerCase());
-const hasPrivileges = computed(() =>
-  Array.isArray(auth.user?.privileges) && auth.user.privileges.length > 0
-)
-;
+
 const isPro = computed(() =>
   auth.user?.privileges?.includes("pro")
 )
@@ -483,7 +486,11 @@ const user = computed(() => authStore.user);
 const pendingCount = computed(() => authStore.pendingReportsCount);
 
 const isLoggedIn = computed(() => !!authStore.jwt);
+const hasPrivileges = computed(() =>
+  authStore.privilegesStatus === "active"
+)
 
+;
 /* ADMIN réel = toujours vrai si role = admin (même en impersonation) */
 const isRealAdmin = computed(() => role.value === "admin");
 
@@ -986,34 +993,46 @@ html, body {
   right: 5%;
 }
 
+/* base commune */
 .btn-auth {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: bold;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: .04em;
   text-transform: uppercase;
   text-decoration: none;
-  transition: background 0.3s ease-in-out;
+  transition: background-color .2s ease, color .2s ease, transform .1s ease;
 }
 
+/* login */
 .login-btn {
-  background: none;
-  border: 2px solid white;
-  color: white;
+  background: transparent;
+  border: 1.5px solid #fff;
+  color: #fff;
 }
 
 .login-btn:hover {
-  background: white;
-  color: black;
+  background: #fff;
+  color: #000;
 }
 
+/* trial */
 .trial-btn {
   background: #f1750f;
-  color: black;
+  border: 1.5px solid #f1750f;
+  color: #000;
 }
 
 .trial-btn:hover {
-  background: #ffdd57;
+  background: #ffe057;
+  border-color: #ffdd57;
 }
+
+.btn-auth:active {
+  transform: scale(0.97);
+}
+
 
 
 
@@ -2149,6 +2168,24 @@ body.loading-active {
   color: #7fffd4;
 }
 
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity .15s ease, transform .15s ease;
+}
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+.fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sub-pill.placeholder {
+  width: 72px;
+  height: 26px;
+  opacity: 0;
+}
 
 
 </style>

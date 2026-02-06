@@ -7,9 +7,9 @@
         <form @submit.prevent="requestReset">
           <div class="mb-3">
             <label for="email" class="form-label">Adresse e-mail</label>
-            <input 
-              v-model="email" 
-              type="email" 
+            <input
+              v-model="email"
+              type="email"
               id="email"
               class="form-control"
               required
@@ -60,7 +60,7 @@ export default {
 
   try {
     // 🔗 URL cible avec tous les paramètres encodés
-    const targetURL = `https://script.google.com/macros/s/AKfycby9eEjH_wuiOyC4JBg1RNqYnBovhtGjOWT7KaYiirN-5wkjqG4G_YwS9L8PrrJZk_MC4g/exec?route=forgotPassword&email=${encodeURIComponent(this.email)}`;
+    const targetURL = `https://script.google.com/macros/s/AKfycbxycti14n766pQRq2ldeUGekUKWXj-NsZxd4nbpfzSDbAs7UQ-2IrCiFc-C9mzfxOOC3g/exec?route=forgotPassword&email=${encodeURIComponent(this.email)}`;
     const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(targetURL)}`;
 
     console.log("📡 URL finale GET via proxy :", proxyURL);
@@ -77,9 +77,14 @@ export default {
     console.log("✅ Réponse API :", data);
 
 if (data.status === "success" || data.message?.toLowerCase().includes("succès")) {
-  this.message = "✅ " + (data.message || "Un email de réinitialisation a été envoyé.");
+  this.message = "✅ Un email de réinitialisation a été envoyé.";
   this.messageType = "alert-success";
-} else {
+
+  setTimeout(() => {
+    this.$router.push("/login");
+  }, 2000);
+}
+ else {
   this.message = "⚠️ " + (data.message || "Une erreur est survenue.");
   this.messageType = "alert-danger";
 }
@@ -102,7 +107,7 @@ if (data.status === "success" || data.message?.toLowerCase().includes("succès")
 .container {
   display: flex;
   align-items: flex-start; /* Au lieu de center */
- 
+
   width: 100% !important; /* Prend toute la largeur de l'écran */
   max-width: 1200px; /* Ajuste selon tes besoins */
 

@@ -14,9 +14,9 @@
         <form v-if="tokenValid" @submit.prevent="resetPassword">
           <div class="mb-3">
             <label for="password" class="form-label">Nouveau mot de passe</label>
-            <input 
-              v-model="password" 
-              type="password" 
+            <input
+              v-model="password"
+              type="password"
               id="password"
               class="form-control"
               required
@@ -25,9 +25,9 @@
 
           <div class="mb-3">
             <label for="confirmPassword" class="form-label">Confirmer le mot de passe</label>
-            <input 
-              v-model="confirmPassword" 
-              type="password" 
+            <input
+              v-model="confirmPassword"
+              type="password"
               id="confirmPassword"
               class="form-control"
               required
@@ -77,7 +77,7 @@ export default {
       }
 
       try {
-        const baseScriptURL = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+        const baseScriptURL = "https://script.google.com/macros/s/AKfycbxycti14n766pQRq2ldeUGekUKWXj-NsZxd4nbpfzSDbAs7UQ-2IrCiFc-C9mzfxOOC3g/exec";
 const route = "verifytoken";
 const fullTargetURL = `${baseScriptURL}?route=${route}&token=${encodeURIComponent(this.token)}`;
 const proxyURL = `https://cors-proxy-sbs.vercel.app/api/proxy?url=${encodeURIComponent(fullTargetURL)}`;
@@ -129,7 +129,7 @@ const response = await fetch(proxyURL);
   try {
     const hashedPassword = await this.sha256(this.password); // 🔐 Hash sécurisé
 
-    const baseScriptURL = "https://script.google.com/macros/s/AKfycbwwOqLh1roORKXiEiqtxpmABU7uCtfsNaxs3Gej3IvLqzHsgG5Pifb_usNNi8ovSX0XgA/exec";
+    const baseScriptURL = "https://script.google.com/macros/s/AKfycbxycti14n766pQRq2ldeUGekUKWXj-NsZxd4nbpfzSDbAs7UQ-2IrCiFc-C9mzfxOOC3g/exec";
     const proxyURL = "https://cors-proxy-sbs.vercel.app/api/proxy?url=" + encodeURIComponent(baseScriptURL);
 
     console.log("🌐 Proxy URL POST :", proxyURL);
@@ -195,7 +195,7 @@ const response = await fetch(proxyURL);
 .container {
   display: flex;
   align-items: flex-start; /* Au lieu de center */
- 
+
   width: 100% !important; /* Prend toute la largeur de l'écran */
   max-width: 1200px; /* Ajuste selon tes besoins */
 
@@ -234,7 +234,7 @@ input:focus {
   height: 38px; /* Ajustement de la hauteur */
    min-width: 120px; /* Définit une largeur minimale */
   width: auto; /* S'ajuste au contenu */
-  
+
   text-transform: uppercase; /* Pour un style plus impactant */
 }
 

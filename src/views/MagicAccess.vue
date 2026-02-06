@@ -43,13 +43,30 @@ onMounted(async () => {
       email: json.data.email
     })
 
-    router.replace("/secure-account")
+const { isNewUser, statut } = json.data
+
+if (isNewUser || statut === "invited") {
+  router.replace("/secure-account")
+} else {
+  router.replace("/mes-achats")
+}
   } catch (e: any) {
-    console.error("❌ magic-access", e)
-    error.value = e.message
-  } finally {
-    loading.value = false
+  console.error("❌ magic-access", e)
+
+  // 🔁 magic link déjà utilisé / invalide
+  if (
+    e.message?.includes("token invalide") ||
+    e.message?.includes("token expiré")
+  ) {
+    router.replace("/thankyou")
+    return
   }
+
+  error.value = e.message
+} finally {
+  loading.value = false
+}
+
 })
 </script>
 

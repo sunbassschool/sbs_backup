@@ -1,23 +1,34 @@
 <template>
   <Layout>
     <div class="register-choice-container">
-<h2 class="h2-immersive">SunBassSchool</h2>
-<p class="subtitle">Sélection du profil</p>
 
+      <h1 class="title">Créer un compte</h1>
+      <p class="subtitle">Comment veux-tu utiliser la plateforme ?</p>
 
       <div class="choices">
         <button class="choice-card prof" @click="goProf">
           <div class="emoji">🎸</div>
-          <div class="title">Professeur</div>
-          <div class="desc">Créer ton espace, gérer tes élèves</div>
+          <div class="title">Je suis professeur</div>
+          <div class="desc">Créer mon espace, gérer mes élèves</div>
+          <div class="cta">Créer un compte professeur →</div>
         </button>
 
         <button class="choice-card eleve" @click="goEleve">
           <div class="emoji">👨‍🎓</div>
-          <div class="title">Élève</div>
-          <div class="desc">Accéder à ton espace de cours</div>
+          <div class="title">Je suis élève</div>
+          <div class="desc">Accéder à mes cours et contenus</div>
+          <div class="cta">Créer un compte élève →</div>
         </button>
       </div>
+
+  <p class="foot-note">
+  Déjà inscrit ?
+  <router-link to="/login" class="login-link">
+    Se connecter
+  </router-link>
+</p>
+
+
     </div>
   </Layout>
 </template>
@@ -41,71 +52,74 @@ export default {
 
 <style scoped>
 /* =====================================================
-   SBS – Register choice / Full dark premium
+   SBS – Register choice / Intuitif & orienté action
    ===================================================== */
 
 .register-choice-container {
   max-width: 520px;
   margin: 0 auto;
-  padding: 28px 14px 42px;
+  padding: 32px 14px 44px;
   text-align: center;
 }
 
-.h2-immersive {
+/* TITRES */
+.title {
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: .3px;
 }
 
 .subtitle {
-  margin: 6px 0 28px;
-  font-size: 0.9rem;
-  color: rgba(255,255,255,0.55);
+  margin: 6px 0 26px;
+  font-size: .9rem;
+  color: rgba(255,255,255,.55);
 }
 
 /* GRID */
 .choices {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 18px;
 }
 
-/* CARD */
+/* CARD = ACTION */
 .choice-card {
   position: relative;
-  padding: 18px 18px 20px;
-  border-radius: 14px;
+  padding: 20px 18px 22px;
+  border-radius: 16px;
 
   background: linear-gradient(
     180deg,
-    rgba(255,255,255,0.06),
-    rgba(255,255,255,0.015)
+    rgba(255,255,255,.07),
+    rgba(255,255,255,.015)
   );
 
-  border: 1px solid rgba(255,255,255,0.08);
-
+  border: 1px solid rgba(255,255,255,.1);
   color: #fff;
   cursor: pointer;
 
-  transition: transform 0.18s ease,
-              box-shadow 0.18s ease,
-              border-color 0.18s ease;
+  text-align: center;
+
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    border-color .18s ease;
 }
 
-/* Hover – discret & premium */
+/* HOVER = "CLIQUE ICI" */
 .choice-card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 10px 30px rgba(0,0,0,0.55);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 36px rgba(0,0,0,.6);
 }
 
-/* Emoji minimal */
+/* ICON */
 .choice-card .emoji {
-  font-size: 1.6rem;
-  margin-bottom: 6px;
-  opacity: 0.9;
+  font-size: 1.7rem;
+  margin-bottom: 8px;
+  opacity: .95;
 }
 
-/* Text */
+/* TEXTE */
 .choice-card .title {
   font-size: 1.05rem;
   font-weight: 600;
@@ -113,41 +127,68 @@ export default {
 }
 
 .choice-card .desc {
-  font-size: 0.85rem;
+  font-size: .85rem;
   line-height: 1.35;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,.65);
 }
 
-/* PROF accent */
+/* CTA VISUEL */
+.choice-card .cta {
+  margin-top: 12px;
+  font-size: .8rem;
+  font-weight: 600;
+  opacity: .7;
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.choice-card:hover .cta {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* ACCENTS PROF / ELEVE */
 .choice-card.prof {
-  border-left: 2px solid rgba(255,160,60,0.8);
+  border-left: 3px solid rgba(255,160,60,.9);
 }
+
 .choice-card.prof:hover {
-  border-color: rgba(255,160,60,0.9);
-  box-shadow:
-    0 10px 30px rgba(255,140,0,0.18);
+  border-color: rgba(255,160,60,1);
+  box-shadow: 0 14px 36px rgba(255,140,0,.22);
 }
 
-/* ELEVE accent */
 .choice-card.eleve {
-  border-left: 2px solid rgba(80,180,255,0.8);
-}
-.choice-card.eleve:hover {
-  border-color: rgba(80,180,255,0.9);
-  box-shadow:
-    0 10px 30px rgba(0,160,255,0.18);
+  border-left: 3px solid rgba(80,180,255,.9);
 }
 
-/* Desktop */
+.choice-card.eleve:hover {
+  border-color: rgba(80,180,255,1);
+  box-shadow: 0 14px 36px rgba(0,160,255,.22);
+}
+
+/* FOOT NOTE */
+.foot-note {
+  margin-top: 30px;
+  font-size: .8rem;
+  color: rgba(255,255,255,.45);
+}
+
+/* DESKTOP */
 @media (min-width: 768px) {
   .choices {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-/* Touch feedback (PWA) */
+/* MOBILE */
 .choice-card:active {
-  transform: scale(0.985);
+  transform: scale(.985);
+}
+
+.choice-card:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.15),
+    0 14px 36px rgba(0,0,0,.6);
 }
 
 @media (max-width: 480px) {
@@ -155,19 +196,24 @@ export default {
     display: none;
   }
 }
-.choice-card {
-  padding: 18px 18px 22px;
+.foot-note {
+  margin-top: 30px;
+  font-size: .8rem;
+  color: rgba(255,255,255,.45);
 }
-.choice-card::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
+
+.login-link {
+  margin-left: 6px;
+  color: rgba(255,160,60,.95);
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity .15s ease, transform .15s ease;
 }
-.choice-card:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px rgba(255,255,255,0.15),
-    0 10px 30px rgba(0,0,0,0.5);
+
+.login-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+  transform: translateY(-1px);
 }
 
 </style>

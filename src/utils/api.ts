@@ -1584,15 +1584,14 @@ const attemptFetch = async (attempt: number): Promise<{
     }
 
     // ❌ refus métier → pas de retry
-    if (data?.success === false) {
-      console.warn("❌ refresh refusé", data.code)
+   if (data?.success === false) {
+  if (data.code === "SESSION_LOST") {
+    console.warn("⚠️ SESSION_LOST → continuer avec JWT existant")
+    return null
+  }
+  throw new Error("NO_RETRY")
+}
 
-      if (["SESSION_LOST", "INVALID_REFRESH", "UNAUTHORIZED"].includes(data.code)) {
-        throw new Error("NO_RETRY")
-      }
-
-      return null
-    }
 
     const payload =
       data?.jwt ? data :
@@ -2043,7 +2042,7 @@ export async function logoutUser() {
   if (logoutLock || store.isLoggingOut) return;
   logoutLock = true;
   store.isLoggingOut = true;
-store.authReady = true   // 🔥 bloque le splash
+store.isAuthenticated = false;
 
   console.log("🚨 Déconnexion en cours...");
 
@@ -2052,9 +2051,9 @@ store.authReady = true   // 🔥 bloque le splash
   // ---------------------------------------------------------
   // 🔒 1) Verrouillage immédiat auth (anti watchers / flash)
   // ---------------------------------------------------------
+
+
 store.hardLogoutReset()
-store.isAuthenticated = false
-store.isLoggingOut = false
 
   window.dispatchEvent(new Event("user-data-updated"));
 
@@ -2129,17 +2128,17 @@ Object.keys(localStorage).forEach(k => {
   await clearIndexedDBData();
   console.log("✅ IndexedDB nettoyée !");
 
-  // ---------------------------------------------------------
-  // 🔄 7) Redirection propre
-  // ---------------------------------------------------------
+// ---------------------------------------------------------
+// 🔄 7) Redirection propre
+// ---------------------------------------------------------
 store.authReady = true
+store.isLoggingOut = false
 logoutLock = false
-// 🔥 RESET TOTAL SPA (multi-rôle safe)
-setTimeout(() => {
-  window.location.reload()
-}, 0)
 
-  return true;
+
+await router.replace("/")
+return true
+
 }
 
 
@@ -2150,13 +2149,26 @@ setTimeout(() => {
 export function showLogoutMessage() {
     const logoutMessage = document.createElement("div");
     logoutMessage.innerHTML = `
-    <div class="logout-container">
-      <div class="logout-spinner"></div>
-      <p class="logout-text">Déconnexion en cours...</p>
-    </div>
+ <div class="logout-overlay">
+  <div class="logout-container">
+    <div class="logout-spinner"></div>
+    <p class="logout-text">Déconnexion en cours...</p>
+  </div>
+</div>
+
   `;
     const style = document.createElement("style");
     style.innerHTML = `
+    .logout-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9998;
+}body {
+  overflow: hidden;
+}
+
+
     .logout-container {
       position: fixed;
       top: 50%;

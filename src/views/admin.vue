@@ -1,7 +1,11 @@
 <template>
   <Layout>
-    <div class="admin-page dark-theme">
-      <h3>🛠 Administration SBS</h3>
+    <div class="admin-page">
+
+      <div class="admin-header">
+        <h1>Administration</h1>
+        <p>Configuration avancée de la plateforme SBS</p>
+      </div>
 
       <div class="admin-grid">
         <AdminCard
@@ -9,6 +13,13 @@
           description="Configurer les frais one-time et abonnements"
           icon="💰"
           @click="open('pricing')"
+        />
+
+        <AdminCard
+          title="In-App Messages"
+          description="Gérer les messages affichés aux utilisateurs"
+          icon="📣"
+          @click="$router.push('/admin/InAppMessagesAdmin')"
         />
 
         <!-- futurs modules -->
@@ -26,6 +37,7 @@
     </div>
   </Layout>
 </template>
+
 <script setup>
 import { ref } from "vue"
 import Layout from "@/views/Layout.vue"
@@ -45,20 +57,47 @@ const close = () => {
 }
 </script>
 <style scoped>
-/* Admin.vue (minimum clean) */
+/* =====================================================
+   SBS – Admin Home (Dark Premium)
+   ===================================================== */
+
 .admin-page {
-  padding: 20px;
-  color:white;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 14px 40px;
+  color: #fff;
 }
 
-.admin-page h3 {
-  margin-bottom: 14px;
+/* HEADER */
+.admin-header {
+  margin-bottom: 24px;
 }
 
+.admin-header h1 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: .3px;
+}
+
+.admin-header p {
+  margin-top: 6px;
+  font-size: .85rem;
+  color: rgba(255,255,255,.55);
+}
+
+/* GRID */
 .admin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
+
+/* DESKTOP */
+@media (min-width: 768px) {
+  .admin-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
 
 </style>

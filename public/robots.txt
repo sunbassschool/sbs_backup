@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /login
+Disallow: /onboarding
+Disallow: /mon-espace
+Disallow: /admin
+Disallow: /stripe-success
+Disallow: /thankyou
+
+Sitemap: https://www.sunbassschool.com/sitemap.xml

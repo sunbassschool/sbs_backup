@@ -21,7 +21,7 @@
             class="btn btn-sm mt-2 fw-bold"
             style="background-color: #333; color: white;"
           >
-            🔓 Débloquer avec un abonnement
+            🔓 Réserver un cours
           </RouterLink>
         </div>
 

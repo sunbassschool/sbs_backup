@@ -52,7 +52,6 @@ select,
    =============================== */
 #app {
   width: 100%;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   
@@ -100,7 +99,6 @@ body {
 html.app-mode,
 body.app-mode {
   overflow: hidden;
-  height: 100%;
 }
 
 /* LANDING */
@@ -110,6 +108,3 @@ body.landing-mode {
   height: auto;
 }
 
-#app {
-  min-height: 100vh;
-}

@@ -28,7 +28,14 @@
 
 <!-- 🧾 Aucun replay -->
 <div v-else-if="replayCourses.length === 0" class="alert alert-info text-center">
-  Aucun replay disponible pour le moment.
+  <p>Aucun replay disponible pour le moment.</p>
+       <RouterLink
+            to="/eleve/offres"
+            class="btn btn-sm mt-2 fw-bold"
+            style="background-color: #333; color: white;"
+          >
+            🔓 Réserver un cours
+          </RouterLink>
 </div>
 <!-- fleches indiquant le swipe -->
 
@@ -45,17 +52,17 @@
 
 <SwiperSlide v-for="(row, index) in replayCourses" :key="index">
   <div class="w-100 d-flex justify-content-center flex-column align-items-center">
-    
+
    <div class="card shadow rounded-4 border-0 overflow-hidden mb-3" style="max-width: 600px;">
 <div class="position-relative w-100">
 <div class="thumbnail-wrapper" @click="openVideo(row.lienReplay, row.formattedDate)">
-  <img 
-    :src="generateThumbnail(row.lienReplay)" 
+  <img
+    :src="generateThumbnail(row.lienReplay)"
     class="replay-thumbnail"
     @error="(e) => onImageError(e, row.formattedDate)"
     @load="(e) => onImageLoad(row.formattedDate, e)"
   />
-  
+
   <div v-if="erroredImages[row.formattedDate]" class="no-thumb-overlay">
     🎬 Replay disponible<br />Cliquez pour voir
   </div>
@@ -72,10 +79,10 @@
     <h5 class="card-title text-primary mb-1">{{ row.formattedDate }}</h5>
     <p class="mb-1"><strong>📆 Trimestre :</strong> {{ row.trimestre || "Non défini" }}</p>
     <p class="mb-3"><strong>📝 Commentaire :</strong> {{ row.commentaire || "Aucun" }}</p>
-    <a 
-      v-if="generateDownloadLink(row.lienReplay)" 
-      :href="generateDownloadLink(row.lienReplay)" 
-      class="btn btn-outline-primary w-100" 
+    <a
+      v-if="generateDownloadLink(row.lienReplay)"
+      :href="generateDownloadLink(row.lienReplay)"
+      class="btn btn-outline-primary w-100"
       target="_blank"
     >⬇️ Télécharger</a>
   </div>
@@ -86,7 +93,7 @@
     <div v-if="index === 0" class="mobile-swipe-hint d-md-none">
       <span>⟶ Glissez pour voir les autres</span>
     </div>
-    
+
   </div>
 </SwiperSlide>
 
@@ -103,7 +110,7 @@
         <button type="button" class="btn-close btn-close-white" @click="closeModal"></button>
       </div>
 <div class="modal-body p-0">
-  <iframe 
+  <iframe
     :src="videoUrl"
     frameborder="0"
     allowfullscreen

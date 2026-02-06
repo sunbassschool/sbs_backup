@@ -1,18 +1,47 @@
 <script setup>
+import { watchEffect } from "vue"
 import { useAuthStore } from "@/stores/authStore"
+import { useRouter } from "vue-router"
 
 const auth = useAuthStore()
+const router = useRouter()
 
-// ❌ plus de watch
-// ❌ plus de router
-// ✅ juste un écran "loading / splash"
+watchEffect(() => {
+  // ⛔ attendre auth complètement prêt
+  if (!auth.authReady) return
+
+  // invité
+  if (!auth.jwt) {
+    router.replace("/cours-de-basse-en-ligne")
+    return
+  }
+
+  // rôle encore indéfini → attendre
+  if (!auth.user?.role) return
+
+  const isProf = ["prof", "admin"].includes(auth.user.role)
+
+  // PROF
+  if (isProf) {
+    router.replace("/dashboard-prof")
+    return
+  }
+
+  // ÉLÈVE
+  const cachedOnboarding =
+    localStorage.getItem("onboarding_done") === "true"
+
+  router.replace(cachedOnboarding ? "/dashboard" : "/onboarding")
+})
 </script>
 
 
+
+
 <template>
-  <div class="root-loader">
-    <img src="/logo.png" alt="Logo" class="logo" />
+ <div class="root-loader">
   </div>
+
 </template>
 <style scoped>
 .root-loader {
