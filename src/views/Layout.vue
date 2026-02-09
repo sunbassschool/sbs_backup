@@ -96,7 +96,7 @@
         <!-- ======================== -->
         <router-link v-if="isProf" to="/dashboard-prof" class="sidebar-link">
           <i class="bi bi-speedometer2"></i>
-          <span>Dashboard Prof</span>
+          <span>Accueil</span>
         </router-link>
                 <router-link v-if="isAdmin" to="/admin" class="sidebar-link">
           <i class="bi bi-speedometer2"></i>
@@ -105,12 +105,12 @@
 
 <router-link v-if="isProf" to="/dashboard-prof/offres" class="sidebar-link">
 <i class="bi bi-bag"></i>
-  <span>Ma boutique</span>
+  <span>Mes offres</span>
 </router-link>
 
         <router-link v-if="isProf" to="/FeedBackProf" class="sidebar-link">
           <i class="bi bi-chat-left-dots"></i>
-          <span>Feedbacks Élèves</span>
+          <span>Messagerie</span>
         </router-link>
 
         <router-link v-if="isProf" to="/gestioneleves" class="sidebar-link">
@@ -126,7 +126,7 @@
 
 <router-link v-if="isProf" to="/cours" class="sidebar-link">
   <i class="bi bi-wrench-adjustable"></i>
-  <span>Gestion des cours</span>
+  <span>Mes cours</span>
 </router-link>
 
 
@@ -382,7 +382,7 @@
   <i class="bi bi-calendar-event"></i><span>Créer planning</span>
 </router-link>
    <router-link v-if="isProf" to="/dashboard-prof/offres" class="nav-link">
-<i class="bi bi-bag"></i><span>Ma boutique</span>
+<i class="bi bi-bag"></i><span>Mes offres</span>
 </router-link>
 
 
@@ -495,20 +495,23 @@ const hasPrivileges = computed(() =>
 const isRealAdmin = computed(() => role.value === "admin");
 
 /* Admin visible → sauf en mode 'voir comme élève' */
-const isAdmin = computed(() => {
-  if (authStore.impersonateStudent) return false;
-  return role.value === "admin";
-});
+const isAdmin = computed(() =>
+  authStore.user?.role === "admin" && !authStore.impersonateStudent
+)
+
+;
 
 /* Prof = prof OU admin */
 const isProf = computed(() =>
   ["prof", "admin"].includes(authStore.user?.role)
-);
+)
+;
 
 /* Élève = ni admin visible, ni prof */
 const isEleve = computed(() =>
-  isLoggedIn.value && !isAdmin.value && !isProf.value
-);
+  isLoggedIn.value && !isProf.value
+)
+;
 
 /*=================CLOSE MENU MOBILE */
 const closeMenu = () => {

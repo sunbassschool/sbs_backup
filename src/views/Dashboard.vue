@@ -52,7 +52,10 @@
   class="dashboard-card rounded-3 p-3 d-flex flex-column"
 >
 
-            <h3 class="h5 mb-2">🎶 📝 Bloc note</h3>
+            <h3 class="h5 mb-2">🎶 📝 Bloc note
+
+
+            </h3>
 
  <div
   v-if="!noteReady"
@@ -204,6 +207,7 @@ while (!this.auth.user?.user_id) {
   await new Promise(r => setTimeout(r, 20))
   if (this.destroyed) return
 }
+
 
   // --------------------------------------------------
   // 🔗 helper global upload

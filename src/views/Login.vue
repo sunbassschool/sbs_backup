@@ -4,14 +4,14 @@
     <!-- 🟡 SUCCESS -->
     <div v-if="loginSuccess" class="login-status-box">
       <div class="login-status-title">Connexion réussie</div>
-      <div class="login-status-text">Redirection en cours…</div>
+<div class="login-status-text">{{ statusText }}</div>
       <span class="login-status-spinner"></span>
     </div>
 
     <!-- 🟠 PROCESSING -->
     <div v-else-if="loginProcessing" class="login-status-box">
       <div class="login-status-title">Connexion</div>
-      <div class="login-status-text">Merci de patienter…</div>
+<div class="login-status-text">{{ statusText }}</div>
       <span class="login-status-spinner"></span>
     </div>
 
@@ -83,11 +83,11 @@
 
 
 <script setup>
-import { ref } from "vue"
+import { nextTick, ref } from "vue"
 import { Form, Field, ErrorMessage } from "vee-validate"
 
 import { getDeviceId } from "@/utils/device.ts"
-import { getProxyPostURL } from "@/config/gas"
+import { getProxyPostURL,gasPost } from "@/config/gas.ts"
 import * as yup from 'yup'
 import { useToast } from 'vue-toastification'
 import { useAuthStore } from '@/stores/authStore.js'
@@ -106,6 +106,7 @@ const router = useRouter()
 const deviceId = getDeviceId()
 console.log("📱 deviceId envoyé au backend :", deviceId)
 
+const statusText = ref("")
 
 const loading = ref(false)
 
@@ -168,76 +169,115 @@ async function loginApi({ email, hashedPassword, deviceId }) {
 
 async function onSubmit(values) {
   const T0 = performance.now()
+  console.group("🚀 [LOGIN FLOW]")
   console.time("⏱️ LOGIN TOTAL")
 
   auth.isLoggingIn = true
   loginProcessing.value = true
   loading.value = true
+  statusText.value = "Vérification des identifiants…"
+  await nextTick()
 
   try {
+    // 🛑 bot
     if (values.botField) throw new Error("Bot détecté")
 
+    // 🔐 hash
+    console.time("LOGIN sha256")
     const hashedPassword = await sha256(values.password)
+    console.timeEnd("LOGIN sha256")
 
+    // 🌐 login API
+    statusText.value = "Connexion sécurisée…"
+    console.time("LOGIN loginApi")
     const data = await loginApi({
       email: values.email,
       hashedPassword,
       deviceId
     })
+    console.timeEnd("LOGIN loginApi")
 
+  
+
+    // ✅ feedback succès
     loginProcessing.value = false
     loginSuccess.value = true
+    statusText.value = "Connexion réussie"
+    const successShownAt = performance.now()
 
-    let payload
-    try {
-      payload = jwtDecode(data.jwt)
-    } catch {
-      throw new Error("JWT invalide")
-    }
+    // 🧾 JWT
+    console.time("LOGIN jwtDecode")
+    const payload = jwtDecode(data.jwt)
+    console.timeEnd("LOGIN jwtDecode")
+    console.log("🧾 JWT payload", payload)
 
+    // 💾 cache léger
+    console.time("LOGIN localStorage")
     localStorage.setItem("email", payload.email || "")
     localStorage.setItem("prenom", payload.prenom || "")
+    console.timeEnd("LOGIN localStorage")
 
+    // 🧠 session
+    console.time("LOGIN setSessionData")
     auth.setSessionData({
       jwt: data.jwt,
       refreshToken: data.refreshToken,
       sessionId: data.sessionId,
       userData: data.user
     })
+    console.timeEnd("LOGIN setSessionData")
 
     auth.isLoggingOut = false
     auth.refreshFailed = false
     sessionStorage.removeItem("AUTH_ABORTED")
     localStorage.removeItem("session_expired")
 
+    // ⏳ HYDRATATION (POINT CLÉ)
+    console.time("LOGIN fetchUserData")
     await auth.fetchUserData()
-    await auth.waitHydration?.()
+    console.timeEnd("LOGIN fetchUserData")
 
-    const role = auth.user?.role
+    console.log("🧠 user hydrated", {
+      role: auth.user?.role,
+      onboarding: auth.user?.onboarding_done
+    })
 
-    if (role === "eleve") {
-      const done = localStorage.getItem("onboarding_done") === "true"
-      router.replace(done ? "/dashboard" : "/onboarding")
-      return
+    // ✅ TRIGGER ROUTING
+const role = auth.user?.role
+const isProf = ["prof", "admin"].includes(role)
+const onboardingDone = auth.user?.onboarding_done === true
+
+if (isProf) {
+  router.replace("/dashboard-prof")
+} else {
+  router.replace(onboardingDone ? "/dashboard" : "/onboarding")
+}
+    // ⏱️ UX min
+    const MIN_SUCCESS_MS = 400
+    const elapsed = performance.now() - successShownAt
+    if (elapsed < MIN_SUCCESS_MS) {
+      await new Promise(r => setTimeout(r, MIN_SUCCESS_MS - elapsed))
     }
 
-    if (role === "prof" || role === "admin") {
-      router.replace("/dashboard-prof")
-      return
-    }
-
-    router.replace("/dashboard")
+    // ❌ PAS DE ROUTER ICI
+    // → le beforeEach / RootLoader décide
 
   } catch (err) {
+    console.error("❌ [LOGIN ERROR]", err)
     loginProcessing.value = false
+    loginSuccess.value = false
+    statusText.value = ""
     toast.error(err.message || "Erreur serveur")
   } finally {
     loading.value = false
     auth.isLoggingIn = false
     console.timeEnd("⏱️ LOGIN TOTAL")
     console.log("🏁 LOGIN END", Math.round(performance.now() - T0), "ms")
+    console.groupEnd()
   }
 }
+
+
 
 
 

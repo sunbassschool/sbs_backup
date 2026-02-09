@@ -4,7 +4,11 @@
       <div class="dashboard-wrapper">
 
         <!-- Loader -->
-<div v-if="!auth.user || !auth.user.prof_id" class="loader-container">
+<div
+  v-if="!auth.user && !dashboardReady"
+  class="loader-container"
+>
+
   <div class="dashboard-loader">
     <div class="spinner"></div>
     <p class="loader-text">Chargement du tableau de bord…</p>
@@ -17,8 +21,13 @@
         <!-- DASHBOARD PROF -->
         <div v-else class="fade-in">
           <!-- ⏳ Skeleton onboarding -->
-<OnboardingSkeleton v-if="auth.authFullyReady && !auth.onboardingSnapshot.isReady" />
-<OnboardingProfCard v-else-if="auth.onboardingSnapshot.completed < 4" />
+<OnboardingSkeleton v-if="!auth.authFullyReady" />
+
+<OnboardingProfCard
+  v-else-if="auth.onboardingSnapshot.completed < 4"
+/>
+
+
 
 
 <div class="prof-dashboard">
@@ -183,6 +192,8 @@ const loadingEleves = ref(false)
 const loadingPlanning = ref(false)
 const loadingReports = ref(false)
 const loadingPartitions = ref(false)
+const dashboardReady = ref(false)
+const onboardingLocked = ref(false)
 
 
 // === STATE ===
@@ -198,6 +209,10 @@ const dashboardStore = useDashboardStore()
 
 const TTL = 15 * 60 * 1000 // 15 min
 const CACHE_PREFIX = "dashboard_cache_"
+const cacheKey = computed(() =>
+  CACHE_PREFIX + (auth.user?.prof_id || auth.user?.user_id)
+)
+
 const onboardingReady = computed(() => auth.onboardingReady === true)
 const showOnboarding = computed(() => {
   const s = auth.onboardingSnapshot
@@ -246,22 +261,34 @@ const cachedDashboard = getCachedDashboard()
 // === ROUTES ===
 
 watch(
-  () => auth.user?.prof_id,
-  async (pid) => {
-    if (!pid || !auth.jwt) return
+  () => auth.user,
+  (user) => {
+    if (!user) return
 
-    console.log("🟢 [DASHBOARD] jwt + prof_id OK → fetch")
+    const hydrated = loadFromStore()
+    dashboardReady.value = hydrated
 
-    profId.value = pid
-
-    loadFromStore()
-    refreshDashboard()
+    if (auth.jwt && user.prof_id) {
+      profId.value = user.prof_id
+      refreshDashboard()
+    }
   },
   { immediate: true }
 )
 
 
 
+
+watch(
+  () => auth.authFullyReady,
+  (ready) => {
+    if (!ready) return
+
+    // 🔑 lock dès que auth est prêt
+    onboardingLocked.value = true
+  },
+  { immediate: true }
+)
 
 
 
@@ -276,7 +303,6 @@ async function fetchPartitionsCount() {
 
   if (!auth.jwt || !profId.value) return
 
-  console.group("🎵 FETCH PARTITIONS COUNT")
   if (shouldShowLoader(partitionsCount.value)) {
     loadingPartitions.value = true
   }
@@ -295,7 +321,6 @@ async function fetchPartitionsCount() {
       body: JSON.stringify(payload)
     })
 
-    console.log("📡 HTTP STATUS →", res.status)
 
     const text = await res.text()
 
@@ -388,9 +413,10 @@ const payload = {
 }
 
 function loadFromStore() {
-  if (!profId.value) return false
+  const key = cacheKey.value
+  if (!key) return false
 
-  const raw = localStorage.getItem(CACHE_PREFIX + profId.value)
+  const raw = localStorage.getItem(key)
   if (!raw) return false
 
   try {
@@ -402,7 +428,8 @@ function loadFromStore() {
     pendingReports.value = data.pendingReports ?? 0
     inviteLink.value = data.inviteLink ?? ""
     partitionsCount.value = data.partitionsCount ?? 0
-    // ✅ cache = data déjà là → stop loaders
+
+    dashboardReady.value = true
     loadingEleves.value = false
     loadingPlanning.value = false
     loadingReports.value = false
@@ -412,6 +439,7 @@ function loadFromStore() {
     return false
   }
 }
+
 
 
 // ======================================================================
@@ -456,12 +484,10 @@ async function fetchEleves() {
   }
 
   const t0 = performance.now()
-  console.group("👥 fetchEleves")
   if (shouldShowLoader(totalEleves.value)) {
     loadingEleves.value = true
   }
   try {
-    console.log("📤 payload", payload)
 
     const res = await fetch(getProxyPostURL(), {
       method: "POST",
@@ -475,7 +501,6 @@ async function fetchEleves() {
     const raw = await res.text()
     if (auth.isLoggingOut) return
 
-    console.log("📥 raw", raw)
 
     let data
     try {

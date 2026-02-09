@@ -112,6 +112,17 @@ hasSaleByProf: {},
   // GETTERS
   // --------------------------------------------------------------------------
   getters: {
+    pricingReady(state) {
+  const profId = state.user?.prof_id
+  if (!profId) return false
+
+  return (
+    state.jwtReady === true &&
+    typeof state.hasActiveOfferByProf?.[profId] === "boolean" &&
+    typeof state.hasSaleByProf?.[profId] === "boolean"
+  )
+}
+,
     // ✅ Est-ce que l'utilisateur est considéré comme connecté ?
     isLoggedIn(state) {
       // 1) Pas de JWT → non connecté
@@ -175,16 +186,18 @@ const hasStudent =
 
   const hasSale =
     state.hasSaleByProf?.[profId] === true
+const stripeKnown = state.stripe.status !== "unknown"
 
 const isReady =
-  typeof stripeOk === "boolean" &&
   typeof hasOffer === "boolean" &&
   typeof hasSale === "boolean" &&
   typeof state.dashboardElevesCount === "number"
 
 
-  const completed =
-    [stripeOk, hasStudent, hasOffer, hasSale].filter(v => v === true).length
+
+ const completed =
+  [stripeOk, hasStudent, hasOffer, hasSale].filter(v => v === true).length
+
 
   const isDone =
     stripeOk && hasStudent && hasOffer && hasSale
@@ -311,15 +324,11 @@ async fetchHasOffer() {
     const profId = this.prof_id || this.user?.prof_id
     if (!profId) return
 
-    const jwt = await getValidToken()
-    if (!jwt) return
-
     const res = await fetch(getProxyPostURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         route: "hasactiveproduct",
-        jwt,
         prof_id: profId
       })
     })
@@ -333,8 +342,6 @@ async fetchHasOffer() {
     console.groupEnd()
   }
 }
-
-
 ,
 
   showUpgradeCTA(payload) {
@@ -693,10 +700,12 @@ async fetchUserData() {
 
     const payload = decodeJwt(jwtString)
 
-    const onboarding_done =
-      typeof data.onboarding_done === "boolean"
-        ? data.onboarding_done
-        : false
+ const onboarding_done = Boolean(
+  data.onboarding_done === true ||
+  data.onboarding_done === "TRUE" ||
+  data.onboarding_done === 1
+)
+
 
 const builtUser = {
   ...data,
@@ -1015,7 +1024,6 @@ async restoreFast() {
 
   // user minimal sync
   this.user = buildUserFromJwt(this.jwt)
-  this.user.onboarding_done ??= false
 
   this.prof_id = this.user.prof_id || null
 
@@ -1068,17 +1076,10 @@ await Promise.allSettled(tasks)
     }
 
     this.authFullyReady = true
+    this.jwtReady = true
     console.log("🟢 AUTH FULLY READY")
 
-    // 🔀 redirection post-login uniquement
-    const route = router.currentRoute.value
-    if (route.path === "/login") {
-      router.replace(
-        ["prof", "admin"].includes(this.user.role)
-          ? "/dashboard-prof"
-          : "/dashboard"
-      )
-    }
+
 
   } catch (e) {
     console.error("❌ finalizeAuthAsync error", e)
@@ -1128,9 +1129,12 @@ if (this.isInitDone) {
       }
 
       // 🔁 hydratation réelle en background
-      if (hasSession) {
-        await this.finalizeAuthAsync()
-      }
+    // 🔁 hydratation réelle en background
+if (hasSession) {
+  // ⚠️ NE PAS await → sinon le router attend
+  this.finalizeAuthAsync()
+}
+
 
       console.log("🟢 initAuth → SUCCESS")
       return true

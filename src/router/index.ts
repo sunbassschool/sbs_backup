@@ -254,7 +254,7 @@ history: createWebHistory("/"),
   path: "/admin/InAppMessagesAdmin",
   name: "InAppMessagesAdmin",
   component: () => import("@/components/admin/InAppMessagesAdmin.vue"),
-  meta: { requiresAuth: true,     requiresPrivilege: "admin" }
+  meta: { requiresAuth: true,     requiresPrivilege: "admin",layout: "landing" }
 }
 ,
 
@@ -316,89 +316,54 @@ history: createWebHistory("/"),
 });
 
 
-// =============================================================
-// 🔐 GLOBAL GUARD MULTI-PROF / ADMIN + STRIPE
-// =============================================================
-const sleep = (ms: number): Promise<void> =>
-  new Promise(resolve => setTimeout(resolve, ms))
 router.beforeEach((to) => {
   const store = useAuthStore()
 
-  // ⛔ attendre auth
-if (!store.authReady) {
-  return true
-}
-
-
+  // ⏳ attendre que l'état soit prêt
+  if (!store.authReady || (store.jwt && !store.userLoaded)) {
+    return true
+  }
 
   const isLogged = !!store.jwt
- // 🚫 pages guest-only interdites si connecté
-  if (isLogged && to.meta?.guestOnly) {
-    const isProf = ["prof", "admin"].includes(store.user?.role)
-    return {
-      path: isProf ? "/dashboard-prof" : "/dashboard",
-      replace: true
-    }}
-
-
   const isProf = ["prof", "admin"].includes(store.user?.role)
 
   // invité
-if (!store.jwt) {
-  if (to.meta?.public) return true
-  return { path: "/cours-de-basse-en-ligne", replace: true }
-}
-
-
-  const cachedOnboarding =
-    localStorage.getItem("onboarding_done") === "true"
-
-  // ⏳ backend pas encore résolu → ÉLÈVES SEULEMENT
-  if (!store.onboardingResolved && !isProf) {
-    if (cachedOnboarding) return true
-    if (to.path === "/onboarding") return true
-    return { path: "/onboarding", replace: true }
+  if (!isLogged) {
+    if (to.meta?.public) return true
+    return { path: "/cours-de-basse-en-ligne", replace: true }
   }
 
-  // 🔐 backend = vérité finale
+
+
+  // onboarding
   const onboardingDone = store.user?.onboarding_done === true
 
   if (!isProf && !onboardingDone && to.path !== "/onboarding") {
     return { path: "/onboarding", replace: true }
   }
 
-  if (!isProf && onboardingDone && to.path === "/onboarding") {
-return true
-  }
-
-  // 🚫 onboarding interdit aux profs
   if (isProf && to.path === "/onboarding") {
     return { path: "/dashboard-prof", replace: true }
   }
 
+  // privilèges
+  const required = to.meta?.requiresPrivilege
+  if (required) {
+    const privileges = store.user?.privileges || []
+    const hasPrivilege = Array.isArray(required)
+      ? required.some(p => privileges.includes(p))
+      : privileges.includes(required)
 
-// 🔐 PRIVILÈGE REQUIS (PAGE PROTÉGÉE)
-const required = to.meta?.requiresPrivilege
-
-if (required) {
-  const privileges = store.user?.privileges || []
-
-  const hasPrivilege = Array.isArray(required)
-    ? required.some(p => privileges.includes(p))
-    : privileges.includes(required)
-
-  if (!hasPrivilege) {
-    store.showUpgradeCTA({ privilege: Array.isArray(required) ? required[0] : required })
-    return false // ⛔ blocage navigation
+    if (!hasPrivilege) {
+      store.showUpgradeCTA({
+        privilege: Array.isArray(required) ? required[0] : required
+      })
+      return false
+    }
   }
-}
-
-
 
   return true
 })
-
-
 
 
 

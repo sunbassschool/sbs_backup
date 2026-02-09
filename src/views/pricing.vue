@@ -83,33 +83,23 @@
   </RouterLink>
 
   <!-- CONNECTÉ -->
-  <button
-    v-else
-    class="btn primary full"
-    :disabled="
-      checkoutTarget === 'teachy_pro' ||
-      !isProReady ||
-      !auth.jwtReady ||
-      !auth.onboardingReady
-    "
-    @click="subscribe('teachy_pro')"
-  >
-    <span v-if="checkoutTarget === 'teachy_pro'">
-      Redirection vers le paiement…
-    </span>
-    <span v-else-if="!auth.jwtReady">
-      Connexion en cours…
-    </span>
-    <span v-else-if="!auth.onboardingReady">
-      Initialisation du compte…
-    </span>
-    <span v-else-if="!isProReady">
-      Chargement de l’offre…
-    </span>
-    <span v-else>
-      Gagner plus, passer Pro
-    </span>
-  </button>
+<button
+  v-else
+  class="btn primary full"
+  :disabled="checkoutTarget === 'teachy_pro' || !isProReady"
+  @click="subscribe('teachy_pro')"
+>
+  <span v-if="checkoutTarget === 'teachy_pro'">
+    Redirection…
+  </span>
+  <span v-else-if="!isProReady">
+    Chargement de l’offre…
+  </span>
+  <span v-else>
+    Gagner plus, passer Pro
+  </span>
+</button>
+
 
   <small class="reassure">
     Sans engagement • Passe Pro quand tu veux
@@ -144,18 +134,10 @@
   <span v-if="checkoutTarget === 'teachy_studio'">
     Redirection…
   </span>
-    <span v-else-if="!auth.jwtReady">
-    Connexion en cours…
-  </span>
-  <span v-else-if="!auth.onboardingReady">
-    Initialisation du compte…
-  </span>
-  <span v-else-if="!isProReady">
-    Chargement de l’offre…
-  </span>
   <span v-else>
     Développer mon école
   </span>
+
 
 </button>
 
@@ -178,6 +160,14 @@
     <p class="legal">
       * Frais Stripe standards applicables.
     </p>
+<!-- OVERLAY CHECKOUT (GLOBAL) -->
+<div v-if="checkoutTarget" class="checkout-overlay">
+  <div class="checkout-modal">
+    <span class="spinner"></span>
+    <p class="title">Redirection sécurisée</p>
+    <p class="subtitle">Ouverture du paiement…</p>
+  </div>
+</div>
 
   </section>
 </template>
@@ -189,6 +179,8 @@
 import { ref, onMounted, computed } from "vue"
 import { useAuthStore } from "@/stores/authStore"
 import { getProxyPostURL } from "@/config/gas"
+import { storeToRefs } from "pinia"
+
 import MarketingHeader from "@/components/MarketingHeader.vue"
 
 /* =========================================================
@@ -196,6 +188,7 @@ import MarketingHeader from "@/components/MarketingHeader.vue"
    ========================================================= */
 const auth = useAuthStore()
 const proxyUrl = getProxyPostURL("")
+const { user, authReadyLight, authFullyReady } = storeToRefs(auth)
 
 /* =========================================================
    🧠 CACHE CONFIG
@@ -321,9 +314,23 @@ const fetchProfPlans = async () => {
    ========================================================= */
 const subscribe = async (droitCode) => {
   if (checkoutTarget.value) return
-  if (!auth.user || !auth.jwtReady || !auth.onboardingReady) return
 
-  const product = products.value.find(p => p.droit_code === droitCode)
+  // pas connecté → register
+  if (!auth.user) {
+    router.push("/register")
+    return
+  }
+
+  // JWT lazy
+  const jwt = await auth.ensureValidJwt()
+  if (!jwt) {
+    router.push("/login")
+    return
+  }
+
+  const product = products.value.find(
+    p => p.droit_code === droitCode
+  )
   if (!product || !product.prices?.length) return
 
   checkoutTarget.value = droitCode
@@ -341,26 +348,12 @@ const subscribe = async (droitCode) => {
       })
     })
 
-    const raw = await res.text()
-    console.log("🧱 RAW CHECKOUT =", raw)
-
-    let json
-    try {
-      json = JSON.parse(raw)
-    } catch {
-      console.error("❌ JSON invalide", raw)
-      return
-    }
-
+    const json = await res.json()
     if (json.checkout_url) {
       window.location.href = json.checkout_url
-    } else {
-      console.error("❌ checkout_url manquant", json)
     }
   } finally {
-    setTimeout(() => {
-      checkoutTarget.value = null
-    }, 1500)
+    checkoutTarget.value = null
   }
 }
 
@@ -589,6 +582,55 @@ onMounted(fetchProfPlans)
     opacity: 1;
     filter: none;
   }
+}
+
+.checkout-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 999999; /* 🔥 au-dessus de tout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkout-modal {
+  background: #111;
+  border-radius: 16px;
+  padding: 28px 32px;
+  min-width: 260px;
+  max-width: 90vw;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  color: #fff;
+}
+
+.checkout-modal .title {
+  margin-top: 12px;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.checkout-modal .subtitle {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+/* spinner */
+.spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+  border: 3px solid rgba(255,255,255,.3);
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 </style>

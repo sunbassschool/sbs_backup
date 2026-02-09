@@ -22,6 +22,13 @@
           @click="$router.push('/admin/InAppMessagesAdmin')"
         />
 
+            <AdminCard
+          title="Dashboard"
+          description="Dashboard"
+          icon="🚀"
+          @click="$router.push('/dashboard')"
+        />
+
         <!-- futurs modules -->
         <!--
         <AdminCard title="Quotas" icon="📦" />

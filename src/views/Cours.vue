@@ -215,9 +215,10 @@ const res = await fetch(proxyUrl, {
     console.log("📥 PARSED JSON :", json)
 
     if (json?.success && Array.isArray(json.eleves)) {
-      elevesInscrits.value = json.eleves.filter(
-        e => e && e.statut === "inscrit"
-      )
+     elevesInscrits.value = json.eleves
+  .filter(e => e && e.statut === "inscrit")
+  .filter(e => e.prenom?.toLowerCase() !== "nepasup")
+
     } else {
       console.warn("⚠️ Format inattendu getElevesByProf :", json)
     }
@@ -290,7 +291,7 @@ const goToNextWeek = () => {
     };
 
     const API_URL =
-      "https://cors-proxy-37yu.onrender.com/https://script.google.com/macros/s/AKfycbxvaZgqAbC8icJJTtJ9cETcet2dWu8FVJre9yKgmyJpSqPhFmdgKOT5yWnFxPmVbk4D_w/exec";
+      "https://cors-proxy-37yu.onrender.com/https://script.google.com/macros/s/AKfycbwGvXe0LLeio_7BpFI-OiKTBEoagNovI0GjEvV2iEqCilwPSefa2UIYodwS85xhp9Mvrg/exec";
 
     // ✅ Vérifie si l'utilisateur est connecté
     const isLoggedIn = computed(() => !!localStorage.getItem("jwt"));
@@ -321,6 +322,7 @@ const response = await axios.get(proxyUrl)
       : Object.values(response.data || {})
 
     console.log("📊 coursData length :", coursData.value.length)
+console.log("🔗 URL appelée :", proxyUrl)
 
     saveToStore()
   } catch (e) {

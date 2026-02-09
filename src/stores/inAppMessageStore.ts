@@ -41,36 +41,28 @@ async fetchMessages(force = false) {
 ,
 
    selectMessage(context: any) {
-  console.group("🎯 [InAppStore] selectMessage")
-  console.log("context =", context)
+
 
   const auth = useAuthStore()
   const user = auth.user
 
 const candidates = this.messages.filter(m => {
-  console.group(`🧪 [InApp][${m.id}]`)
 
   const t = matchTrigger(m, context)
-  console.log("trigger =", t)
 
   const a = matchAudience(m, user)
-  console.log("audience =", a)
 
   const s = isInSchedule(m)
-  console.log("schedule =", s)
 
   const f = matchFrequency(m)
-  console.log("frequency =", f)
 
   const ok = t && a && s && f
-  console.log("👉 FINAL =", ok)
 
   console.groupEnd()
   return ok
 })
 
 
-  console.log("🎯 candidates =", candidates)
   console.groupEnd()
 
   if (!candidates.length) return null

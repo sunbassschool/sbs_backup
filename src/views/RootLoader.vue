@@ -7,32 +7,20 @@ const auth = useAuthStore()
 const router = useRouter()
 
 watchEffect(() => {
-  // ⛔ attendre auth complètement prêt
+  console.log("🟥 RootLoader MOUNT", window.location.pathname)
+if (window.location.pathname !== "/") return
+
   if (!auth.authReady) return
 
-  // invité
   if (!auth.jwt) {
     router.replace("/cours-de-basse-en-ligne")
     return
   }
 
-  // rôle encore indéfini → attendre
-  if (!auth.user?.role) return
 
-  const isProf = ["prof", "admin"].includes(auth.user.role)
-
-  // PROF
-  if (isProf) {
-    router.replace("/dashboard-prof")
-    return
-  }
-
-  // ÉLÈVE
-  const cachedOnboarding =
-    localStorage.getItem("onboarding_done") === "true"
-
-  router.replace(cachedOnboarding ? "/dashboard" : "/onboarding")
 })
+
+
 </script>
 
 

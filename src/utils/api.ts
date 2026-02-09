@@ -299,43 +299,50 @@ export function extractErrorMessage(error: unknown): string {
 
 
 
-export function getUserInfoFromJWT(jwt?: string): { email: string; prenom: string; role: string; abonnement: string } {
+export function getUserInfoFromJWT(jwt?: string): {
+  email: string
+  prenom: string
+  role: string
+  abonnement: string
+  prof_id: string
+} {
   if (!jwt) {
-    jwt = sessionStorage.getItem("jwt") ||
-          localStorage.getItem("jwt") ||
-          document.cookie.split('; ').find(row => row.startsWith('jwt='))?.split('=')[1];
+    jwt =
+      sessionStorage.getItem("jwt") ||
+      localStorage.getItem("jwt") ||
+      document.cookie
+        .split("; ")
+        .find(r => r.startsWith("jwt="))
+        ?.split("=")[1]
   }
 
-  if (!jwt || typeof jwt !== 'string') {
-    console.warn("⚠️ Aucun JWT trouvé !");
-    return { email: "", prenom: "", role: "", abonnement: "" };
+  if (!jwt || typeof jwt !== "string") {
+    console.warn("⚠️ Aucun JWT trouvé !")
+    return { email: "", prenom: "", role: "", abonnement: "", prof_id: "" }
   }
 
   try {
+    const decoded: any = jwtDecode(jwt)
+    console.log("🧾 Payload JWT :", decoded)
 
-    const decoded: any = jwtDecode(jwt);
-console.log("🧾 Payload JWT :", jwtDecode(jwt));
-
-
-    // ✅ Correction UTF-8 si prénom mal encodé
-    let prenom = decoded.prenom || decoded.name || "";
+    let prenom = decoded.prenom || decoded.name || ""
     try {
-      prenom = decodeURIComponent(escape(prenom));
-    } catch (e) {
-      console.warn("⚠️ Impossible de décoder correctement le prénom :", prenom);
-    }
+      prenom = decodeURIComponent(escape(prenom))
+    } catch {}
 
     return {
       email: decoded.email || "",
       prenom,
       role: decoded.role || "",
-      abonnement: decoded.abonnement || ""
-    };
-  } catch (error) {
-    console.error("❌ Erreur lors du décodage du JWT :", error);
-    return { email: "", prenom: "", role: "", abonnement: "" };
+      abonnement: decoded.abonnement || "",
+      prof_id: decoded.prof_id || ""
+    }
+  } catch (e) {
+    console.error("❌ Erreur JWT :", e)
+    return { email: "", prenom: "", role: "", abonnement: "", prof_id: "" }
   }
 }
+
 
 
 export function isTokenExpired(token: string): boolean {

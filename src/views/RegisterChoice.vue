@@ -21,9 +21,9 @@
         </button>
       </div>
 
-  <p class="foot-note">
+  <p class="foot-note">  <router-link to="/login" class="login-link">
+
   Déjà inscrit ?
-  <router-link to="/login" class="login-link">
     Se connecter
   </router-link>
 </p>

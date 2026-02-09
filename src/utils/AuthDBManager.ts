@@ -127,40 +127,42 @@ export async function saveSessionData({
   sessionId,
   userData,
 }: {
-  jwt: string;
-  refreshToken: string;
-  sessionId: string;
-  userData?: { prenom: string; email: string };
+  jwt: string
+  refreshToken: string
+  sessionId: string
+  userData?: { prenom: string; email: string }
 }) {
-  console.log("🚀 saveSessionData start");
+  console.time("SS TOTAL")
 
   if (!jwt || !refreshToken || !sessionId) {
-    console.warn("⚠️ Données manquantes", { jwt, refreshToken, sessionId });
-    throw new Error("Missing session data");
+    throw new Error("Missing session data")
   }
 
-  const existingSessionId = await readKV("sessionId");
+  const database = await openSafeDB()
 
-  if (existingSessionId && existingSessionId !== sessionId) {
-    console.warn("🚨 SessionId différent détecté", {
-      existant: existingSessionId,
-      entrant: sessionId,
-    });
-    // on n’écrase pas
-  } else {
-    await writeKV("sessionId", sessionId);
+  console.time("SS TX")
+  const tx = database.transaction(STORE_NAME, "readwrite")
+  const store = tx.objectStore(STORE_NAME)
+
+  const existing = await store.get("sessionId")
+
+  if (!existing || existing.value === sessionId) {
+    store.put({ key: "sessionId", value: sessionId })
   }
 
-  await writeKV("jwt", jwt);
-  await writeKV("refreshToken", refreshToken);
+  store.put({ key: "jwt", value: jwt })
+  store.put({ key: "refreshToken", value: refreshToken })
 
   if (userData) {
-    await writeKV("prenom", userData.prenom);
-    await writeKV("email", userData.email);
+    store.put({ key: "prenom", value: userData.prenom })
+    store.put({ key: "email", value: userData.email })
   }
 
-  console.log("✅ saveSessionData done");
+  await tx.done
+  console.timeEnd("SS TX")
+  console.timeEnd("SS TOTAL")
 }
+
 
 // ======================================================
 // 🔎 GET SESSION ID
