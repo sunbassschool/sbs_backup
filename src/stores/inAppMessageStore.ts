@@ -6,12 +6,14 @@ import { matchTrigger, matchAudience, matchFrequency, isInSchedule } from "@/eng
 const ALLOW_GUEST_INAPP = true
 
 export const useInAppMessageStore = defineStore("inAppMessages", {
-  state: () => ({
-    messages: [] as any[],
-    loaded: false,
-    loading: false,
-    lastFetchAt: 0
-  }),
+state: () => ({
+  messages: [] as any[],
+  loaded: false,
+  loading: false,
+  lastFetchAt: 0,
+
+  current: null as any | null // ✅
+}),
 
   actions: {
 async fetchMessages(force = false) {
@@ -39,6 +41,8 @@ async fetchMessages(force = false) {
   this.loading = false
 }
 ,
+
+
 
    selectMessage(context: any) {
 
@@ -90,6 +94,34 @@ const candidates = this.messages.filter(m => {
       this.loaded = false
       this.loading = false
       this.lastFetchAt = 0
-    }
+    },
+ emitEvent(event: string, payload: any = {}) {
+  console.log("🧠 EMIT EVENT", {
+    event,
+    payload,
+    messages: this.messages.map(m => ({
+      id: m.id,
+      type: m.trigger?.type,
+      route: m.trigger?.route,
+      payload: m.trigger?.payload
+    }))
+  })
+
+  const msg = this.selectMessage({
+    trigger: "on_event",
+    event,
+    payload
+  })
+
+  console.log("🧠 MATCH RESULT =", msg)
+
+  if (msg) this.current = msg
+  return msg
+}
+,
+
+  clearCurrent() {
+    this.current = null
+  }
   }
 })

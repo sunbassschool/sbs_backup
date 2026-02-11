@@ -28,6 +28,16 @@
           <input v-model="imageUrl" type="text" placeholder="https://…" />
         </label>
 
+<label>
+  URL de téléchargement
+  <input
+    v-model="downloadUrl"
+    type="url"
+    placeholder="https://..."
+  />
+</label>
+
+
         <p v-if="error" class="error">❌ {{ error }}</p>
 
         <div class="actions">
@@ -60,6 +70,7 @@ const name = ref("")
 const description = ref("")
 const category = ref("")
 const imageUrl = ref("")
+const downloadUrl = ref("")
 
 const loading = ref(false)
 const error = ref("")
@@ -79,6 +90,10 @@ const submit = async () => {
     error.value = "Le nom du produit est obligatoire"
     return
   }
+if (downloadUrl.value && !downloadUrl.value.startsWith("http")) {
+  error.value = "URL de téléchargement invalide"
+  return
+}
 
   console.group("📦 CreateProductModal → submit")
   loading.value = true
@@ -96,8 +111,10 @@ const payload = {
   description: description.value.trim(),
   category: category.value.trim(),
   image_url: imageUrl.value.trim(),
-  droit_code // 👈 CLEF
+  download_url: downloadUrl.value.trim() || null,
+  droit_code
 }
+
 
 
     console.log("➡️ payload =", payload)

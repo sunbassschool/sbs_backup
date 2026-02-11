@@ -27,9 +27,10 @@
   class="link"
 >
   Cours de basse en ligne
-</router-link> 
+</router-link>
 
-
+  <RouterLink to="/improvisationcadentielle" class="link">Improvisation Cadentielle</RouterLink>
+    <RouterLink to="/masterclass" class="link">Masterclass GRATUITE</RouterLink>
              <RouterLink to="/home" class="link">Teachy.io</RouterLink>
 
          <RouterLink to="/register" class="btn primary full">

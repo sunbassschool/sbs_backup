@@ -5,23 +5,46 @@ type InAppMessage = Record<string, any>
 type UserContext = Record<string, any>
 
 export function matchTrigger(msg: InAppMessage, context: UserContext) {
-
   const type = (msg.trigger?.type || "").trim()
-  const ruleRaw = (msg.trigger?.route || "").trim()
 
+  // =========================
+  // 🔥 EVENT
+  // =========================
+if (type === "on_event") {
+  if (context?.trigger !== "on_event") return false
+  if (context?.event !== msg.trigger?.route) return false
+
+  if (msg.trigger?.payload) {
+    const expected = String(msg.trigger.payload).trim()
+    const received = String(context.payload?.product_id || "").trim()
+    return expected === received
+  }
+
+  return true
+}
+
+
+
+  // =========================
+  // 🚀 APP OPEN
+  // =========================
   if (type === "on_app_open")
     return context.trigger === "on_app_open"
 
+  // =========================
+  // 🧭 ROUTE
+  // =========================
   if (type !== "on_route") return false
   if (context.trigger !== "on_route") return false
 
+  const ruleRaw = (msg.trigger?.route || "").trim()
   if (!ruleRaw || ruleRaw === "all" || ruleRaw === "*")
     return true
 
-const rules = ruleRaw.split(",").map((r: string) => r.trim())
+  const rules = ruleRaw.split(",").map((r: string) => r.trim())
   const path = context.route
 
-return rules.some((rule: string) => {
+  return rules.some((rule: string) => {
     if (rule.endsWith("*")) {
       const base = rule.slice(0, -1)
       return path.startsWith(base)
@@ -29,6 +52,7 @@ return rules.some((rule: string) => {
     return path === rule
   })
 }
+
 
 
 // ---------- AUDIENCE ----------

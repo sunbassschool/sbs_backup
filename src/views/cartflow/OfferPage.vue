@@ -76,17 +76,28 @@ const onStripeSuccess = async (res: StripeSuccessRes) => {
   // ===============================
   // 💸 ONE-TIME
   // ===============================
-  if (selectedOffer.value?.pricing_mode === "one_time") {
-    const pi = res?.paymentIntent
-    if (pi?.status !== "succeeded") return
+if (selectedOffer.value?.pricing_mode === "one_time") {
+  const pi = res?.paymentIntent
+  if (pi?.status !== "succeeded") return
+  if (paymentDone.value) return
 
-    if (paymentDone.value) return
-    paymentDone.value = true
+  paymentDone.value = true
+  paying.value = false
 
-    paying.value = false
-    router.replace("/thankyou")
-    return
+  // 🔥 GOOGLE ADS CONVERSION (ONE TIME)
+  if (window.gtag) {
+    window.gtag('event', 'conversion', {
+      send_to: 'AW-17922401091/EIv7CNWHpfEbEMPGiOJC',
+      transaction_id: pi.id,
+      value: pi.amount / 100,
+      currency: pi.currency.toUpperCase()
+    })
   }
+
+  router.replace("/thankyou")
+  return
+}
+
 
   // ===============================
   // 🔁 SUBSCRIPTION
@@ -148,6 +159,20 @@ watch(paying, v => console.log("🧠 paying =", v))
 // FETCH OFFERS
 // =====================
 onMounted(async () => {
+ await nextTick()
+  requestAnimationFrame(() => {
+    const targets = [
+      document.scrollingElement,
+      document.documentElement,
+      document.body,
+      document.querySelector("#app"),
+      document.querySelector(".offer-page"),
+    ].filter(Boolean) as HTMLElement[]
+
+    targets.forEach(t => (t.scrollTop = 0))
+    window.scrollTo(0, 0)
+  })
+
   document.documentElement.classList.add("landing-mode")
 document.body.classList.add("landing-mode")
 

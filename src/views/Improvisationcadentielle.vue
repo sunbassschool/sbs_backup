@@ -29,26 +29,38 @@ let onScroll: ((this: Window, ev: Event) => any) | null = null
 // SEO
 // =====================
 useHead({
-  title: "Cours de basse en ligne avec professeur | SunBassSchool",
+  title: "Improvisation à la basse – Méthode cadentielle pour solos mélodiques | SunBassSchool",
   meta: [
     {
       name: "description",
       content:
-        "Cours de basse en ligne en visioconférence avec un professeur musicien professionnel. Suivi personnalisé, replay, feedback et progression rapide."
+        "Apprends l’improvisation à la basse grâce à une méthode cadentielle claire et musicale. Harmonie appliquée, solos mélodiques et direction rythmique. Accès immédiat."
     },
     {
-      name: "robots",
-      content: "index, follow"
+      property: "og:title",
+      content: "Improvisation cadentielle à la basse"
+    },
+    {
+      property: "og:description",
+      content:
+        "Une méthode claire pour improviser des solos mélodiques et cohérents à la basse."
+    },
+    {
+      property: "og:type",
+      content: "website"
+    },
+    {
+      property: "og:url",
+      content: "https://sunbassschool.com/improvisationcadentielle"
     }
   ],
   link: [
     {
       rel: "canonical",
-      href: "https://www.sunbassschool.com/cours-de-basse-en-ligne"
+      href: "https://sunbassschool.com/improvisationcadentielle"
     }
   ]
 })
-
 
 
 
@@ -56,7 +68,7 @@ useHead({
 // CONST
 // =====================
 const funnel =
-  (route.query.funnel as string) || "cours_basse"
+  (route.query.funnel as string) || "improvisation_cadentielle"
 // =====================
 // STATE
 // =====================
@@ -295,66 +307,71 @@ watch(paying, v => console.log("🧠 paying =", v))
     <div class="offer-container">
       <!-- LEFT -->
       <div class="offer-copy">
-        <span class="badge">🎸 Cours individuels en visioconférence</span>
+        <span class="badge">🎸 Module pédagogique – Basse soliste</span>
 
         <h1 class="offer-title">
-          Cours de basse <span class="accent">en ligne</span> avec un professeur
-          musicien pro pour progresser vite
+        Improvisation à la basse :
+<span class="accent">méthode cadentielle</span> pour solos mélodiques
         </h1>
+<p class="seo-intro">
+  Méthode complète pour apprendre à improviser à la basse
+  en utilisant les cadences harmoniques et une vraie direction mélodique.
+</p>
 
         <p class="hero-proof">
-          +50 élèves accompagnés · 10 ans d’enseignement · musicien pro depuis 15 ans
+          Développe l’aspect <strong>mélodique</strong> de tes solos et deviens
+          un vrai soliste audible, cohérent et musical.
         </p>
 
         <div class="hero-video">
-<video
-  src="https://www.sunbassschool.com/wp-content/uploads/2023/11/promo-cours-en-visio.mp4"
-  autoplay
-  muted
-  loop
-  playsinline
-  preload="none"
-  poster="/hero-cours-basse.jpg"
-></video>
-
-
-
+          <video
+            src="https://www.sunbassschool.com/wp-content/uploads/2023/11/promo-cours-en-visio.mp4"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="none"
+          ></video>
         </div>
 
         <div class="proof">
-          <p>🎯 Niveau requis : 6 mois de basse minimum (autodidacte ou école)</p>
-          <p>⏱️ 1h / semaine · 100% individuel</p>
-          <p>📱 Matériel : basse + ampli + téléphone + bonne connexion</p>
+          <p>🎵 Approche moderne & musicale</p>
+          <p>🧠 Harmonie pensée pour la tessiture réelle de la basse</p>
+          <p>🎯 Tous niveaux · aucun prérequis théorique lourd</p>
         </div>
 
-        <a href="#checkout" class="cta-main">Voir les formules</a>
+        <a href="#checkout" class="cta-main">Accéder au module</a>
       </div>
 
       <!-- RIGHT -->
       <div class="offer-checkout-wrapper">
         <p class="offer-lead">
-          Une pédagogie <strong>terrain</strong>, guidée par un musicien actif :
-          des consignes précises, un plan clair, et un suivi qui te fait avancer
-          semaine après semaine.
+          Pendant longtemps, les solos de basse étaient inutiles,
+          inaudibles, prétexte à discuter avec son voisin.
+          <br /><br />
+          Aujourd’hui, la <strong>connaissance harmonique</strong> est une qualité
+          recherchée chez les bassistes.
+          <br />
+          <strong>On nous entend enfin.</strong>
         </p>
 
         <ul class="benefits">
-          <li>✅ Technique (propreté, endurance, précision)</li>
-          <li>✅ Groove & timing (placement, feel, régularité)</li>
-          <li>✅ Harmonie (comprendre ce que tu joues)</li>
-          <li>✅ Répertoire (rock, funk, jazz, etc.)</li>
+          <li>✅ Solos mélodiques et audibles</li>
+          <li>✅ Direction claire dans l’impro</li>
+          <li>✅ Connexion rythme & harmonie</li>
+          <li>✅ Compréhension réelle du manche</li>
         </ul>
 
         <div class="guarantee-badge">
           <span class="icon">✔</span>
           <div class="text">
-            <strong>Suivi sur SunBassApp</strong>
-            <span>replay, feedback, devoirs et ressources centralisés</span>
+            <strong>Méthode reproductible</strong>
+            <span>pas de plans, pas de par cœur</span>
           </div>
         </div>
 
         <div class="video-cta" style="margin-top: 1.4rem">
-          <a href="#contact" class="cta-secondary">Poser une question</a>
+          <a href="#checkout" class="cta-secondary">Voir l’offre</a>
         </div>
       </div>
     </div>
@@ -362,359 +379,251 @@ watch(paying, v => console.log("🧠 paying =", v))
     <!-- CONTENT -->
     <section class="offer-content">
       <div class="fade-separator with-cta">
-        <a href="#checkout" class="separator-cta">Rejoindre les cours</a>
+        <a href="#checkout" class="separator-cta">Je commande le module</a>
       </div>
 
-      <!-- BLOCK A : POUR QUI -->
+      <!-- BLOCK A : PROBLÈME -->
       <section class="content-block block-a">
         <div class="two-cols">
           <div class="col-text">
-            <h2>Pour qui sont ces cours de basse en ligne ?</h2>
+            <h2>Pourquoi tant de solos sonnent faux ?</h2>
 
             <p class="intro">
-              Si tu as déjà une base (au moins 6 mois), que tu veux progresser sérieusement
-              et arrêter de tourner en rond, ces cours sont faits pour toi.
+              Dans l’enseignement traditionnel de la basse, il existe
+              un décalage énorme entre le contenu pédagogique
+              et la réalité de la basse moderne.
             </p>
 
             <ul class="features">
-              <li><strong>Débutant +</strong> : tu joues déjà quelques morceaux, tu veux une méthode et des repères.</li>
-              <li><strong>Intermédiaire</strong> : tu bloques sur le groove, la régularité, l’harmonie, les styles.</li>
-              <li><strong>Avancé</strong> : tu veux affiner, structurer, gagner en musicalité et en efficacité.</li>
+              <li>❌ Harmonie pensée pour le piano</li>
+              <li>❌ Tessiture réelle jamais exploitée</li>
+              <li>❌ Rythme et harmonie traités séparément</li>
             </ul>
 
             <p class="intro">
-              ⚠️ Si tu n’as <strong>jamais joué de musique</strong>, je te recommande de démarrer en présentiel
-              ou avec un cadre différent avant de passer en visio.
+              Résultat : des solos techniques,
+              mais sans discours musical clair.
             </p>
-
-            <a href="#checkout" class="cta-main">Choisir une formule</a>
           </div>
 
           <div class="col-media">
-            <div class="diapo-placeholder">📄 Exemple de programme personnalisé</div>
+            <div class="diapo-placeholder">
+              🎵 Solos techniques ≠ solos mélodiques
+            </div>
           </div>
         </div>
       </section>
 
       <div class="fade-separator"></div>
 
-      <!-- BLOCK B : MÉTHODE -->
+      <!-- BLOCK B : PROMESSE -->
       <section class="content-block block-b">
-        <h2 class="block-title">Une méthode simple : du concret, du feedback, un plan</h2>
+        <h2 class="block-title">
+          Une approche simple, logique et musicale
+        </h2>
+
+        <p class="intro" style="max-width: 820px; margin: 0 auto; text-align:center">
+          Ce module te donne les outils pour improviser avec une
+          <strong>intention mélodique claire</strong>,
+          en reliant enfin harmonie, rythme et direction.
+        </p>
+
+        <div class="video-cta">
+          <a href="#checkout" class="cta-secondary">
+            Accéder au module
+          </a>
+        </div>
+      </section>
+
+      <div class="fade-separator"></div>
+
+      <!-- BLOCK A : CONTENU -->
+      <section class="content-block block-a">
+        <div class="two-cols">
+          <div class="col-text">
+            <h2>Ce que tu vas travailler</h2>
+
+            <ul class="features">
+              <li>
+                <strong>Cadences</strong> : cadrer tes improvisations avec
+                des suites harmoniques simples et mémorisables.
+              </li>
+              <li>
+                <strong>Chant intérieur</strong> : construire une vraie mélodie
+                à partir des top-notes et accords de 10e.
+              </li>
+              <li>
+                <strong>Rampes de lancement</strong> :
+                relier chaque note cible avec logique et fluidité.
+              </li>
+            </ul>
+
+            <p class="intro">
+              Tu sais toujours où tu vas,
+              et pourquoi tu joues chaque note.
+            </p>
+          </div>
+
+          <div class="col-media">
+            <div class="diapo-placeholder">
+              🚀 Direction · Mélodie · Cohérence
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="fade-separator"></div>
+<section class="content-block block-b">
+  <h2>Comment improviser à la basse sans jouer au hasard ?</h2>
+
+  <p class="intro" style="max-width:820px;margin:0 auto;text-align:center">
+    Improviser à la basse ne consiste pas à enchaîner des gammes.
+    Cette méthode repose sur les cadences harmoniques,
+    la compréhension des accords et la construction
+    d’un discours mélodique cohérent.
+  </p>
+
+  <p class="intro" style="max-width:820px;margin:1.5rem auto 0;text-align:center">
+    Tu apprends à relier harmonie et rythme pour créer
+    de vrais solos de basse audibles et musicaux,
+    quel que soit le style.
+  </p>
+</section>
+      <div class="fade-separator"></div>
+
+      <!-- BLOCK B : RÉSULTATS -->
+      <section class="content-block block-b">
+        <h2 class="block-title">Résultats concrets</h2>
 
         <div class="method-grid">
           <div class="method-card">
             <span class="method-num">01</span>
-            <h3>Tu joues</h3>
-            <p>On part de ton jeu réel : ton son, ton timing, tes habitudes.</p>
+            <h3>Solos mélodiques</h3>
+            <p>Tu improvises avec un vrai discours musical.</p>
           </div>
 
           <div class="method-card">
             <span class="method-num">02</span>
-            <h3>Consignes précises</h3>
-            <p>Workshop terrain : consignes claires pour corriger et solidifier.</p>
+            <h3>Manche compris</h3>
+            <p>Les positions deviennent logiques et connectées.</p>
           </div>
 
           <div class="method-card">
             <span class="method-num">03</span>
-            <h3>Suite du programme</h3>
-            <p>On avance sur ton parcours : technique, groove, harmonie, styles.</p>
+            <h3>Fluidité rythmique</h3>
+            <p>Harmonie et groove fonctionnent ensemble.</p>
           </div>
 
           <div class="method-card">
             <span class="method-num">04</span>
-            <h3>Devoirs & suivi</h3>
-            <p>Fin de cours : objectifs semaine + ressources + replay sur SunBassApp.</p>
-          </div>
-        </div>
-
-        <div class="video-cta">
-          <a href="#checkout" class="cta-secondary">Je veux un plan clair</a>
-        </div>
-      </section>
-
-      <div class="fade-separator"></div>
-
-      <!-- BLOCK A : DÉROULÉ -->
-      <section class="content-block block-a">
-        <div class="two-cols">
-          <div class="col-text">
-            <h2>Déroulé d’un cours (1h)</h2>
-
-            <ul class="features">
-              <li><strong>5–10 min</strong> : questions + retour sur les devoirs, tu joues, je diagnostique.</li>
-              <li><strong>~15 min</strong> : workshop pratique (consignes précises, corrections, approfondissement).</li>
-              <li><strong>~15 min</strong> : on entame la suite du programme (technique / groove / harmonie / style).</li>
-              <li><strong>5 min</strong> : objectifs + devoirs de la semaine.</li>
-            </ul>
-
-            <p class="intro">
-              L’avantage : tu ne fais pas “au hasard”. Chaque séance s’inscrit dans un fil conducteur,
-              avec des objectifs mesurables.
-            </p>
-          </div>
-
-          <div class="col-media">
-            <div class="diapo-placeholder">🎥 Replay + feedback + ressources (SunBassApp)</div>
-          </div>
-        </div>
-      </section>
-
-      <div class="fade-separator"></div>
-
-      <!-- BLOCK B : PROFIL -->
-      <section class="content-block block-b bio-block">
-        <div class="two-cols">
-          <div class="bio-photo">
-         <img
-  src="https://i.ibb.co/8L3qDSVD/IMG-0866-jpeg.jpg"
-  alt="Sunny Adroit – professeur de basse et musicien professionnel"
-  width="250"
-  height="250"
-  loading="lazy"
-  decoding="async"
-/>
-
-          </div>
-
-          <div class="bio-text">
-            <h2>Pourquoi travailler avec moi ?</h2>
-
-            <h3 class="bio-name">Sunny Adroit</h3>
-
-            <p>
-              Je cumule la double casquette : <strong>musicien professionnel actif</strong> (activité principale)
-              et <strong>pédagogue</strong> depuis 10 ans.
-            </p>
-
-            <p>
-              Ça veut dire : un transfert de connaissances <strong>actuel</strong>, concret, issu de la scène,
-              du studio et d’une culture musicale large.
-            </p>
-
-            <p>
-              Formation : <strong>DEM Jazz (mention très bien)</strong> + <strong>Licence de musicologie Jazz</strong> à Toulouse.
-              Et surtout : beaucoup de styles joués (rock, funk, jazz…).
-            </p>
-          </div>
-        </div>
-
-        <div class="bio-stats">
-          <div class="stat">
-            <strong>10 ans</strong>
-            <span>pédagogie</span>
-          </div>
-          <div class="stat">
-            <strong>15 ans</strong>
-            <span>musicien pro</span>
-          </div>
-          <div class="stat">
-            <strong>50+</strong>
-            <span>élèves suivis</span>
+            <h3>Autonomie</h3>
+            <p>Tu improvises sans dépendre de plans appris.</p>
           </div>
         </div>
       </section>
 
       <div class="fade-separator with-cta">
-        <a href="#checkout" class="separator-cta">S’inscrire</a>
+        <a href="#checkout" class="separator-cta">J’en profite</a>
       </div>
+<section class="content-block block-b">
+  <h2 class="block-title">Questions fréquentes</h2>
 
-      <!-- FAQ SEO -->
-      <section class="content-block block-a faq-block">
-        <h2>FAQ – Cours de basse en ligne</h2>
+  <div style="max-width:820px;margin:0 auto">
+    <h3>Ce module convient-il aux débutants ?</h3>
+    <p>
+      Oui. Les principes d’improvisation sont expliqués étape par étape
+      et applicables immédiatement à la basse.
+    </p>
 
-        <article class="faq-item">
-          <h3>Les cours de basse en ligne sont-ils efficaces ?</h3>
-          <p>
-            Oui. Avec un cadre clair, des consignes précises et un suivi structuré,
-            le format visio est très efficace. SunBassApp permet de garder un fil conducteur :
-            feedbacks, devoirs, replay et ressources.
-          </p>
-        </article>
+    <h3>Faut-il connaître le solfège ?</h3>
+    <p>
+      Non. La méthode repose sur la compréhension pratique
+      des cadences et du manche.
+    </p>
 
-        <article class="faq-item">
-          <h3>Quel niveau faut-il pour démarrer ?</h3>
-          <p>
-            Il faut idéalement <strong>au moins 6 mois de basse</strong> (autodidacte ou école).
-            Si tu n’as jamais joué de musique, je ne recommande pas de commencer directement en visio.
-          </p>
-        </article>
+    <h3>Est-ce adapté à tous les styles ?</h3>
+    <p>
+      Oui. Les principes d’improvisation cadentielle
+      fonctionnent en jazz, pop, funk et musique actuelle.
+    </p>
+  </div>
+</section>
 
-        <article class="faq-item">
-          <h3>Que travaille-t-on pendant les cours ?</h3>
-          <p>
-            Technique, groove/timing, harmonie et répertoire (rock, funk, jazz…).
-            Le contenu s’adapte à ton niveau et à tes objectifs.
-          </p>
-        </article>
+      <!-- OFFRE -->
+      <section class="content-block block-a">
+        <h2 class="block-title">Offre de lancement</h2>
 
-        <article class="faq-item">
-          <h3>Quel matériel faut-il ?</h3>
-          <p>
-            Une basse, un ampli, un téléphone (ou ordinateur) et une bonne connexion.
-          </p>
-        </article>
-
-        <article class="faq-item">
-          <h3>Y a-t-il des devoirs entre les cours ?</h3>
-          <p>
-            Oui. En fin de séance, je donne les objectifs de la semaine, et je dépose sur SunBassApp
-            le feedback, les devoirs, les ressources et le replay du cours.
-          </p>
-        </article>
-      </section>
-
-      <div class="fade-separator"></div>
-
-      <!-- CONTACT CTA -->
-      <section class="content-block block-b" id="contact">
-        <h2 class="block-title">Une question avant de t’inscrire ?</h2>
-        <p class="intro" style="max-width: 800px; margin: 0 auto; text-align: center;">
-          Si tu veux vérifier que le format est adapté à ton niveau et à ton objectif,
-          tu peux me contacter rapidement. Je te réponds avec une reco claire.
+        <p class="intro" style="text-align:center">
+          🎁 <strong>–50%</strong> avec le code de réduction<br />
+          Offre limitée dans le temps
         </p>
 
-        <div class="video-cta" style="margin-top: 1.8rem;">
-          <a href="#checkout" class="cta-secondary">Voir les formules</a>
-          <a href="mailto:contact@sunbassschool.com" class="cta-secondary">Me contacter</a>
+        <div class="video-cta">
+          <a href="#checkout" class="cta-main">J’en profite maintenant</a>
         </div>
       </section>
     </section>
   </div>
 
-  <!-- SEO SÉMANTIQUE -->
-<p class="seo-hook">
-  Ces cours de basse en ligne en visioconférence s’adressent aux bassistes souhaitant
-  travailler avec un professeur de basse à distance, dans un cadre structuré et personnalisé.
-</p>
+  <!-- CHECKOUT -->
+  <div id="checkout_bg">
+    <section class="checkout-section" id="checkout">
+      <div class="checkout-card">
+        <div class="checkout-header">
+          <h2>Accéder au module aujourd’hui</h2>
+          <p>Accès immédiat · Paiement sécurisé</p>
+        </div>
 
-  <!-- CHECKOUT (réutilise ton bloc existant) -->
-<div id="checkout_bg">
-<section class="checkout-section" id="checkout">
-
-  <div class="checkout-card">
-
-    <!-- HEADER -->
-    <div class="checkout-header">
-      <h2>S'inscrire aux cours de basse aujourd'hui</h2>
-      <p>
-        Choisis ta formule et accède immédiatement
-        à l’accompagnement.
-      </p>
-    </div>
-
-    <!-- erreurs -->
-    <div v-if="error" class="checkout-error">
-      {{ error }}
-    </div>
-
-    <!-- ÉTAPE 1 : OFFRE -->
-    <div class="checkout-step">
-      <span class="step-label">1 · Formule</span>
-
-      <OfferSelector
-        v-if="!clientSecret"
-        :offers="offers"
-        :loading="offersLoading"
-        v-model="selectedOffer"
-      />
-    </div>
-
-    <!-- ÉTAPE 2 : EMAIL -->
-    <div
-      v-if="selectedOffer && !auth.user?.email && !clientSecret"
-      class="checkout-step"
-    >
-      <span class="step-label">2 · Email</span>
-
-      <div class="email-field">
-        <label>Email</label>
-        <input
-          v-model="guestEmail"
-          type="email"
-          placeholder="email@exemple.com"
-          autocomplete="email"
+        <OfferSelector
+          v-if="!clientSecret"
+          :offers="offers"
+          :loading="offersLoading"
+          v-model="selectedOffer"
         />
-      </div>
-      <p class="email-note">
-  *Aucun spam. Juste l’accès à tes cours et ton suivi.
-</p>
-
-    </div>
-
-    <!-- ÉTAPE 3 : RÉCAP -->
-    <div
-      v-if="selectedOffer && resolvedEmail && !clientSecret"
-      class="checkout-step"
-    >
-      <span class="step-label">3 · Récapitulatif</span>
-
-      <OfferRecap
-        :offer="selectedOffer"
-        @pay="createIntent"
-      />
-    </div>
-
-    <!-- LOADING -->
-    <div v-if="loading" class="checkout-overlay">
-      <div class="overlay-box">
-        <div class="spinner"></div>
-        <p>Préparation du paiement sécurisé…</p>
-        <span>Merci de patienter quelques secondes</span>
-      </div>
-    </div>
-<!-- OVERLAY preparation paiement -->
-<div v-if="preparing" class="checkout-overlay">
-  <div class="overlay-box">
-    <div class="spinner"></div>
-    <p>Connexion au paiement sécurisé…</p>
-    <span>Merci de patienter</span>
-  </div>
-</div>
-
-<!-- OVERLAY paiement -->
-<div v-if="paying" class="checkout-overlay">
-  <div class="overlay-box">
-    <div class="spinner"></div>
-    <p>Paiement en cours…</p>
-    <span>Ne fermez pas la page</span>
-  </div>
-</div>
-
-    <!-- STRIPE -->
-<Transition name="slide-fade">
-  <PaymentElement
-    v-if="clientSecret && !paymentDone"
-    :client-secret="clientSecret"
-    :mode="selectedOffer?.pricing_mode === 'one_time' ? 'payment' : 'setup'"
-    :email="resolvedEmail"
-    @paying="paying = $event"
-    @success="onStripeSuccess"
-    @error="onStripeError"
-  />
-</Transition>
-
-
-    <!-- FOOTER -->
-    <div class="checkout-footer">
-      🔐 Paiement sécurisé · Accès immédiat
-    </div>
-
-  </div>
-
-</section>
-</div>
-<!-- CTA STICKY MOBILE -->
-<!-- CTA STICKY MOBILE -->
-<a
-  href="#checkout"
-  class="cta-sticky-mobile"
-  ref="stickyCta"
+<div
+  v-if="selectedOffer && !auth.user?.email && !clientSecret"
+  class="checkout-step"
 >
-  🎸 Voir les formules
-</a>
+  <span class="step-label">2 · Email</span>
 
+  <div class="email-field">
+    <label>Email</label>
+    <input
+      v-model="guestEmail"
+      type="email"
+      placeholder="email@exemple.com"
+      autocomplete="email"
+    />
+  </div>
+</div>
 
+        <OfferRecap
+          v-if="selectedOffer && resolvedEmail && !clientSecret"
+          :offer="selectedOffer"
+          @pay="createIntent"
+        />
+
+        <PaymentElement
+          v-if="clientSecret && !paymentDone"
+          :client-secret="clientSecret"
+          :mode="selectedOffer?.pricing_mode === 'one_time' ? 'payment' : 'setup'"
+          :email="resolvedEmail"
+          @paying="paying = $event"
+          @success="onStripeSuccess"
+          @error="onStripeError"
+        />
+
+        <div class="checkout-footer">
+          🔐 Paiement sécurisé · Accès immédiat
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- CTA STICKY MOBILE -->
+  <a href="#checkout" class="cta-sticky-mobile" ref="stickyCta">
+    🎸 Accéder au module
+  </a>
 </template>
 
 

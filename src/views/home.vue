@@ -1,5 +1,6 @@
 <template>
     <MarketingHeader />
+  <div class="landing-wrap">
 
   <section class="landing-page">
 
@@ -114,13 +115,20 @@ Prêt à simplifier ton activité dès aujourd’hui ?
 </section>
 
 
-  </section>
+  </section></div>
 </template>
 <script setup>
 import MarketingHeader from "@/components/MarketingHeader.vue"
 </script>
 
 <style scoped>
+.landing-wrap {
+  height: 100dvh;              /* scroll local même si body locked */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 .landing-page {
   --bg: #0b0b0f;
   --panel: #13131a;

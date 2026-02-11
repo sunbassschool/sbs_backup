@@ -35,11 +35,15 @@ base: "/",
         srcDir: "src",
         filename: "sw-custom.js",
 
-     injectManifest: {
+injectManifest: {
   globPatterns: [
     "**/*.{js,css,html,svg,png,woff2}"
   ],
+  globIgnores: [
+    "**/bg-masterclass.png"
+  ]
 },
+
 
 
         includeAssets: ["favicon.ico", "robots.txt"],

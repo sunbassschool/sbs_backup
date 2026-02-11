@@ -304,6 +304,7 @@ const finalizeUpload = async ({ upload_id, total_chunks, file_name, upload_token
   form.append("upload_id", upload_id)
   form.append("total_chunks", total_chunks)
   form.append("file_name", file_name)
+  form.append("folder_id", lockedFolderId.value) // ✅ CLÉ
 
   const res = await fetch(
     "https://www.sunbassschool.com/sbs-upload/finalize_upload.php",
@@ -322,38 +323,21 @@ const finalizeUpload = async ({ upload_id, total_chunks, file_name, upload_token
   return json.url
 }
 
-const uploadSingleFile = (wrapper) => {
+const uploadSingleFile = async (wrapper) => {
   const optimisticId = wrapper.optimistic_id
-  cancelledUploads.delete(optimisticId) // 🔑 blindage
-
   const file = wrapper.file
 
-  if (cancelledUploads.has(optimisticId)) {
-  throw new Error(CANCEL_ERROR)
-}
-emit("progress", {
-  optimistic_id: optimisticId,
-  status: "uploading",
-  message: "Envoi en cours…",
-  progress: 0
-})
+  emit("progress", {
+    optimistic_id: optimisticId,
+    status: "uploading",
+    message: "Envoi en cours…",
+    progress: 0
+  })
 
-  return new Promise(async (resolve, reject) => {
-    console.group(`⬆️ uploadSingleFile → ${file.name}`)
-    console.log("size =", Math.round(file.size / 1024 / 1024), "MB")
-    console.log("type =", file.type)
+  // 🔐 JWT déjà récupéré dans startNextUpload
+  if (!batchJwt) throw new Error("jwt-missing")
 
-    try {
-      // ==================================================
-      // 🔐 JWT
-      // ==================================================
-      const jwt = batchJwt
-      if (!jwt) {
-        console.error("❌ jwt missing")
-        throw new Error("jwt-missing")
-      }
-
-if (file.size > MAX_DIRECT_UPLOAD) {
+  // ✅ TOUJOURS chunked (même 300 Ko)
   const chunkRes = await uploadChunkedFile(wrapper)
 
   emit("progress", {
@@ -362,231 +346,18 @@ if (file.size > MAX_DIRECT_UPLOAD) {
     message: "Traitement du fichier…"
   })
 
-  if (cancelledUploads.has(optimisticId)) {
-    throw new Error(CANCEL_ERROR)
-  }
+  const finalUrl = await finalizeUpload(chunkRes)
 
-  let finalUrl
-  try {
-    finalUrl = await finalizeUpload(chunkRes)
-  } catch (e) {
-    if (e?.error === "missing_chunks") {
-      // 🔁 retry finalize uniquement
-      finalUrl = await finalizeUpload(chunkRes)
-    } else {
-      throw e
-    }
-  }
-
-  resolve({
+  return {
     optimistic_id: chunkRes.optimistic_id,
     file_url: finalUrl,
     file_name: chunkRes.file_name,
     file_size: chunkRes.file_size,
     file_type: chunkRes.file_type,
     folder_id: chunkRes.folder_id
-  })
-  return
-}
-
-
-
-
-
-      // ==================================================
-      // 1️⃣ UPLOAD TOKEN (GAS)
-      // ==================================================
-      const proxyUrl = getProxyPostURL()
-      const fileSizeMb = Math.ceil(file.size / 1024 / 1024)
-
-      const tokenPayload = {
-        route: "getuploadtoken",
-        jwt,
-        prof_id: auth.user.prof_id,
-        file_size_mb: fileSizeMb,
-        ...(props.eleveId && { eleve_id: props.eleveId }),
-        ...(props.coursId && { cours_id: props.coursId })
-      }
-
-      console.log("📨 getuploadtoken payload", tokenPayload)
-
-      const rawRes = await fetch(proxyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tokenPayload)
-      })
-
-      const text = await rawRes.text()
-      console.log("📥 getuploadtoken response", text)
-
-      if (text.includes("quota_exceeded")) {
-        throw new Error("quota_exceeded")
-      }
-
-      let tokenRes
-      try {
-        tokenRes = JSON.parse(text)
-      } catch {
-        throw new Error("invalid-token-json")
-      }
-
-      if (!tokenRes?.success || !tokenRes.token) {
-        throw new Error("upload-token-failed")
-      }
-
-      // // ==================================================
-      // // 2️⃣ PHP UPLOAD (XHR)
-      // // ==================================================
-      console.log(
-  "📦 DIRECT UPLOAD",
-  file.name,
-  file.type,
-  file.size
-)
-
-      const formData = new FormData()
-      formData.append("token", tokenRes.token)
-      formData.append("file", file)
-
-      const xhr = new XMLHttpRequest()
-      xhr.open("POST", "https://www.sunbassschool.com/sbs-upload/upload.php")
-const cancelInterval = setInterval(() => {
-  if (cancelledUploads.has(optimisticId)) {
-    console.warn("🛑 abort xhr", optimisticId)
-    xhr.abort()
-    clearInterval(cancelInterval)
   }
-}, 200)
-      xhr.timeout = 300000 // 5 min
-
-      // -------- lifecycle logs --------
-      xhr.onloadstart = () => console.log("🟡 xhr.onloadstart")
-      xhr.upload.onloadstart = () => console.log("🟡 xhr.upload.onloadstart")
-      xhr.onreadystatechange = () =>
-        console.log("🔁 readyState =", xhr.readyState)
-
-      xhr.upload.onprogress = (e) => {
-        if (!e.lengthComputable) {
-          console.warn("⚠️ progress non computable")
-          return
-        }
-        const p = Math.round((e.loaded / e.total) * 100)
-        console.log(`📊 progress ${p}% (${e.loaded}/${e.total})`)
-        emit("progress", { optimistic_id: optimisticId, progress: p })
-        activeProgress.value[optimisticId] = p
-      }
-
-      xhr.onerror = (e) => {
-        console.error("❌ xhr.onerror", e)
-        reject(new Error("xhr-upload-error"))
-        clearInterval(cancelInterval)
-
-      }
-
-      xhr.onabort = () => {
-        console.error("🟥 xhr aborted")
-        reject(new Error("xhr-aborted"))
-        clearInterval(cancelInterval)
-
-      }
-
-    xhr.ontimeout = () => {
-  console.error("⏱️ xhr timeout")
-  clearInterval(cancelInterval)
-  reject(new Error("xhr-timeout"))
 }
 
-
-      xhr.onload = () => {
-        console.log("🟢 xhr.onload status =", xhr.status)
-        console.log("responseText =", xhr.responseText)
-        console.log(
-  "📥 PHP upload response",
-  xhr.status,
-  xhr.responseText
-)
-
-clearInterval(cancelInterval)
-
-        if (xhr.status < 200 || xhr.status >= 300) {
-          reject(new Error("upload-http-error"))
-          return
-        }
-
-        let res
-        try {
-          res = JSON.parse(xhr.responseText || "{}")
-        } catch {
-          reject(new Error("invalid-upload-json"))
-          return
-        }
-
-        if (!res?.success || !res.url) {
-          reject(new Error("php-upload-failed"))
-          return
-        }
-
-        const effectiveFolderId =
-          lockedFolderId.value || props.folderId
-
-        if (!effectiveFolderId) {
-          reject(new Error("folder-id-missing"))
-          return
-        }
-
-        // ==================================================
-        // ✅ RESOLVE
-        // ==================================================
-        console.log("✅ upload success", res)
-
-        resolve({
-          optimistic_id: optimisticId,
-          file_url: res.url,
-          file_name: res.name,
-          file_size: res.size,
-          file_type: file.type,
-          folder_id: effectiveFolderId
-        })
-      }
-
-      console.log("🚀 xhr.send()")
-if (cancelledUploads.has(optimisticId)) {
-  console.warn("🛑 upload cancelled before start", optimisticId)
-  reject(new Error(CANCEL_ERROR))
-  return
-}
-
-
-xhr.send(formData)
-
-} catch (err) {
-  if (err?.message === "upload-cancelled") {
-    emit("error", {
-      optimistic_id: optimisticId,
-      message: "Upload annulé"
-    })
-    reject(err) // ⛔ STOP DÉFINITIF
-    return
-  }
-
-  console.error("💥 upload error", err)
-
-  if (err.message === "quota_exceeded") {
-    emit("error", {
-      type: "quota",
-      optimistic_id: optimisticId,
-      message: "❌ Quota dépassé. Supprime des fichiers ou augmente ton espace."
-    })
-    return
-  }
-
-  reject(err)
-}
-
-
-    console.groupEnd()
-  })
-}
 
 
 
@@ -658,9 +429,10 @@ const isSlowNet =
   ["slow-2g", "2g", "3g"].includes(navigator.connection.effectiveType)
 
 // ⛔ calculé UNE FOIS
-const CHUNK_SIZE = isCoarse
-  ? (isSlowNet ? 4 * 1024 * 1024 : 8 * 1024 * 1024)
-  : 16 * 1024 * 1024
+const CHUNK_SIZE = Math.min(
+  8 * 1024 * 1024, // 8 MB
+  file.size       // 🔥 si fichier plus petit → 1 chunk
+)
 
 const MAX_PARALLEL_CHUNKS = isCoarse
   ? (isSlowNet ? 1 : 2)
@@ -696,12 +468,14 @@ if (cancelledUploads.has(optimisticId)) {
 const uploadToken = await getUploadToken({
   jwt: batchJwt,
   prof_id: auth.user.prof_id,
-  file_name: file.name,
+  folder_id: lockedFolderId.value,   // 🔐 bind dossier
+  upload_id: uploadId,               // 🔐 bind upload (CRITIQUE)
   file_size_mb: Math.ceil(file.size / 1024 / 1024),
   mode: "chunked",
   ...(props.eleveId && { eleve_id: props.eleveId }),
   ...(props.coursId && { cours_id: props.coursId })
 })
+
 
 
     // ==================================================

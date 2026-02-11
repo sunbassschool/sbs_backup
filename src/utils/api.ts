@@ -1533,7 +1533,7 @@ type RefreshTokenParams = {
 }
 
 const REFRESH_TIMEOUT = 8000   // 8s max
-const REFRESH_RETRY = 1        // 1 retry max
+const REFRESH_RETRY = 2        // 1 retry max
 
 export async function refreshToken(
   params: RefreshTokenParams

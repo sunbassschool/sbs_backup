@@ -4,8 +4,11 @@
   <ModalMessage
     v-if="message && message.display?.type === 'modal'"
     :message="message"
+      :lock="route.path === '/lead-access'"
     @dismiss="onDismiss"
     @cta="onCta"
+      @cta-secondary="onSecondaryCta"
+
   />
 
   <BannerTop
@@ -47,6 +50,16 @@ watch(
     }
   }
 )
+watch(
+  () => store.current,
+  (m) => {
+    if (!m) return
+
+    console.log("🔥 [InApp] event message received", m)
+
+    message.value = m
+  }
+)
 
 watch(
   () => auth.authReady,
@@ -61,10 +74,13 @@ watch(
 
     await store.fetchMessages(false)
 
-    message.value = store.selectMessage({
-      trigger: "on_route",
-      route: route.path
-    })
+if (!store.current) {
+  message.value = store.selectMessage({
+    trigger: "on_route",
+    route: route.path
+  })
+}
+
   },
   { immediate: true }
 )
@@ -83,10 +99,13 @@ watch(
     const BLOCKED = ["/login", "/register"]
     if (BLOCKED.includes(route.path)) return
 
-    message.value = store.selectMessage({
-      trigger: "on_route",
-      route: route.path
-    })
+if (!store.current) {
+  message.value = store.selectMessage({
+    trigger: "on_route",
+    route: route.path
+  })
+}
+
   })
 
 watch(
@@ -107,10 +126,7 @@ watch(
 
     // 2️⃣ sécurité JWT
  // 2️⃣ tracking seulement si connecté
-if (!auth.jwt) {
-  console.log("ℹ️ [InApp][IMP] guest → no tracking")
-  return
-}
+
 
 
     // 3️⃣ anti double impression (par rendu)
@@ -141,11 +157,13 @@ if (!auth.jwt) {
 
 
 function onDismiss() {
-  console.log("❌ [InApp] dismiss", message.value?.id)
   if (!message.value) return
   store.markSeen(message.value.id)
+  store.clearCurrent()
   message.value = null
+
 }
+
 function onCta() {
   if (!message.value) return
 
@@ -153,18 +171,47 @@ function onCta() {
   const cta = m.content?.cta
 
   // 📊 track click
-  gasPost("trackInAppMessageEvent", {
-    jwt: auth.jwt,
-    message_id: m.id,
-    type: "click",
-  page: route.path
-  })
+gasPost("trackInAppMessageEvent", {
+  jwt: auth.jwt,
+  message_id: m.id,
+  type: "click",
+  page: route.path,
+  source: "lead_email"
+})
 
   // 🧠 mark seen
   store.markSeen(m.id)
   message.value = null
 
   if (!cta?.action) return
+
+  if (cta.action === "route" && cta.payload) {
+    router.push(cta.payload)
+  }
+
+  if (cta.action === "external" && cta.payload) {
+    window.open(cta.payload, "_blank")
+  }
+}
+
+function onSecondaryCta() {
+  if (!message.value) return
+
+  const cta = message.value.content?.cta?.secondary
+  if (!cta?.action) return
+
+  // tracking (optionnel)
+  gasPost("trackInAppMessageEvent", {
+    jwt: auth.jwt,
+    message_id: message.value.id,
+    type: "click_secondary",
+    page: route.path,
+    source: "lead_email",
+    email: localStorage.getItem("lead_email")
+  })
+
+  store.clearCurrent()
+  message.value = null
 
   if (cta.action === "route" && cta.payload) {
     router.push(cta.payload)

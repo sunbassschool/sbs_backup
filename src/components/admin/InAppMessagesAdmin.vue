@@ -70,6 +70,8 @@ onMounted(fetchMessages)
   <div class="admin-sticky-header">
   <MarketingHeader />
 </div>
+  <div class="iam-scroll">
+
   <div class="iam-container">
 
     <!-- LEFT : LIST -->
@@ -219,10 +221,16 @@ onMounted(fetchMessages)
         </button>
       </div>
     </section>
-  </div>
+  </div></div>
 </template>
 
 <style scoped>
+.iam-scroll {
+  height: calc(100dvh - 56px); /* hauteur header */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* =====================================================
    SBS – In-App Messages Admin (Dark Premium)
    Mobile-first / Zero horizontal scroll

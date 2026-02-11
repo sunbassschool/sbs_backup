@@ -86,8 +86,17 @@ history: createWebHistory("/"),
 {
   path: "/cours-de-basse-en-ligne",
   component: () => import("@/views/cartflow/cours-de-basse-en-ligne.vue"),
-  meta: { public: true, layout: "landing" }
+  meta: { public: true }
 },
+{
+  path: "/dl/folder/:token",
+  name: "FolderDownload",
+  component: () => import("@/views/FolderDownload.vue"),
+    meta: { public: true }
+
+},
+
+
 {
   path: "/offerpage",
   component: () => import("@/views/cartflow/OfferPage.vue"),
@@ -153,7 +162,25 @@ history: createWebHistory("/"),
   component: Partitions,
   meta: { public: true }
 },
-
+// router
+{
+  path: "/improvisationcadentielle",
+  component: () => import("@/views/Improvisationcadentielle.vue"),
+ meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/masterclass",
+  component: () => import("@/views/MasterclassGratuite.vue"),
+ meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/lead-access",
+  component: () => import("@/views/LeadAccess.vue"),
+  meta: { public: true }
+}
+,
 
 {
   path: "/basstuner",

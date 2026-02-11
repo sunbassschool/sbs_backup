@@ -28,13 +28,17 @@
       <div v-else class="products">
 
         <!-- ================= ACTIFS ================= -->
-        <div
-          v-for="product in activeProducts"
-          :key="product.product_id"
-          class="product-row"
-            :class="{ archived: !product.active, updating: product._updating }"
+ <div
+  v-for="product in activeProducts"
+  :key="product.product_id"
+  class="product-row clickable"
+  :class="{
+    updating: product._updating,
+    disabled: !product.download_url
+  }"
+  @click="openDownload(product)"
+>
 
-        >
 
           <!-- HEADER -->
           <div class="row-main">
@@ -127,11 +131,18 @@
             Archivés
           </div>
 
-          <div
-            v-for="product in archivedProducts"
-            :key="product.product_id"
-            class="product-row archived"
-          >
+ <div
+  v-for="product in activeProducts"
+  :key="product.product_id"
+  class="product-row clickable"
+  :class="{
+    archived: !product.active,
+    updating: product._updating,
+    disabled: !product.download_url
+  }"
+  @click="openDownload(product)"
+>
+
 
             <div class="row-main">
               <div class="row-info">
@@ -141,11 +152,12 @@
                 </span>
               </div>
 
-              <div class="row-actions">
+<div class="row-actions" @click.stop>
                 <button
                   class="icon-btn"
                   title="Réactiver"
                   @click="toggleProductActive(product)"
+                  @click.stop="toggleProductActive(product)"
                 >
                   <i class="bi bi-arrow-counterclockwise"></i>
                 </button>
@@ -153,6 +165,7 @@
                 <button
                   class="btn ghost small"
                   @click="togglePrices(product.product_id)"
+                  @click.stop="togglePrices(product.product_id)"
                 >
                   {{ openedProduct === product.product_id ? "Masquer" : "Prix" }}
                 </button>
@@ -250,6 +263,10 @@ const activeProducts = computed(() =>
 const archivedProducts = computed(() =>
   (products.value || []).filter(p => !p.active)
 )
+const openDownload = (product) => {
+  if (!product.download_url) return
+  window.open(product.download_url, "_blank")
+}
 
 
 // =====================================================
@@ -695,6 +712,18 @@ onMounted(() => {
 .product-row.updating {
   opacity: 0.5;
   pointer-events: none;
+}
+.product-row.clickable {
+  cursor: pointer;
+}
+
+.product-row.clickable:hover {
+  border-color: #fb923c;
+  background: #111318;
+}
+
+.product-row.disabled {
+  cursor: default;
 }
 
 </style>

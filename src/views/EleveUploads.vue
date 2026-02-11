@@ -416,6 +416,16 @@ cut: clipboard.mode === 'cut' &&
 
           <template v-if="contextMenu.type === 'folder'">
             <div class="context-item" @click="startRenameFolder(contextMenu.target)">✏️ Renommer</div>
+<div
+  class="context-item"
+  :class="{ loading: zipLoading }"
+  @click="copyFolderDownloadLink(contextMenu.target)"
+>
+  🔗 Lien de téléchargement du dossier
+  <span v-if="zipLoading" class="spinner"></span>
+</div>
+
+
             <div class="context-item danger" @click="deleteFolderAction(contextMenu.target)">
               🗑️ Supprimer
             </div>
@@ -526,6 +536,7 @@ const trashProgress = ref({ done: 0, total: 0 })
 const isRenaming = computed(() => editingId.value !== null)
 const isDragActive = ref(false)
 const lastNormalFolderId = ref(null)
+const isCopyingZip = ref(false)
 
 const driveQuotaRef = ref(null)
 const onExplorerScroll = () => {
@@ -546,8 +557,79 @@ const sharedByMeIds  = ref(new Set())
 const uploader = ref(null)
 const showUploadCore = ref(false)
 let isScrolling = false
+const zipLoading = ref(false)
+
 let scrollResetTimer = null
 const navigationLocked = ref(true)
+async function copyFolderDownloadLink(folder) {
+  console.group("🔗 [DOWNLOAD LINK]")
+
+  console.log("📁 folder =", folder)
+
+  if (!folder?.folder_id) {
+    console.warn("⛔ folder_id manquant")
+    console.groupEnd()
+    return
+  }
+
+  zipLoading.value = true
+
+  try {
+    const payload = {
+      folder_id: folder.folder_id,
+      prof_id: profId.value
+    }
+
+    console.log("📤 payload =", payload)
+
+    const res = await gasPost("createFolderDownloadLink", payload)
+
+    console.log("📥 RAW RESPONSE =", res)
+    console.log("📥 typeof res =", typeof res)
+    console.log("📥 keys =", res ? Object.keys(res) : null)
+
+    if (!res) {
+      console.error("❌ res undefined / null")
+      toast.error("Aucune réponse serveur")
+      return
+    }
+
+    if (!res.ok) {
+      console.warn("❌ res.ok = false", res.error)
+      toast.error("Impossible de générer le lien")
+      return
+    }
+
+    if (!res.url) {
+      console.warn("❌ url absente", res)
+      toast.error("Lien manquant")
+      return
+    }
+
+    await navigator.clipboard.writeText(res.url)
+
+    console.log("✅ URL COPIÉE =", res.url)
+    toast.success("Lien de téléchargement copié")
+
+  } catch (e) {
+  console.error("🔥 JS ERROR =", e)
+  console.error("🔥 name =", e?.name)
+  console.error("🔥 message =", e?.message)
+  console.error("🔥 stack =", e?.stack)
+
+  toast.error(e?.message || "Erreur JS")
+}
+ finally {
+    zipLoading.value = false
+    closeContextMenu()
+    console.groupEnd()
+  }
+}
+
+
+
+
+
 
 const onUploadError = ({ optimistic_id, message, type }) => {
   // ⛔ cas ANNULATION → on retire l’optimistic
@@ -1946,7 +2028,7 @@ const draggedFiles = ref([])
 
 // Upload modal
 const effectiveCoursId = ref(null) // utilisé par UploadModal
-const generateCoursId = () => `GEN_${Date.now()}`
+const generateCoursId = () => `GEN${Date.now()}`
 
 // Filtres existants (cours / type)
 const selectedCours = ref(route.query.cours_id || "")
@@ -6163,6 +6245,30 @@ margin-top:4px;
   user-select: none;
   -webkit-touch-callout: none;
   touch-action: pan-y; /* 🔥 au lieu de manipulation */
+}
+/* 🔄 Spinner SBS – léger et discret */
+.spinner {
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sbs-spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes sbs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* optionnel : état loading bouton */
+.context-item.loading {
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 </style>

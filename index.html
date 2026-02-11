@@ -213,21 +213,25 @@ body,
   ]
 }
 </script>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<!-- Google tag -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-X8PE6LC5ED"></script>
 <script>
   window.dataLayer = window.dataLayer || []
   function gtag(){dataLayer.push(arguments)}
-
   gtag('js', new Date())
 
-  // 🔒 REFUS PAR DÉFAUT (RGPD)
+  // RGPD
   gtag('consent', 'default', {
     analytics_storage: 'denied'
   })
 
-  // SPA → pas de page_view auto
-  gtag('config', 'G-XXXXXXXXXX', { send_page_view: false })
+  // GA4
+  gtag('config', 'G-X8PE6LC5ED', { send_page_view: false })
+
+  // Google Ads
+  gtag('config', 'AW-17922401091')
 </script>
+
 
   </head>
 

@@ -2,18 +2,20 @@
 <script setup lang="ts">
 import { onMounted } from "vue"
 onMounted(() => console.log("✅ [ModalMessage] mounted"))
-
 defineProps<{
   message: any
+  lock?: boolean
 }>()
 
-const emit = defineEmits(["dismiss", "cta"])
+const emit = defineEmits(["dismiss", "cta", "cta-secondary"])
 </script>
 
 <template>
   <teleport to="body">
-    <div class="inapp-overlay" @click.self="emit('dismiss')">
-      <div class="inapp-modal">
+<div
+  class="inapp-overlay"
+  @click.self="!lock && emit('dismiss')"
+>      <div class="inapp-modal">
         <h3>{{ message.content.title }}</h3>
 
         <div class="body">
@@ -28,10 +30,21 @@ const emit = defineEmits(["dismiss", "cta"])
           >
             {{ message.content.cta.label }}
           </button>
+<button
+  v-if="message.content?.cta?.secondary?.label"
+  class="btn secondary"
+  @click="emit('cta-secondary')"
+>
+  {{ message.content.cta.secondary.label }}
+</button>
+    <button
+  v-if="!lock"
+  class="btn secondary"
+  @click="emit('dismiss')"
+>
+  Fermer
+</button>
 
-          <button class="btn secondary" @click="emit('dismiss')">
-            Fermer
-          </button>
         </div>
       </div>
     </div>

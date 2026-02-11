@@ -20,18 +20,33 @@
 
 
 <script setup>
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, computed, watch, nextTick  } from "vue";
 import { useAuthStore } from "@/stores/authStore.js";
 import { registerSW } from "virtual:pwa-register";
 import { useMetronomeStore } from "@/stores/useMetronomeStore";
 import UpgradeModal from "@/components/UpgradeModal.vue";
 import { useRouter } from "vue-router"
+import { useRoute } from "vue-router"
+
 import InAppMessageRenderer from "@/components/InAppMessageRenderer.vue"
 
 
+const route = useRoute()
 
 const auth = useAuthStore();
 const showLogoutMessage = ref(false);
+watch(
+  () => route.fullPath,
+  async () => {
+    await nextTick()
+
+    const isLanding = route.meta?.layout === "landing"
+
+    document.documentElement.classList.toggle("landing-mode", isLanding)
+    document.documentElement.classList.toggle("app-mode", !isLanding)
+  },
+  { immediate: true }
+)
 onMounted(() => {
 
   window.addEventListener("show-logout-message", () => {
