@@ -344,6 +344,10 @@ watch(paying, v => console.log("🧠 paying =", v))
           <li>✅ Harmonie (comprendre ce que tu joues)</li>
           <li>✅ Répertoire (rock, funk, jazz, etc.)</li>
         </ul>
+<p class="internal-link-block">
+  Si tu veux approfondir spécifiquement l’improvisation et la compréhension des cadences,
+  découvre ma <a href="/improvisationcadentielle">formation complète sur l’improvisation à la basse</a>.
+</p>
 
         <div class="guarantee-badge">
           <span class="icon">✔</span>
@@ -518,6 +522,14 @@ watch(paying, v => console.log("🧠 paying =", v))
       <div class="fade-separator with-cta">
         <a href="#checkout" class="separator-cta">S’inscrire</a>
       </div>
+<section class="content-block block-b internal-offer">
+  <h2>Commencer gratuitement</h2>
+  <p>
+    Tu veux déjà améliorer ton groove et ta compréhension harmonique ?
+    Télécharge la <a href="/masterclass">masterclass basse gratuite (PDF + vidéo)</a>
+    pour poser des bases solides.
+  </p>
+</section>
 
       <!-- FAQ SEO -->
       <section class="content-block block-a faq-block">
@@ -1342,6 +1354,83 @@ align-items: flex-start;
   }
 }
 
+/* =========================
+   INTERNAL SEO BLOCKS
+========================= */
+
+.internal-link-block {
+  margin-top: 1.4rem;
+  padding: 1.2rem 1.4rem;
+  border-radius: 16px;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.04),
+    rgba(255,255,255,0.02)
+  );
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 680px;
+}
+
+.internal-link-block a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245,158,11,0.4);
+  transition: all 0.2s ease;
+}
+
+.internal-link-block a:hover {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+
+/* Bloc masterclass gratuit */
+
+.internal-offer {
+  text-align: center;
+  padding: 3.2rem 1.2rem;
+  border-radius: 22px;
+  max-width: 820px;
+  margin: 3rem auto;
+  background: linear-gradient(
+    180deg,
+    rgba(245,158,11,0.08),
+    rgba(245,158,11,0.03)
+  );
+  border: 1px solid rgba(245,158,11,0.35);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+}
+
+.internal-offer h2 {
+  font-size: 1.6rem;
+  font-weight: 900;
+  margin-bottom: 1rem;
+}
+
+.internal-offer p {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.internal-offer a {
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+  border-bottom: 2px solid rgba(245,158,11,0.5);
+  padding-bottom: 2px;
+  transition: all 0.2s ease;
+}
+
+.internal-offer a:hover {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
 
 
 </style>

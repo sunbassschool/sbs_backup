@@ -8,24 +8,65 @@ const BOOK_URL = "https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d
 const VIDEO_URL = "https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d-45ea-9c57-156896fdb198/de7ed9f1-fd21-43d7-b6d1-016325f9a827/4cc7754e-099c-4ffa-86fc-38d4c0686a9b.mp4"
 const POSTER_URL = "https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d-45ea-9c57-156896fdb198/de7ed9f1-fd21-43d7-b6d1-016325f9a827/f67ab0ae-c710-43b9-bfaa-313563a8e826.png"
 useHead({
-title: "Masterclass basse gratuite – Harmonie, groove et lignes efficaces | SunBassSchool",
+  title: "Masterclass basse gratuite – Harmonie & improvisation | SunBassSchool",
   meta: [
-   {
-  name: "description",
-  content: "Masterclass basse gratuite (vidéo + livret PDF) pour apprendre quoi jouer dans un morceau. Harmonie appliquée, groove, articulation des lignes. Tous niveaux."
-}
-,
-    { property: "og:title", content: "Masterclass gratuite basse" },
-    { property: "og:description", content: "Vidéo + livret offerts." },
-    { property: "og:type", content: "website" },
-    { property: "og:url", content: "https://sunbassschool.com/masterclass" },
-    { property: "og:image", content: BOOK_URL },
+    {
+      name: "description",
+      content:
+        "Masterclass basse gratuite (vidéo + livret PDF) pour comprendre l’harmonie à la basse, construire des lignes solides et développer un groove naturel. Accès immédiat."
+    },
 
+    // Open Graph
+    {
+      property: "og:title",
+      content: "Masterclass basse gratuite – Harmonie & groove"
+    },
+    {
+      property: "og:description",
+      content:
+        "Accède gratuitement à une vidéo + livret PDF pour apprendre quoi jouer dans un morceau et développer ton groove à la basse."
+    },
+    {
+      property: "og:type",
+      content: "website"
+    },
+    {
+      property: "og:url",
+      content: "https://sunbassschool.com/masterclass"
+    },
+    {
+      property: "og:image",
+      content: BOOK_URL
+    },
+
+    // Twitter
+    {
+      name: "twitter:card",
+      content: "summary_large_image"
+    },
+    {
+      name: "twitter:title",
+      content: "Masterclass basse gratuite"
+    },
+    {
+      name: "twitter:description",
+      content:
+        "Vidéo + livret PDF offerts pour comprendre l’harmonie et le groove à la basse."
+    },
+    {
+      name: "twitter:image",
+      content: BOOK_URL
+    }
   ],
+
   link: [
-    { rel: "canonical", href: "https://sunbassschool.com/masterclass" }
+    {
+      rel: "canonical",
+      href: "https://sunbassschool.com/masterclass"
+    }
   ]
 })
+
 const showModal = ref(false)
 const PRODUCT_ID = "FREE_MASTERCLASS_001"
 
@@ -57,7 +98,8 @@ const close = () => {
       </span>
 
       <h1 class="mc-title">
-        Harmonie & rythme<br />
+        Masterclass basse gratuite – Harmonie & rythme
+<br />
         <span>à la basse</span>
       </h1>
 
@@ -74,7 +116,7 @@ const close = () => {
       </ul>
 
       <button class="mc-cta" @click="open">
-        Accéder gratuitement
+Recevoir la masterclass gratuite
       </button>
     </div>
 
@@ -235,6 +277,94 @@ const close = () => {
         plus efficaces et réellement musicales.
       </p>
     </section>
+    <section class="section internal-acquis">
+
+  <h2>Concrètement, après cette masterclass :</h2>
+
+  <div class="acquis-grid">
+<div class="acquis-card">
+  <div class="acquis-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <circle cx="12" cy="12" r="9" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="3" stroke-width="1.5"/>
+    </svg>
+  </div>
+  <h3>Tu te sens libre sur tout le manche</h3>
+      <p>
+        Grâce à la compréhension des degrés et des intervalles,
+        tout devient logique.
+        Tu sais toujours où tu es dans l’harmonie.
+        Plus de blocage mental.
+        Plus de peur de jouer la mauvaise note.
+      </p>
+    </div>
+
+ <div class="acquis-card">
+  <div class="acquis-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M3 12h18" stroke-width="1.5"/>
+      <circle cx="6" cy="12" r="2" stroke-width="1.5"/>
+      <circle cx="18" cy="12" r="2" stroke-width="1.5"/>
+    </svg>
+  </div>  <h3>Tu sais quoi jouer dans un morceau</h3>
+
+      <p>
+        Tu construis des lignes cohérentes,
+        stables et musicales,
+        sans dépendre de positions apprises par cœur.
+        Chaque note a une intention.
+      </p>
+    </div>
+
+ <div class="acquis-card">
+  <div class="acquis-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M4 12c2-6 6-6 8 0s6 6 8 0" stroke-width="1.5"/>
+    </svg>
+  </div>
+  <h3>Ton groove devient plus naturel</h3>
+      <p>
+        En comprenant les débits, les accents
+        et les ghost-notes,
+        tu ne calcules plus le rythme :
+        tu le ressens.
+        Ton jeu gagne en stabilité et en profondeur.
+      </p>
+    </div>
+<div class="acquis-card">
+  <div class="acquis-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <rect x="4" y="4" width="16" height="16" rx="3" stroke-width="1.5"/>
+      <path d="M8 12h8" stroke-width="1.5"/>
+    </svg>
+  </div>
+  <h3>Tu as une vraie méthode de progression</h3>
+      <p>
+        Une porte d’entrée claire pour travailler
+        harmonie et rythme ensemble.
+        Tu progresses avec un système,
+        pas au hasard.
+      </p>
+    </div>
+
+  </div>
+
+</section>
+<section class="section text internal-bridge">
+  <h2>Aller plus loin après la masterclass</h2>
+ <p>
+  Cette masterclass pose les bases.
+  Si tu veux approfondir la méthode complète,
+  structurer ton jeu et gagner en liberté sur le long terme,
+  la formation dédiée va beaucoup plus loin.
+</p>
+
+   <a href="/improvisationcadentielle" class="bridge-cta">
+  Découvrir la formation complète
+</a>
+
+</section>
+
 
     <!-- CIBLE SEO -->
     <section class="section text">
@@ -252,6 +382,15 @@ const close = () => {
         savoir quoi jouer et quand le jouer
         est essentiel pour progresser durablement.
       </p>
+
+<p>
+  Elle convient également aux musiciens qui souhaitent
+  apprendre l’improvisation à la basse
+  et comprendre l’harmonie à la basse
+  de manière claire et structurée.
+</p>
+
+
     </section>
 
     <!-- FAQ SEO -->
@@ -864,5 +1003,199 @@ padding-top:20px;
 .mc-video video:hover {
   transform: scale(1.02);
 }
+
+.section:nth-of-type(even) {
+  background: rgba(255,255,255,0.025);
+  border-radius: 28px;
+  padding: 3.5rem 2rem;
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+.section:last-of-type {
+  margin-top: 4rem;
+  padding-top: 4rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+/* ======================================================
+   PREMIUM BRIDGE SECTION
+====================================================== */
+
+.internal-bridge {
+  position: relative;
+  max-width: 880px;
+  margin: 5rem auto;
+  padding: 4rem 2.5rem;
+
+  text-align: center;
+
+  border-radius: 28px;
+
+  background:
+    radial-gradient(circle at 50% 0%,
+      rgba(245,158,11,0.18),
+      rgba(245,158,11,0.05) 40%,
+      rgba(255,255,255,0.02) 100%
+    );
+
+  border: 1px solid rgba(245,158,11,0.35);
+
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.6),
+    inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+.internal-bridge h2 {
+  font-size: 2rem;
+  font-weight: 900;
+  margin-bottom: 1.4rem;
+}
+
+.internal-bridge p {
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: var(--text-soft);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.internal-bridge a {
+  display: inline-block;
+  margin-top: 1.8rem;
+  padding: 0.9rem 2rem;
+
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  color: #fff;
+
+  box-shadow: 0 12px 32px rgba(245,158,11,0.35);
+
+  transition: all 0.25s ease;
+}
+
+.internal-bridge a:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px rgba(245,158,11,0.5);
+}
+
+/* ======================================================
+   TRANSFORMATION BLOCK — PREMIUM
+====================================================== */
+
+.internal-acquis {
+  margin: 6rem auto;
+  padding: 4.5rem 2.5rem;
+  max-width: 1050px;
+
+  border-radius: 32px;
+
+  background:
+    radial-gradient(circle at 50% 0%,
+      rgba(245,158,11,0.15),
+      rgba(245,158,11,0.05) 40%,
+      rgba(255,255,255,0.02) 100%
+    );
+
+  border: 1px solid rgba(245,158,11,0.35);
+
+  box-shadow:
+    0 50px 120px rgba(0,0,0,0.7),
+    inset 0 0 0 1px rgba(255,255,255,0.05);
+
+  text-align: center;
+}
+
+.internal-acquis h2 {
+  font-size: 2.1rem;
+  font-weight: 900;
+  margin-bottom: 3.5rem;
+}
+
+.acquis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2.2rem;
+}
+
+.acquis-card {
+  padding: 2.4rem 2rem;
+  border-radius: 24px;
+
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+
+  backdrop-filter: blur(8px);
+
+  transition: all 0.25s ease;
+}
+
+.acquis-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(245,158,11,0.5);
+}
+
+.acquis-card h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.acquis-card p {
+  font-size: 0.98rem;
+  line-height: 1.8;
+  color: var(--text-soft);
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .acquis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .internal-acquis {
+    padding: 3rem 1.5rem;
+  }
+}
+/* ======================================================
+   ACQUIS ICON STYLE
+====================================================== */
+
+.acquis-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 1.4rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 14px;
+
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.4);
+
+  color: var(--accent-1);
+
+  transition: all 0.25s ease;
+}
+
+.acquis-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.acquis-card:hover .acquis-icon {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 25px rgba(245,158,11,0.35);
+}
+
 
 </style>
