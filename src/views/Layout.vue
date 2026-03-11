@@ -8,10 +8,16 @@
       class="sidebar"
       :class="{ isCollapsed: isSidebarCollapsed, hidden: isMobile }"
     >
-      <!-- Logo -->
-      <div class="sidebar-logo">
-        <img :src="logoUrl" class="sidebar-main-logo" alt="SunBassSchool" />
-      </div>
+ <!-- Logo -->
+<div class="sidebar-logo">
+  <RouterLink to="/cours-de-basse-en-ligne">
+    <img
+      :src="logoUrl"
+      class="sidebar-main-logo"
+      alt="SunBassSchool"
+    />
+  </RouterLink>
+</div>
 
       <!-- ======================== -->
       <!-- MENU : ÉLÈVE (non admin / non prof) -->
@@ -182,10 +188,10 @@
         <button v-if="showInstallButton" @click="installPWA" class="install-btn">📥</button>
 
         <!-- Titre / Slogan -->
-        <div class="hero-text">
-          <h1 class="hero-title">SunBassAPP</h1>
-          <p class="hero-subtitle">L'école de basse qui groove.</p>
-        </div>
+   <RouterLink to="/cours-de-basse-en-ligne" class="hero-text">
+  <h1 class="hero-title">SunBassAPP</h1>
+  <p class="hero-subtitle">L'école de basse qui groove.</p>
+</RouterLink>
 
         <!-- Auth desktop -->
         <div v-if="!isLoggedIn && !isMobile" class="desktop-auth-buttons">
@@ -2190,5 +2196,10 @@ body.loading-active {
   opacity: 0;
 }
 
-
+.hero-text{
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  cursor: pointer;
+}
 </style>

@@ -4070,28 +4070,35 @@ const getPreviewUrl = (url) => {
 }
 
 const openFile = (file) => {
+
   const folder = foldersById.value?.[file.folder_id]
 
-  // 📂 PARTITIONS
+  // PARTITIONS
   if (folder?.name === "Partitions" && file.file_url) {
     const previewUrl = getPreviewUrl(file.file_url)
-    console.log("👁️ PREVIEW =", previewUrl)
     window.open(previewUrl, "_blank", "noopener")
     return
   }
 
-  // 🎥 VIDEO
+  // VIDEO
   if (file.file_type?.startsWith("video/")) {
     previewVideoUrl.value = file.file_url
     return
   }
 
-  // 📄 DEFAULT
-  if (file.file_url) {
-    window.open(file.file_url, "_blank", "noopener")
+  // DOWNLOAD
+ if (file.file_url) {
+
+    const path = file.file_url.split("/uploads/")[1]
+
+    const url =
+      "https://www.sunbassschool.com/sbs-upload/download.php" +
+      "?path=" + encodeURIComponent(path) +
+      "&name=" + encodeURIComponent(file.file_name)
+
+    window.open(url, "_blank", "noopener")
   }
 }
-
 
 
 

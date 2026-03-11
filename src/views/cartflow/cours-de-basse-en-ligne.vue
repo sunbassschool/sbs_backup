@@ -9,19 +9,90 @@ import { useRoute, useRouter } from "vue-router"
 import { useAuthStore } from "@/stores/authStore.js"
 import { getProxyPostURL, gasPost } from "@/config/gas"
 import { useHead } from "@vueuse/head"
+import MarketingFooter from "@/components/MarketingFooter.vue"
 
 import MarketingHeader from "@/components/MarketingHeader.vue"
-import OfferSelector from "@/components/cartflow/Payments/OfferSelector.vue"
-import OfferRecap from "@/components/cartflow/Payments/OfferRecap.vue"
-import PaymentElement from "@/components/cartflow/Payments/PaymentElement.vue"
+import { defineAsyncComponent } from "vue"
 
+declare global {
+  interface Window {
+    dataLayer: any[]
+    __gtagLoaded?: boolean
+  }
+}
+const GA4_ID = "G-X8PE6LC5ED"
+const ADS_ID = "AW-17922401091"
+
+
+const loadGtag = () => {
+  if ((window as any).__gtagLoaded) return
+  ;(window as any).__gtagLoaded = true
+
+  window.dataLayer = window.dataLayer || []
+
+  function gtag(...args: any[]) {
+    window.dataLayer.push(args)
+  }
+
+  window.gtag = gtag
+
+  const script = document.createElement("script")
+  script.async = true
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`
+  document.head.appendChild(script)
+
+  gtag("js", new Date())
+  gtag("config", GA4_ID)
+  gtag("config", ADS_ID)
+}
+const heroVideo = ref<HTMLVideoElement | null>(null)
+const showVideo = ref(false)
+
+const startVideo = () => {
+  showVideo.value = true
+  nextTick(() => {
+    heroVideo.value?.play()
+  })
+}
+const setupDeferredAnalytics = () => {
+  // fallback après 3s
+  const timer = window.setTimeout(loadGtag, 3000)
+
+  const trigger = () => {
+    clearTimeout(timer)
+    loadGtag()
+    window.removeEventListener("pointerdown", trigger)
+    window.removeEventListener("scroll", trigger)
+    window.removeEventListener("keydown", trigger)
+  }
+
+  window.addEventListener("pointerdown", trigger, { once: true })
+  window.addEventListener("scroll", trigger, { once: true })
+  window.addEventListener("keydown", trigger, { once: true })
+}
+
+
+
+
+
+
+const OfferSelector = defineAsyncComponent(() =>
+  import("@/components/cartflow/Payments/OfferSelector.vue")
+)
+
+const OfferRecap = defineAsyncComponent(() =>
+  import("@/components/cartflow/Payments/OfferRecap.vue")
+)
+
+const PaymentElement = defineAsyncComponent(() =>
+  import("@/components/cartflow/Payments/PaymentElement.vue")
+)
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
 
 const stickyCta = ref<HTMLElement | null>(null)
-let checkoutObserver: IntersectionObserver | null = null
 let shown = false
 let onScroll: ((this: Window, ev: Event) => any) | null = null
 
@@ -29,12 +100,12 @@ let onScroll: ((this: Window, ev: Event) => any) | null = null
 // SEO
 // =====================
 useHead({
-  title: "Cours de basse en ligne avec professeur | SunBassSchool",
+  title: "Cours de basse en ligne personnalisés – Professeur professionnel en visio | SunBassSchool",
   meta: [
     {
       name: "description",
       content:
-        "Cours de basse en ligne en visioconférence avec un professeur musicien professionnel. Suivi personnalisé, replay, feedback et progression rapide."
+        "Cours de basse en ligne personnalisés avec un musicien professionnel. Programme structuré, feedback précis, replay et suivi sur SunBassApp. Dès 6 mois de pratique."
     },
     {
       name: "robots",
@@ -46,9 +117,74 @@ useHead({
       rel: "canonical",
       href: "https://www.sunbassschool.com/cours-de-basse-en-ligne"
     }
+  ],
+  script: [
+    {
+      type: "application/ld+json",
+      children: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Les cours de basse en ligne sont-ils efficaces ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Oui. Avec un cadre clair, des consignes précises et un suivi structuré, le format visio est très efficace. SunBassApp permet de garder un fil conducteur : feedbacks, devoirs, replay et ressources."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Quel niveau faut-il pour démarrer ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Il faut idéalement au moins 6 mois de basse (autodidacte ou école). Si vous n’avez jamais joué de musique, il est préférable de commencer avec un autre cadre avant la visio."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Que travaille-t-on pendant les cours ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Technique, groove, timing, harmonie et répertoire (rock, funk, jazz…). Le contenu est personnalisé selon le niveau et les objectifs."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Quel matériel faut-il ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Une basse, un ampli, un téléphone ou ordinateur avec webcam et une bonne connexion internet suffisent."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Y a-t-il des devoirs entre les cours ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Oui. En fin de séance, les objectifs de la semaine sont définis et déposés sur SunBassApp avec le feedback, les ressources et le replay du cours."
+            }
+          }
+        ]
+      })
+    },
+{
+  type: "application/ld+json",
+  children: JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "Cours de basse en ligne personnalisés",
+    "description": "Cours de basse en ligne personnalisés avec professeur professionnel en visioconférence.",
+    "thumbnailUrl": "https://www.sunbassschool.com/hero-cours-basse(1).webp",
+    "uploadDate": "2026-02-20T00:00:00+01:00",
+    "datePublished": "2026-02-20T00:00:00+01:00",
+    "duration": "PT6M19S",
+    "contentUrl": "https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d-45ea-9c57-156896fdb198/b4c34e3c-9187-409d-ad84-30bb7731e735/a8414182-681d-438e-89e7-0e000f7ef44e.mp4",
+    "embedUrl": "https://www.sunbassschool.com/cours-de-basse-en-ligne"
+  })
+}
   ]
 })
-
 
 
 
@@ -87,75 +223,80 @@ const resolvedEmail = computed(() =>
 // FETCH OFFERS
 // =====================
 onMounted(async () => {
- await nextTick()
-  requestAnimationFrame(() => {
-    const targets = [
-      document.scrollingElement,
-      document.documentElement,
-      document.body,
-      document.querySelector("#app"),
-      document.querySelector(".offer-page"),
-    ].filter(Boolean) as HTMLElement[]
+  setupDeferredAnalytics()
 
-    targets.forEach(t => (t.scrollTop = 0))
+  setTimeout(() => {
+    showVideo.value = true
+  }, 2000)
+
+  await nextTick()
+
+  requestAnimationFrame(() => {
     window.scrollTo(0, 0)
   })
+
   document.documentElement.classList.add("landing-mode")
   document.body.classList.add("landing-mode")
 
-  try {
-    const res = await fetch(getProxyPostURL(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route: "getOffersForCheckout",
-        funnel
-      })
-    })
+  // 🔥 Lazy load OFFERS uniquement quand checkout visible
+  const checkoutEl = document.getElementById("checkout")
 
-    const json = await res.json()
-    if (!json.ok) throw new Error(json.error?.message || "Erreur chargement offres")
+  if (checkoutEl) {
+    const observer = new IntersectionObserver(
+      async ([entry]) => {
+        if (!entry.isIntersecting) return
 
-    offers.value = json.data
-  } catch (e: any) {
-    error.value = e.message
-  } finally {
-    offersLoading.value = false
+        observer.disconnect()
+
+        if (!offers.value.length) {
+          try {
+            const res = await fetch(getProxyPostURL(), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                route: "getOffersForCheckout",
+                funnel
+              })
+            })
+
+            const json = await res.json()
+            if (!json.ok) throw new Error("Erreur chargement offres")
+
+            offers.value = json.data
+          } catch (e: any) {
+            error.value = e.message
+          } finally {
+            offersLoading.value = false
+          }
+        }
+      },
+      { threshold: 0.2 }
+    )
+
+    observer.observe(checkoutEl)
   }
 
-    const el = stickyCta.value
-  const checkoutEl = document.getElementById("checkout")
+  // Sticky CTA logique existante
+  const el = stickyCta.value
   if (!el) return
 
-  // 1) apparition retardée (1.2s)
   setTimeout(() => {
     el.classList.add("is-visible")
     shown = true
   }, 1200)
 
-  // 2) changement de texte après scroll
-onScroll = () => {
-  if (!el || !shown) return
-  el.textContent =
-    window.scrollY > 420
-      ? "🎸 Rejoindre les cours"
-      : "🎸 Voir les formules"
-}
+  onScroll = () => {
+    if (!el || !shown) return
+    el.textContent =
+      window.scrollY > 420
+        ? "🎸 Rejoindre les cours"
+        : "🎸 Voir les formules"
+  }
 
   window.addEventListener("scroll", onScroll, { passive: true })
-
-  // 3) hide auto quand checkout visible
-  if (checkoutEl) {
-    checkoutObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (!el) return
-        el.style.opacity = entry.isIntersecting ? "0" : "1"
-        el.style.pointerEvents = entry.isIntersecting ? "none" : "auto"
-      },
-      { threshold: 0.25 }
-    )
-    checkoutObserver.observe(checkoutEl)}
 })
+
+
 
 onUnmounted(() => {
   document.documentElement.classList.remove("landing-mode")
@@ -165,7 +306,6 @@ onUnmounted(() => {
     window.removeEventListener("scroll", onScroll)
   }
 
-  checkoutObserver?.disconnect()
 })
 
 
@@ -297,29 +437,56 @@ watch(paying, v => console.log("🧠 paying =", v))
       <div class="offer-copy">
         <span class="badge">🎸 Cours individuels en visioconférence</span>
 
-        <h1 class="offer-title">
-          Cours de basse <span class="accent">en ligne</span> avec un professeur
-          musicien pro pour progresser vite
-        </h1>
-
-        <p class="hero-proof">
-          +50 élèves accompagnés · 10 ans d’enseignement · musicien pro depuis 15 ans
-        </p>
-
-        <div class="hero-video">
-<video
-  src="https://www.sunbassschool.com/wp-content/uploads/2023/11/promo-cours-en-visio.mp4"
-  autoplay
-  muted
-  loop
-  playsinline
-  preload="none"
-  poster="/hero-cours-basse.jpg"
-></video>
+<h1 class="offer-title">
+  Cours de basse <span class="accent">en ligne personnalisés</span>
+</h1>
+<p class="hero-sub">
+  Avec un professeur musicien professionnel
+</p>
 
 
 
-        </div>
+<div class="hero-stats">
+  <div class="stat-item">
+    <strong>50+</strong>
+    <span>élèves accompagnés</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-item">
+    <strong>10 ans</strong>
+    <span>d’enseignement</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-item">
+    <strong>15 ans</strong>
+    <span>musicien professionnel</span>
+  </div>
+</div>
+
+
+<div class="hero-video">
+  <div v-if="!showVideo" class="video-cover" @click="startVideo">
+    <img
+      src="/hero-cours-basse(1).webp"
+      alt="Cours de basse en ligne personnalisés"
+      width="680"
+      height="382"
+      fetchpriority="high"
+    />
+    <div class="play-btn">▶</div>
+  </div>
+
+  <video
+    v-else
+    ref="heroVideo"
+    src="https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d-45ea-9c57-156896fdb198/b4c34e3c-9187-409d-ad84-30bb7731e735/a8414182-681d-438e-89e7-0e000f7ef44e.mp4"
+    muted
+    playsinline
+    controls
+    preload="metadata"
+     poster="/hero-cours-basse(1).webp"
+  />
+</div>
 
         <div class="proof">
           <p>🎯 Niveau requis : 6 mois de basse minimum (autodidacte ou école)</p>
@@ -726,6 +893,7 @@ watch(paying, v => console.log("🧠 paying =", v))
   🎸 Voir les formules
 </a>
 
+<MarketingFooter />
 
 </template>
 
@@ -805,6 +973,11 @@ align-items: flex-start;
   font-weight: 900;
   line-height: 1.15;
   margin: 1rem 0 0.6rem;
+    max-width: 680px;
+
+}
+.offer-title {
+  letter-spacing: -0.02em;
 }
 
 .offer-title .accent {
@@ -1432,5 +1605,74 @@ align-items: flex-start;
   border-color: #fbbf24;
 }
 
+.hero-sub {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 1.2rem;
+}
 
+
+.hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  margin: 0.8rem 0 1.4rem;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.stat-item strong {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: white;
+}
+
+.stat-item span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.stat-sep {
+  width: 1px;
+  height: 32px;
+  background: rgba(255,255,255,0.15);
+}
+
+@media (max-width: 768px) {
+  .hero-stats {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .stat-sep {
+    display: none;
+  }
+}
+.video-cover {
+  position: relative;
+  cursor: pointer;
+}
+
+.video-cover img {
+  border-radius: 12px;
+  display: block;
+}
+
+.play-btn {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  color: white;
+  background: rgba(0,0,0,0.25);
+  border-radius: 12px;
+}
 </style>

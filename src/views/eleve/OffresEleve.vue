@@ -8,7 +8,7 @@
       </header>
 
 <SBSLoading
-  v-if="loading"
+  v-if="!hasLoadedOnce"
   label="Chargement des offres…"
 />
 
@@ -24,19 +24,19 @@
 
     <div v-else class="offers-list">
 
-  <section
-    v-for="(group, category) in groupedPrices"
-    :key="category"
-    class="offers-group"
-  >
-    <h2 class="category-title">
-      {{ category === 'prof_plan' ? 'Abonnements PROF' : category }}
-    </h2>
+<section
+  v-for="group in groupedPrices"
+  :key="group.category"
+  class="offers-group"
+>
+  <h2 class="category-title">
+    {{ group.category === 'prof_plan' ? 'Abonnements PROF' : group.category }}
+  </h2>
 
-<div
-  v-for="price in group"
-  :key="price.price_id"
-  class="offer-row"
+  <div
+    v-for="price in group.prices"
+    :key="price.price_id"
+    class="offer-row"
   :data-featured="FEATURED_PRODUCTS[price.product.product_id]?.featured || false"
   :data-badge-label="FEATURED_PRODUCTS[price.product.product_id]?.badge_label || ''"
   :data-category="price.product.category"
@@ -122,47 +122,54 @@ const hasLoadedOnce = ref(false)
 
 const loading = ref(false)
 const products = ref([])
+const CATEGORY_ORDER = [
+  "cours",
+  "module",
+  "bundle",
+  "prof_plan"
+]
+
 const prices = computed(() => {
   return products.value
+
+    // ⛔ masquer les abonnements prof
+    .filter(product => product.category !== "prof_plan")
+
     .flatMap(product =>
       (product.prices || []).map(price => ({
         ...price,
         product
       }))
     )
-    // optionnel : tri logique
-.sort((a, b) => {
-  if (a.product.category === "prof_plan" && b.product.category !== "prof_plan") return -1
-  if (a.product.category !== "prof_plan" && b.product.category === "prof_plan") return 1
-  return a.amount - b.amount
-})})
+
+    .sort((a, b) => {
+
+      const aCat = CATEGORY_ORDER.indexOf(a.product.category)
+      const bCat = CATEGORY_ORDER.indexOf(b.product.category)
+
+      if (aCat !== bCat) return aCat - bCat
+
+      return a.amount - b.amount
+    })
+})
 const groupedPrices = computed(() => {
   const map = {}
-  const order = []
 
   prices.value.forEach(p => {
     const cat = p.product.category || "Autre"
 
-    if (!map[cat]) {
-      map[cat] = []
-      order.push(cat)           // 👈 ordre dynamique API
-    }
+    if (!map[cat]) map[cat] = []
 
     map[cat].push(p)
   })
 
-  // prof_plan toujours en dernier
-  if (order.includes("prof_plan")) {
-    order.splice(order.indexOf("prof_plan"), 1)
-    order.push("prof_plan")
-  }
-
-  return Object.fromEntries(
-    order.map(cat => [cat, map[cat]])
-  )
+  return CATEGORY_ORDER
+    .filter(cat => map[cat])
+    .map(cat => ({
+      category: cat,
+      prices: map[cat]
+    }))
 })
-
-
 const isProfPlan = (price) =>
   price.product.category === "prof_plan"
 
@@ -243,17 +250,23 @@ const fetchOffersNetwork = async (profId) => {
     }
 
     // ✅ TMP PRODUCTS (DÉCLARÉ ICI)
-    const tmpProducts = (prodRes.products || [])
-      .filter(p => p.active === true)
-      .map(p => ({
-        product_id: p.product_id,
-        name: p.product_name,
-        description: p.description,
-        category: p.category,
-            droit_code: p.droit_code,   // ✅ ICI
+const tmpProducts = (prodRes.products || [])
+  .filter(p => p.active === true)
+  .map(p => ({
 
-        prices: []
-      }))
+    product_id: p.product_id,
+    name: p.product_name,
+    description: p.description,
+
+    category: (p.category || "")
+      .toLowerCase()
+      .replace("modules","module")
+      .replace("bundles","bundle"),
+
+    droit_code: p.droit_code,
+
+    prices: []
+  }))
 
     // =========================
     // 2️⃣ FETCH PRICES
@@ -278,12 +291,32 @@ const fetchOffersNetwork = async (profId) => {
       })
     )
 
-    // =========================
-    // 3️⃣ COMMIT FINAL (UN SEUL ENDROIT)
-    // =========================
-    products.value = tmpProducts
-    hasLoadedOnce.value = true
-    saveToCache(profId, tmpProducts)
+// =========================
+// 3️⃣ DEBUG CATEGORIES
+// =========================
+console.group("📦 Produits récupérés")
+
+tmpProducts.forEach(p => {
+  console.log("product:", {
+    id: p.product_id,
+    name: p.name,
+    category: p.category
+  })
+})
+
+console.log(
+  "🧩 catégories uniques =",
+  [...new Set(tmpProducts.map(p => p.category))]
+)
+
+console.groupEnd()
+
+// =========================
+// 4️⃣ COMMIT FINAL
+// =========================
+products.value = tmpProducts
+hasLoadedOnce.value = true
+saveToCache(profId, tmpProducts)
 
   } catch (e) {
     console.error("❌ fetchOffersNetwork error", e)
@@ -300,21 +333,24 @@ const fetchOffersNetwork = async (profId) => {
 // FETCH OFFRES (PROGRESSIVE + CACHE SAFE)
 // =====================================================
 const fetchOffers = async () => {
+
   const profId = auth.user?.prof_id
   if (!profId) return
 
-  // 1️⃣ cache immédiat
+  loading.value = true
+
   const cached = loadFromCache(profId)
-if (cached) {
-  products.value = cached
-  loading.value = false          // 👈 IMPORTANT
-  fetchOffersNetwork(profId)     // refresh silencieux
-  return
-}
 
+  if (cached) {
+    products.value = cached
+    hasLoadedOnce.value = true
+    loading.value = false
+    fetchOffersNetwork(profId)
+    return
+  }
 
-  // 2️⃣ pas de cache → réseau direct
   fetchOffersNetwork(profId)
+
 }
 
 

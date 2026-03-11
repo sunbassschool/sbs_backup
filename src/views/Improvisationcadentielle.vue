@@ -9,6 +9,7 @@ import { useRoute, useRouter } from "vue-router"
 import { useAuthStore } from "@/stores/authStore.js"
 import { getProxyPostURL, gasPost } from "@/config/gas"
 import { useHead } from "@vueuse/head"
+import MarketingFooter from "@/components/MarketingFooter.vue"
 
 import MarketingHeader from "@/components/MarketingHeader.vue"
 import OfferSelector from "@/components/cartflow/Payments/OfferSelector.vue"
@@ -19,6 +20,26 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
+const openFaq = ref<number | null>(null)
+
+const toggleFaq = (index: number) => {
+  openFaq.value = openFaq.value === index ? null : index
+}
+
+const faqItems = [
+  {
+    q: "Ce module convient-il aux débutants ?",
+    a: "Oui. Les principes sont expliqués étape par étape et applicables immédiatement à la basse."
+  },
+  {
+ q: "Faut-il connaître le solfège ?",
+  a: "Non. Tu n’as pas besoin de savoir lire la musique. Tout est expliqué de manière visuelle et pratique, directement sur le manche, avec des exemples simples et une vidéo explicative détaillée."
+  },
+  {
+    q: "Est-ce adapté à tous les styles ?",
+    a: "Oui. Les principes d’improvisation cadentielle fonctionnent en jazz, pop, funk et musique actuelle."
+  }
+]
 
 const stickyCta = ref<HTMLElement | null>(null)
 let checkoutObserver: IntersectionObserver | null = null
@@ -51,15 +72,34 @@ useHead({
     },
     {
       property: "og:url",
-      content: "https://sunbassschool.com/improvisationcadentielle"
+      content: "https://www.sunbassschool.com/improvisationcadentielle"
     }
   ],
   link: [
     {
       rel: "canonical",
-      href: "https://sunbassschool.com/improvisationcadentielle"
+      href: "https://www.sunbassschool.com/improvisationcadentielle"
     }
-  ]
+  ],
+  script: [
+  {
+    key: "impro-video-schema",
+    type: "application/ld+json",
+    children: JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "VideoObject",
+      "name": "Improvisation à la basse – Méthode cadentielle",
+      "description":
+        "Présentation de la méthode d’improvisation cadentielle à la basse pour construire des solos mélodiques et cohérents.",
+      "thumbnailUrl": "https://www.sunbassschool.com/wp-content/uploads/2023/11/promo-cours-en-visio.jpg",
+      "uploadDate": "2026-02-20T00:00:00+01:00",
+      "datePublished": "2026-02-20T00:00:00+01:00",
+"duration": "PT1M41S",
+      "contentUrl": "https://www.sunbassschool.com/wp-content/uploads/2023/11/promo-cours-en-visio.mp4",
+      "embedUrl": "https://www.sunbassschool.com/improvisationcadentielle"
+    })
+  }
+]
 })
 
 
@@ -322,6 +362,13 @@ watch(paying, v => console.log("🧠 paying =", v))
           Développe l’aspect <strong>mélodique</strong> de tes solos et deviens
           un vrai soliste audible, cohérent et musical.
         </p>
+        <p class="hero-bridge">
+  Si tu préfères un accompagnement individualisé avec suivi
+  et feedback en direct, découvre aussi mes
+  <a href="/cours-de-basse-en-ligne">
+    cours de basse en ligne personnalisés
+  </a>.
+</p>
 
         <div class="hero-video">
           <video
@@ -340,7 +387,7 @@ watch(paying, v => console.log("🧠 paying =", v))
           <p>🎯 Tous niveaux · aucun prérequis théorique lourd</p>
         </div>
 
-        <a href="#checkout" class="cta-main">Accéder au module</a>
+        <a href="#checkout" class="cta-main">Commencer la méthode</a>
       </div>
 
       <!-- RIGHT -->
@@ -370,18 +417,12 @@ watch(paying, v => console.log("🧠 paying =", v))
           </div>
         </div>
 
-        <div class="video-cta" style="margin-top: 1.4rem">
-          <a href="#checkout" class="cta-secondary">Voir l’offre</a>
-        </div>
+
       </div>
     </div>
 
     <!-- CONTENT -->
     <section class="offer-content">
-      <div class="fade-separator with-cta">
-        <a href="#checkout" class="separator-cta">Je commande le module</a>
-      </div>
-
       <!-- BLOCK A : PROBLÈME -->
       <section class="content-block block-a">
         <div class="two-cols">
@@ -404,6 +445,13 @@ watch(paying, v => console.log("🧠 paying =", v))
               Résultat : des solos techniques,
               mais sans discours musical clair.
             </p>
+            <p class="mini-bridge">
+  Si tu veux d’abord comprendre les bases de manière simple,
+  tu peux commencer par la
+  <a href="/masterclass">
+    masterclass basse gratuite
+  </a>.
+</p>
           </div>
 
           <div class="col-media">
@@ -473,22 +521,37 @@ watch(paying, v => console.log("🧠 paying =", v))
       </section>
 
       <div class="fade-separator"></div>
-<section class="content-block block-b">
-  <h2>Comment improviser à la basse sans jouer au hasard ?</h2>
+<section class="content-block block-b impro-explain">
+  <div class="explain-inner">
 
-  <p class="intro" style="max-width:820px;margin:0 auto;text-align:center">
-    Improviser à la basse ne consiste pas à enchaîner des gammes.
-    Cette méthode repose sur les cadences harmoniques,
-    la compréhension des accords et la construction
-    d’un discours mélodique cohérent.
-  </p>
+    <h2>Comment improviser à la basse sans jouer au hasard ?</h2>
 
-  <p class="intro" style="max-width:820px;margin:1.5rem auto 0;text-align:center">
-    Tu apprends à relier harmonie et rythme pour créer
-    de vrais solos de basse audibles et musicaux,
-    quel que soit le style.
-  </p>
+    <p>
+      Improviser à la basse ne consiste pas à enchaîner des gammes.
+      Cette méthode repose sur les <strong>cadences harmoniques</strong>,
+      la compréhension des accords et la construction
+      d’un discours mélodique cohérent.
+    </p>
+
+    <p>
+      Tu apprends à relier harmonie et rythme pour créer
+      de vrais solos audibles et musicaux,
+      quel que soit le style.
+    </p>
+
+    <div class="explain-bridge">
+      <p>
+        Pour aller plus loin avec un travail encadré et personnalisé,
+        ces principes peuvent être approfondis dans le cadre de
+        <a href="/cours-de-basse-en-ligne">
+          cours de basse en ligne personnalisés
+        </a>.
+      </p>
+    </div>
+
+  </div>
 </section>
+
       <div class="fade-separator"></div>
 
       <!-- BLOCK B : RÉSULTATS -->
@@ -525,27 +588,46 @@ watch(paying, v => console.log("🧠 paying =", v))
       <div class="fade-separator with-cta">
         <a href="#checkout" class="separator-cta">J’en profite</a>
       </div>
-<section class="content-block block-b">
+<section class="content-block block-b faq-premium">
   <h2 class="block-title">Questions fréquentes</h2>
 
-  <div style="max-width:820px;margin:0 auto">
-    <h3>Ce module convient-il aux débutants ?</h3>
-    <p>
-      Oui. Les principes d’improvisation sont expliqués étape par étape
-      et applicables immédiatement à la basse.
-    </p>
+  <div class="faq-item" v-for="(item, i) in faqItems" :key="i">
+    <button
+      class="faq-question"
+      @click="toggleFaq(i)"
+      :class="{ open: openFaq === i }"
+    >
+      <span>{{ item.q }}</span>
+      <span class="icon">+</span>
+    </button>
 
-    <h3>Faut-il connaître le solfège ?</h3>
-    <p>
-      Non. La méthode repose sur la compréhension pratique
-      des cadences et du manche.
-    </p>
+    <div
+      class="faq-answer"
+      v-show="openFaq === i"
+    >
+      <p>{{ item.a }}</p>
+    </div>
+  </div>
+</section>
 
-    <h3>Est-ce adapté à tous les styles ?</h3>
-    <p>
-      Oui. Les principes d’improvisation cadentielle
-      fonctionnent en jazz, pop, funk et musique actuelle.
-    </p>
+<section class="content-block block-b business-bridge">
+  <h2>Aller encore plus loin</h2>
+
+  <p class="intro" style="max-width:820px;margin:0 auto;text-align:center">
+    Ce module t’apporte une méthode claire.
+    Si tu souhaites travailler tes solos en direct,
+    corriger tes erreurs et progresser plus vite,
+    tu peux aussi rejoindre mes
+    <a href="/cours-de-basse-en-ligne">
+      cours de basse en ligne personnalisés
+    </a>
+    en visioconférence.
+  </p>
+
+  <div class="video-cta">
+    <a href="/cours-de-basse-en-ligne" class="cta-secondary">
+      Voir les cours en ligne
+    </a>
   </div>
 </section>
 
@@ -624,10 +706,13 @@ watch(paying, v => console.log("🧠 paying =", v))
   <a href="#checkout" class="cta-sticky-mobile" ref="stickyCta">
     🎸 Accéder au module
   </a>
+  <MarketingFooter />
+
 </template>
 
 
 <style scoped>
+
 .bio-photo img {
   display: block;
   margin: 0 auto;
@@ -803,20 +888,27 @@ align-items: flex-start;
 }
 
 .block-a {
-  background: var(--block-a);
+  background: rgba(255,255,255,0.02);
 }
 
 .block-b {
-  background: var(--block-b);
+  background: rgba(255,255,255,0.04);
 }
+
 
 .fade-separator {
   height: 1px;
   width: 100%;
   max-width: 680px;
   margin: 3rem auto 2rem;
-  background: linear-gradient(to right, transparent, rgba(255,255,255,0.25), transparent);
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255,255,255,0.12),
+    transparent
+  );
 }
+
 
 .fade-separator.with-cta {
   display: flex;
@@ -853,18 +945,34 @@ align-items: flex-start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
+
   margin-top: 1.2rem;
-  padding: 0.85rem 1.6rem;
+  padding: 0.85rem 1.8rem;
+
   font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: #0b0b0f;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+
+  color: #111;
+  background: linear-gradient(
+    90deg,
+    rgba(245,158,11,0.95),
+    rgba(241,120,99,0.95)
+  );
+
   border-radius: 999px;
   text-decoration: none;
-  box-shadow: 0 10px 30px rgba(245,158,11,0.35), inset 0 1px 0 rgba(255,255,255,0.35);
+
+  box-shadow: 0 10px 28px rgba(245,158,11,0.25);
+
+  transition: all 0.25s ease;
 }
+
+.cta-main:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(245,158,11,0.35);
+}
+
 
 .video-cta {
   display: flex;
@@ -1252,5 +1360,161 @@ align-items: flex-start;
 }
 
 
+.hero-bridge {
+  margin: 0.8rem 0 1.2rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.hero-bridge a,
+.business-bridge a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245,158,11,0.4);
+  transition: all 0.2s ease;
+}
+
+.hero-bridge a:hover,
+.business-bridge a:hover {
+  border-bottom-color: var(--accent);
+  color: #fff;
+}
+.business-bridge {
+  background: rgba(245,158,11,0.06);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 20px;
+  padding: 3rem 1.6rem;
+  max-width: 900px;
+  margin: 3rem auto;
+  text-align: center;
+}
+
+.business-bridge h2 {
+  font-size: 1.7rem;
+  font-weight: 900;
+  margin-bottom: 1rem;
+}
+
+.business-bridge .cta-secondary {
+  margin-top: 1.6rem;
+}
+
+
+.impro-explain {
+  padding: 4.5rem 1.2rem;
+}
+
+.explain-inner {
+  max-width: 820px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.impro-explain h2 {
+  font-size: 1.8rem;
+  font-weight: 900;
+  margin-bottom: 1.4rem;
+}
+
+.impro-explain p {
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 1.2rem;
+  font-size: 0.95rem;
+}
+
+.explain-bridge {
+  margin-top: 2rem;
+  padding: 1.4rem 1.6rem;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+}
+
+.explain-bridge p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.explain-bridge a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245,158,11,0.4);
+  transition: all 0.2s ease;
+}
+
+.explain-bridge a:hover {
+  color: #fff;
+  border-bottom-color: var(--accent);
+}
+
+/* ========================
+   FAQ PREMIUM ACCORDION
+======================== */
+
+.faq-premium {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 4rem 1.2rem;
+}
+
+.faq-item {
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.faq-question {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 1.2rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
+}
+
+.faq-question .icon {
+  font-size: 1.2rem;
+  color: var(--accent);
+  transition: transform 0.25s ease;
+}
+
+.faq-question.open .icon {
+  transform: rotate(45deg);
+}
+
+.faq-answer {
+  padding-bottom: 1.2rem;
+}
+
+.faq-answer p {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.mini-bridge {
+  margin-top: 1.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.mini-bridge a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245,158,11,0.4);
+  transition: all 0.2s ease;
+}
+
+.mini-bridge a:hover {
+  border-bottom-color: var(--accent);
+  color: #fff;
+}
 
 </style>

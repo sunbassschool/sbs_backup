@@ -96,6 +96,8 @@ manifest: {
     build: {
       target: "esnext",
       minify: "terser",
+        cssCodeSplit: true,   // 🔥 AJOUTE ÇA
+
       terserOptions: {
         compress: {
           drop_console: true,

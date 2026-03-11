@@ -72,10 +72,18 @@ history: createWebHistory("/"),
 
 ,
 {
-  path: "/home",
-  component: () => import("@/views/home.vue"),
+  path: "/teachy",
+  component: () => import("@/views/teachy.vue"),
   meta: { public: true, layout: "landing" }
 },
+
+
+{
+  path: "/apprendre-la-basse",
+  component: () => import("@/views/apprendrelabasse.vue"),
+  meta: { public: true, layout: "landing" }
+},
+
 {
   path: "/pricing",
   name: "pricing", // 👈 MANQUANT
@@ -166,6 +174,30 @@ history: createWebHistory("/"),
 {
   path: "/improvisationcadentielle",
   component: () => import("@/views/Improvisationcadentielle.vue"),
+ meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/routine-main-gauche",
+  component: () => import("@/views/module-routine-main-gauche.vue"),
+ meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/routine-main-droite",
+  component: () => import("@/views/module-routine-main-droite.vue"),
+ meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/bundle-routine-mains",
+  component: () => import("@/views/bundle-routine-mains.vue"),
+ meta: { public: true, layout: "landing" }
+}
+,
+{
+  path: "/modules-basse",
+  component: () => import("@/views/modules-basse.vue"),
  meta: { public: true, layout: "landing" }
 }
 ,
@@ -337,6 +369,12 @@ history: createWebHistory("/"),
 },
 
 // 404
+{
+  path: "/:pathMatch(.*)*",
+  name: "NotFound",
+  component: NotFound,
+  meta: { public: true }
+}
 
 
   ],
@@ -353,6 +391,12 @@ router.beforeEach((to) => {
 
   const isLogged = !!store.jwt
   const isProf = ["prof", "admin"].includes(store.user?.role)
+
+  // 🚫 empêcher accès pages guest si connecté
+  if (isLogged && to.meta?.guestOnly) {
+    return { path: "/dashboard", replace: true }
+  }
+
 
   // invité
   if (!isLogged) {

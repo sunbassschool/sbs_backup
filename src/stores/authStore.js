@@ -1007,7 +1007,7 @@ async restoreFast() {
   this.authLoading = true
 
   if (sessionStorage.getItem("AUTH_ABORTED")) {
-    this.authReady = !!this.jwt
+    this.authReady = true
     this.authLoading = false
     return false
   }
@@ -1017,22 +1017,20 @@ async restoreFast() {
   // ⛔ TRIPLET OBLIGATOIRE
   if (!this.jwt || !this.refreshToken || !this.sessionId) {
     console.warn("⛔ restoreFast aborted: tokens incomplets")
-    this.authReady = false
+    this.authReady = true
     this.authLoading = false
     return false
   }
 
   // user minimal sync
   this.user = buildUserFromJwt(this.jwt)
-  this.user.onboarding_done ??= false
+
   this.prof_id = this.user.prof_id || null
 
-  // ✅ ready uniquement si JWT OK
   this.authReady = true
   this.authLoading = false
   return true
 }
-
 
 ,
 async finalizeAuthAsync() {

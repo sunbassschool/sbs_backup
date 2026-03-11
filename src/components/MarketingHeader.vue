@@ -2,7 +2,7 @@
   <header class="marketing-header">
 
     <RouterLink to="/" class="logo">
-      <img src="/logo.png" alt="Teachy.Sbs" class="logo-icon" />
+      <img src="/logo (2).webp" alt="Teachy.Sbs" class="logo-icon" />
       <span class="logo-text">SunBass.School</span>
     </RouterLink>
 
@@ -21,22 +21,29 @@
 
     <!-- MENU -->
 <nav class="menu" @click.capture="closeIfMobile">
-      <RouterLink to="/offerpage" class="link">Accueil</RouterLink>
-   <router-link
-  to="/cours-de-basse-en-ligne"
-  class="link"
->
-  Cours de basse en ligne
-</router-link>
 
-  <RouterLink to="/improvisationcadentielle" class="link">Improvisation Cadentielle</RouterLink>
-    <RouterLink to="/masterclass" class="link">Masterclass GRATUITE</RouterLink>
-             <RouterLink to="/home" class="link">Teachy.io</RouterLink>
+  <RouterLink to="/cours-de-basse-en-ligne" class="link">
+    Cours de basse en ligne
+  </RouterLink>
 
-         <RouterLink to="/register" class="btn primary full">
-        SunBassAPP
-      </RouterLink>
-    </nav>
+  <RouterLink to="/apprendre-la-basse" class="link">
+    Apprendre la basse
+  </RouterLink>
+
+<RouterLink to="/masterclass" class="masterclass-link">
+  Masterclass basse gratuite
+</RouterLink>
+
+    <RouterLink to="/modules-basse" class="link">
+    Formations
+  </RouterLink>
+
+<RouterLink to="/register" class="btn primary sunbass-btn">
+    SunBassApp
+  </RouterLink>
+
+</nav>
+
 
   </header>
 </template>
@@ -75,6 +82,70 @@ onUnmounted(() => {
 
 
 <style>
+.masterclass-link{
+  animation: introCTA .6s ease;
+}
+
+@keyframes introCTA{
+  0%{
+    transform:scale(.92);
+    opacity:0;
+  }
+  100%{
+    transform:scale(1);
+    opacity:1;
+  }
+}
+.btn.primary.sunbass-btn{
+  background: linear-gradient(135deg,#f59e0b,#fbbf24);
+  color:#111;
+
+  box-shadow:0 4px 14px rgba(245,158,11,0.35);
+
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+
+.btn.primary.sunbass-btn:hover{
+  transform:translateY(-1px);
+
+  box-shadow:
+    0 8px 22px rgba(245,158,11,0.55),
+    0 0 12px rgba(245,158,11,0.35);
+
+  filter:brightness(1.08);
+}
+.masterclass-link{
+  position: relative;
+  color: #111;
+  background: linear-gradient(135deg,#f59e0b,#fbbf24);
+  padding: 0.38rem 0.7rem;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(245,158,11,0.35);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+
+/* badge gratuit */
+.masterclass-link::before{
+  content:"FREE";
+  position:absolute;
+  top:-6px;
+  right:-10px;
+  font-size:9px;
+  font-weight:900;
+  background:#ef4444;
+  color:white;
+  padding:2px 4px;
+  border-radius:4px;
+}
+
+/* hover */
+.masterclass-link:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(245,158,11,0.45);
+}
 /* ================= HEADER ================= */
 
 .marketing-header {
@@ -282,7 +353,7 @@ onUnmounted(() => {
 }
 
 /* barre verticale */
-.menu .link:not(:last-child)::after {
+.menu .link:not(.highlight):not(:last-child)::after {
   content: "|";
   margin-left: 0.6rem;
   color: rgba(255,255,255,0.25);

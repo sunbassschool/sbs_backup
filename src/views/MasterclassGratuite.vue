@@ -3,6 +3,8 @@
 import { ref } from "vue"
 import LeadCapture from "@/components/lead/LeadCapture.vue"
 import MarketingHeader from "@/components/MarketingHeader.vue"
+import MarketingFooter from "@/components/MarketingFooter.vue"
+
 import { useHead } from "@vueuse/head"
 const BOOK_URL = "https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d-45ea-9c57-156896fdb198/de7ed9f1-fd21-43d7-b6d1-016325f9a827/e8736eda-1d39-49bc-a35c-c01f0d3ea9b6.png"
 const VIDEO_URL = "https://www.sunbassschool.com/sbs-upload/uploads/da325b2c-ff5d-45ea-9c57-156896fdb198/de7ed9f1-fd21-43d7-b6d1-016325f9a827/4cc7754e-099c-4ffa-86fc-38d4c0686a9b.mp4"
@@ -32,7 +34,7 @@ useHead({
     },
     {
       property: "og:url",
-      content: "https://sunbassschool.com/masterclass"
+      content: "https://www.sunbassschool.com/masterclass"
     },
     {
       property: "og:image",
@@ -62,11 +64,67 @@ useHead({
   link: [
     {
       rel: "canonical",
-      href: "https://sunbassschool.com/masterclass"
+      href: "https://www.sunbassschool.com/masterclass"
+    }
+  ],
+
+  script: [
+    // VIDEO SCHEMA
+{
+  type: "application/ld+json",
+  children: JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "Masterclass basse gratuite – Harmonie & rythme",
+    "description":
+      "Masterclass basse gratuite avec vidéo pédagogique et livret PDF pour comprendre l’harmonie et développer le groove à la basse.",
+    "thumbnailUrl": POSTER_URL,
+    "uploadDate": "2026-02-20T00:00:00+01:00",
+    "datePublished": "2026-02-20T00:00:00+01:00",
+    "contentUrl": VIDEO_URL,
+    "embedUrl": "https://www.sunbassschool.com/masterclass"
+  })
+},
+
+    // FAQ SCHEMA (correspond exactement à ta FAQ visible)
+    {
+      type: "application/ld+json",
+      children: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "La masterclass est-elle vraiment gratuite ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "Oui. L’accès à la vidéo et au livret PDF est entièrement gratuit. Aucun paiement n’est demandé."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Faut-il connaître le solfège ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "Non. Les notions sont expliquées simplement et applicables immédiatement à la basse."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Quel niveau faut-il avoir ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "Elle convient aux bassistes débutants comme intermédiaires souhaitant structurer leur jeu."
+            }
+          }
+        ]
+      })
     }
   ]
 })
-
 const showModal = ref(false)
 const PRODUCT_ID = "FREE_MASTERCLASS_001"
 
@@ -142,60 +200,124 @@ Recevoir la masterclass gratuite
   </div>
 
 </section>
-<div class="mc-separator"></div>
 
-<section class="mc-included">
+<section class="mc-included-upgrade">
 
-  <div class="mc-included-inner">
+  <div class="mc-included-container">
 
-    <div class="mc-book-visual">
+    <!-- VISUEL -->
+    <div class="mc-book-side">
       <img
         :src="BOOK_URL"
         alt="Livret PDF masterclass basse – notation et tablature"
       />
+      <span class="mc-book-badge">PDF inclus · Méthode structurée</span>
     </div>
 
-    <div class="mc-book-copy">
-     <h2>Un livret pédagogique structuré en 2 volets</h2>
+    <!-- CONTENU -->
+    <div class="mc-content-side">
 
+      <h2>
+        Un livret structuré<br />
+        <span>pour construire ton improvisation</span>
+      </h2>
+
+      <p class="mc-lead">
+        En plus de la vidéo, tu reçois un livret clair,
+        progressif et directement applicable à la basse.
+      </p>
+
+      <div class="mc-pillars">
+
+ <div class="mc-pillar">
+  <h3>Volet harmonique</h3>
+
+  <div class="mc-step">
+<span>Étape 1 · Créer un point de départ clair</span>
 <p>
-  En plus de la vidéo, tu reçois un livret complet
-  qui te guide étape par étape dans la construction
-  de ton improvisation.
+  La gamme de G majeur sert de base commune.
+  Elle permet d’entrer progressivement
+  dans la logique harmonique
+  sans surcharge technique.
 </p>
 
-<h3>Volet harmonique</h3>
-<ul>
-  <li>✔ Repérage précis de la gamme de référence (G majeur)</li>
-  <li>✔ Travail des accords de 10ème adaptés à la basse</li>
-  <li>✔ Association réservoir de notes & accords</li>
-  <li>✔ Exercices progressifs + improvisations guidées</li>
-</ul>
+  </div>
 
-<h3>Volet rythmique</h3>
-<ul>
-  <li>✔ Travail des débits binaires et ternaires</li>
-  <li>✔ Ghost-notes & accents</li>
-  <li>✔ Mélanges rythmiques contrôlés</li>
-  <li>✔ Mise en pratique en groove réel</li>
-</ul>
-
+  <div class="mc-step">
+<span>Étape 2 · Cartographier le manche</span>
 <p>
-  Une méthode complète pour relier harmonie,
-  direction mélodique et groove.
+  Les accords de 10ème deviennent des points d’ancrage.
+  Ils te permettent de sortir du jeu linéaire,
+  de penser verticalement et de structurer
+  le manche avec des repères harmoniques clairs.
 </p>
 
+  </div>
+
+  <div class="mc-step">
+<span>Étape 3 · Structurer le manche</span>
+<p>
+  Les accords de 10ème deviennent des points d’ancrage.
+  Chaque degré révèle son réservoir de notes
+  (les modes correspondants).
+  Tu ne joues plus des positions,
+  tu comprends la logique harmonique du manche.
+</p>
+
+
+  </div>
+</div>
+
+
+
+ <div class="mc-pillar">
+  <h3>Volet rythmique</h3>
+
+  <div class="mc-step">
+    <span>Étape 1 · Identifier les débits</span>
+    <p>
+      Doubles croches et triolets en ghost-notes
+      puis avec accents pour installer la précision.
+    </p>
+  </div>
+
+  <div class="mc-step">
+    <span>Étape 2 · Mélanger les débits</span>
+    <p>
+      Combiner binaire et ternaire,
+      travailler les accents pour garder la stabilité.
+    </p>
+  </div>
+
+  <div class="mc-step">
+    <span>Étape 3 · Groover</span>
+    <p>
+      Mise en pratique complète :
+      construire un groove solide à partir des débits travaillés.
+    </p>
+  </div>
+</div>
+
+
+
+      </div>
+
+      <p class="mc-conclusion">
+        Une méthode complète pour relier harmonie,
+        direction mélodique et groove.
+      </p>
 
       <button class="mc-cta" @click="open">
         Recevoir gratuitement
       </button>
+
     </div>
 
   </div>
 
 </section>
 
-<div class="mc-separator"></div>
+
 
     <!-- PROBLÈME -->
     <section class="section text">
@@ -350,70 +472,147 @@ Recevoir la masterclass gratuite
   </div>
 
 </section>
-<section class="section text internal-bridge">
-  <h2>Aller plus loin après la masterclass</h2>
- <p>
-  Cette masterclass pose les bases.
-  Si tu veux approfondir la méthode complète,
-  structurer ton jeu et gagner en liberté sur le long terme,
-  la formation dédiée va beaucoup plus loin.
-</p>
+<section class="bridge-flat">
 
-   <a href="/improvisationcadentielle" class="bridge-cta">
-  Découvrir la formation complète
-</a>
+  <div class="bridge-flat-inner">
+
+    <h2>Aller plus loin après la masterclass</h2>
+
+    <p class="bridge-flat-lead">
+      Cette masterclass pose les bases.
+      Si tu veux structurer ton jeu en profondeur
+      et développer une vraie liberté sur le long terme,
+      la formation complète va beaucoup plus loin.
+    </p>
+
+    <a href="/improvisationcadentielle" class="bridge-flat-cta">
+      Découvrir la formation complète
+    </a>
+
+  </div>
 
 </section>
 
 
-    <!-- CIBLE SEO -->
-    <section class="section text">
-      <h2>À qui s’adresse cette masterclass basse ?</h2>
 
-      <p>
-        Cette masterclass s’adresse aux bassistes débutants,
-        intermédiaires et avancés qui souhaitent mieux comprendre
-        l’harmonie à la basse, développer leur groove
-        et construire des lignes solides dans tous les styles.
+<section class="bridge-cours-premium">
+
+  <div class="bridge-inner">
+
+    <div class="bridge-copy">
+      <span class="bridge-tag">🎸 Accompagnement individuel</span>
+
+      <h2>
+        Envie d’un suivi personnalisé<br />
+        <span>avec feedback réel ?</span>
+      </h2>
+
+      <p class="bridge-lead">
+        Va plus loin qu’une simple masterclass.
+        Bénéficie d’un cadre structuré,
+        d’exercices adaptés à ton niveau
+        et d’un retour précis sur ton jeu.
       </p>
 
-      <p>
-        Que tu joues en groupe, en studio ou en solo,
-        savoir quoi jouer et quand le jouer
-        est essentiel pour progresser durablement.
-      </p>
+      <ul class="bridge-points">
+        <li>✔ Analyse de ton jeu en direct</li>
+        <li>✔ Objectifs clairs et progressifs</li>
+        <li>✔ Méthode structurée sur le long terme</li>
+      </ul>
 
-<p>
-  Elle convient également aux musiciens qui souhaitent
-  apprendre l’improvisation à la basse
-  et comprendre l’harmonie à la basse
-  de manière claire et structurée.
-</p>
+      <a href="/cours-de-basse-en-ligne" class="bridge-cta">
+        Découvrir les cours personnalisés
+      </a>
+    </div>
+
+  </div>
+
+</section>
 
 
-    </section>
 
-    <!-- FAQ SEO -->
-    <section class="section text">
-      <h2>Questions fréquentes</h2>
+   <section class="target-flat">
 
-      <h3>La masterclass basse est-elle vraiment gratuite ?</h3>
-      <p>
-        Oui. L’accès à la vidéo et au livret PDF est entièrement gratuit.
-      </p>
+  <div class="target-inner">
 
-      <h3>Faut-il connaître le solfège ?</h3>
-      <p>
-        Non. Les notions sont expliquées simplement
-        et applicables immédiatement à la basse.
-      </p>
+    <h2>À qui s’adresse cette masterclass ?</h2>
 
-      <h3>Quel niveau faut-il avoir ?</h3>
-      <p>
-        Elle convient aux bassistes débutants comme intermédiaires
-        souhaitant structurer leur jeu.
-      </p>
-    </section>
+    <p class="target-lead">
+      Cette masterclass s’adresse aux bassistes
+      qui veulent comprendre l’harmonie,
+      développer leur groove
+      et construire des lignes solides.
+    </p>
+
+    <div class="target-columns">
+
+      <div>
+        <h3>Pour les débutants</h3>
+        <p>
+          Installer des bases claires
+          et comprendre quoi jouer dans un morceau.
+        </p>
+      </div>
+
+      <div>
+        <h3>Pour les intermédiaires</h3>
+        <p>
+          Structurer leur jeu
+          et gagner en cohérence harmonique.
+        </p>
+      </div>
+
+      <div>
+        <h3>Pour les avancés</h3>
+        <p>
+          Approfondir la logique du manche
+          et affiner leur liberté d’improvisation.
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+   <section class="faq-premium">
+
+  <div class="faq-inner">
+    <h2>Questions fréquentes</h2>
+
+    <div class="faq-list">
+
+      <details class="faq-item">
+        <summary>La masterclass est-elle vraiment gratuite ?</summary>
+        <p>
+          Oui. L’accès à la vidéo et au livret PDF est entièrement gratuit.
+          Aucun paiement n’est demandé.
+        </p>
+      </details>
+
+      <details class="faq-item">
+        <summary>Faut-il connaître le solfège ?</summary>
+        <p>
+          Non. Les notions sont expliquées simplement
+          et applicables immédiatement à la basse.
+        </p>
+      </details>
+
+      <details class="faq-item">
+        <summary>Quel niveau faut-il avoir ?</summary>
+        <p>
+          Elle convient aux bassistes débutants comme intermédiaires
+          souhaitant structurer leur jeu.
+        </p>
+      </details>
+
+    </div>
+  </div>
+
+</section>
+
 
     <!-- CTA FINAL -->
     <section class="section text" style="text-align:center">
@@ -437,6 +636,8 @@ Recevoir la masterclass gratuite
       </div>
     </div>
   </Teleport>
+  <MarketingFooter />
+
 </template>
 
 
@@ -486,7 +687,7 @@ padding-top:20px;
   position: relative;
   width: 100%;
   max-width: 900px;
-  margin: 4rem auto;
+  margin: 2.5rem auto;
 
   height: 1px;
   background: linear-gradient(
@@ -509,6 +710,39 @@ padding-top:20px;
   height: 1px;
 
   background: rgba(245,158,11,0.25);
+}
+
+
+.mc-feature {
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+
+  margin-bottom: 0.9rem;
+
+  transition: all 0.25s ease;
+}
+
+.mc-feature:hover {
+  border-color: rgba(245,158,11,0.4);
+  transform: translateX(4px);
+}
+
+.mc-feature span {
+  display: block;
+  font-weight: 700;
+  font-size: 0.92rem;
+  margin-bottom: 0.3rem;
+  color: #fff;
+}
+
+.mc-feature p {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ======================================================
@@ -639,8 +873,10 @@ padding-top:20px;
 /* alternance légère */
 .section:nth-of-type(even) {
   background: rgba(255,255,255,0.02);
-  border-top: 1px solid var(--border-soft);
-  border-bottom: 1px solid var(--border-soft);
+  border-top: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* ======================================================
@@ -654,19 +890,28 @@ padding-top:20px;
 }
 
 .card {
-  position: relative;
-  padding: 2rem 1.6rem;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 18px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border-soft);
-  backdrop-filter: blur(8px);
-  transition: all 0.25s ease;
+  padding: 2rem 1.6rem;
+  transition: transform 0.25s ease;
 }
 
 .card:hover {
-  transform: translateY(-6px);
-  border-color: rgba(245,158,11,0.4);
+  transform: translateY(-4px);
+  border-color: rgba(245,158,11,0.3);
 }
+
+.mc-title {
+  letter-spacing: -0.02em;
+}
+
+.mc-sub {
+  font-size: 1.05rem;
+  opacity: 0.9;
+}
+
+
 
 .card h3 {
   background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
@@ -766,7 +1011,7 @@ padding-top:20px;
 ====================================================== */
 
 .mc-hero {
-  padding: clamp(3rem, 6vh, 5rem) 1.5rem;
+  padding: clamp(2rem, 4vh, 3.5rem) 1.5rem 2rem;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -1022,28 +1267,20 @@ padding-top:20px;
 ====================================================== */
 
 .internal-bridge {
-  position: relative;
   max-width: 880px;
   margin: 5rem auto;
-  padding: 4rem 2.5rem;
+  padding: 3.5rem 2rem;
 
   text-align: center;
 
-  border-radius: 28px;
+  border-radius: 24px;
 
-  background:
-    radial-gradient(circle at 50% 0%,
-      rgba(245,158,11,0.18),
-      rgba(245,158,11,0.05) 40%,
-      rgba(255,255,255,0.02) 100%
-    );
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
 
-  border: 1px solid rgba(245,158,11,0.35);
-
-  box-shadow:
-    0 40px 100px rgba(0,0,0,0.6),
-    inset 0 0 0 1px rgba(255,255,255,0.05);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.5);
 }
+
 
 .internal-bridge h2 {
   font-size: 2rem;
@@ -1195,6 +1432,467 @@ padding-top:20px;
 .acquis-card:hover .acquis-icon {
   transform: translateY(-4px);
   box-shadow: 0 12px 25px rgba(245,158,11,0.35);
+}
+/* accompagnement perso */
+.bridge-cours-premium {
+  margin: 6rem auto;
+  padding: 4.5rem 2.5rem;
+  max-width: 1100px;
+  border-radius: 32px;
+
+  background:
+    radial-gradient(circle at 20% 0%,
+      rgba(245,158,11,0.15),
+      transparent 60%),
+    linear-gradient(180deg,
+      rgba(15,18,28,0.95),
+      rgba(5,5,9,1));
+
+  border: 1px solid rgba(245,158,11,0.35);
+
+  box-shadow:
+    0 50px 120px rgba(0,0,0,0.7),
+    inset 0 0 0 1px rgba(255,255,255,0.05);
+
+  text-align: center;
+}
+
+.bridge-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 1.4rem;
+
+  background: rgba(245,158,11,0.15);
+  border: 1px solid rgba(245,158,11,0.4);
+  color: var(--accent-1);
+  font-weight: 700;
+}
+
+.bridge-cours-premium h2 {
+  font-size: 2.1rem;
+  font-weight: 900;
+  margin-bottom: 1.4rem;
+  line-height: 1.2;
+}
+
+.bridge-cours-premium h2 span {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bridge-lead {
+  max-width: 640px;
+  margin: 0 auto 2rem;
+  line-height: 1.8;
+  color: var(--text-soft);
+  font-size: 1.05rem;
+}
+
+.bridge-points {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto 2.5rem;
+  max-width: 520px;
+  text-align: left;
+  color: var(--text-soft);
+}
+
+.bridge-points li {
+  margin-bottom: 0.8rem;
+}
+
+.bridge-cta {
+  display: inline-block;
+  padding: 0.95rem 2.2rem;
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  color: #fff;
+
+  box-shadow: 0 15px 40px rgba(245,158,11,0.35);
+
+  transition: all 0.25s ease;
+}
+
+.bridge-cta:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 50px rgba(245,158,11,0.5);
+}
+
+/* FAQ */
+.faq-premium {
+  margin: 7rem auto;
+  padding: 5rem 2rem;
+  max-width: 900px;
+
+  border-radius: 30px;
+
+  background:
+    linear-gradient(180deg,
+      rgba(15,18,28,0.95),
+      rgba(8,10,16,1));
+
+  border: 1px solid rgba(255,255,255,0.08);
+
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.7);
+}
+
+.faq-premium h2 {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 900;
+  margin-bottom: 3rem;
+  color: #fff; /* ← forcer visible */
+
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+
+}
+
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* ITEM */
+
+.faq-item {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px;
+  padding: 1.2rem 1.4rem;
+  transition: all 0.25s ease;
+}
+
+.faq-item[open] {
+  border-color: rgba(245,158,11,0.5);
+  box-shadow: 0 12px 30px rgba(245,158,11,0.15);
+}
+
+/* SUMMARY */
+
+.faq-item summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1rem;
+  list-style: none;
+  position: relative;
+  padding-right: 1.5rem;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+/* petite flèche custom */
+
+.faq-item summary::after {
+  content: "+";
+  position: absolute;
+  right: 0;
+  font-weight: 900;
+  transition: transform 0.25s ease;
+}
+
+.faq-item[open] summary::after {
+  content: "–";
+}
+
+/* TEXT */
+
+.faq-item p {
+  margin-top: 1rem;
+  color: var(--text-soft);
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
+
+/* section wide */
+.bridge-flat {
+  width: 100%;
+  padding: 6rem 2rem;
+}
+
+.bridge-flat-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.bridge-flat h2 {
+  font-size: 2.2rem;
+  font-weight: 900;
+  margin-bottom: 1.6rem;
+}
+
+.bridge-flat-lead {
+  max-width: 720px;
+  margin: 0 auto 2.5rem;
+  line-height: 1.8;
+  font-size: 1.05rem;
+  color: var(--text-soft);
+}
+
+.bridge-flat-cta {
+  display: inline-block;
+  padding: 1rem 2.4rem;
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+
+  background: transparent;
+  border: 2px solid var(--accent-1);
+  color: var(--accent-1);
+
+  transition: all 0.25s ease;
+}
+
+.bridge-flat-cta:hover {
+  background: var(--accent-1);
+  color: #000;
+}
+
+
+.mc-included-upgrade {
+  margin: 3.5rem auto;
+  padding: 3.5rem 2rem;
+  max-width: 1200px;
+}
+
+.mc-included-container {
+  display: grid;
+  grid-template-columns: 0.8fr 1.6fr; /* image plus petite, texte plus large */
+  gap: 4rem;
+  align-items: center;
+}
+
+
+/* ========= BOOK SIDE ========= */
+
+.mc-book-side {
+  position: relative;
+  text-align: center;
+}
+
+.mc-book-side img {
+  max-width: 420px;
+  width: 100%;
+  height: auto;
+
+  filter: drop-shadow(0 50px 100px rgba(0,0,0,0.7));
+  transition: transform 0.3s ease;
+}
+
+.mc-book-side img:hover {
+  transform: translateY(-8px);
+}
+
+.mc-book-badge {
+  display: inline-block;
+  margin-top: 1.4rem;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  border-radius: 999px;
+
+  background: rgba(245,158,11,0.15);
+  border: 1px solid rgba(245,158,11,0.4);
+  color: var(--accent-1);
+  font-weight: 700;
+}
+
+/* ========= CONTENT SIDE ========= */
+
+.mc-content-side h2 {
+  font-size: 2.2rem;
+  font-weight: 900;
+  margin-bottom: 1.4rem;
+  line-height: 1.2;
+}
+
+.mc-content-side h2 span {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.mc-lead {
+  color: var(--text-soft);
+  margin-bottom: 2.5rem;
+  line-height: 1.8;
+  font-size: 1.05rem;
+}
+
+/* ========= PILLARS ========= */
+
+.mc-pillars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.8rem;
+  margin-bottom: 2rem;
+}
+
+.mc-pillar {
+  padding: 1.8rem 1.6rem;
+  border-radius: 20px;
+
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+
+  transition: all 0.25s ease;
+}
+
+.mc-pillar:hover {
+  border-color: rgba(245,158,11,0.5);
+  transform: translateY(-4px);
+}
+
+.mc-pillar h3 {
+  text-align: center;
+  font-weight: 900;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+
+  color: var(--accent-1);
+
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.4);
+}
+
+
+.mc-pillar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.mc-pillar li {
+  margin-bottom: 0.6rem;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+/* ========= CONCLUSION ========= */
+
+.mc-conclusion {
+  margin-bottom: 2rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+/* ========= RESPONSIVE ========= */
+
+@media (max-width: 950px) {
+  .mc-included-container {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .mc-pillars {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.mc-step {
+  padding: 1.2rem 1.2rem;
+  border-radius: 16px;
+  margin-bottom: 1rem;
+
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+
+  transition: all 0.25s ease;
+}
+
+.mc-step:hover {
+  border-color: rgba(245,158,11,0.4);
+}
+
+.mc-step span {
+  display: block;
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent-1);
+}
+
+.mc-step p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+.bridge-flat,
+.target-flat {
+  background: #0f1422;
+}
+
+.target-flat {
+  width: 100%;
+  padding: 6rem 2rem;
+
+  text-align: center;
+
+  border-top: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.target-inner {
+  max-width: 820px; /* plus étroit → effet bloc info */
+  margin: 0 auto;
+}
+
+.target-flat h2 {
+  font-size: 2.2rem;
+  font-weight: 900;
+  margin-bottom: 2.5rem;
+}
+
+.target-lead {
+  margin: 0 auto 3rem;
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: var(--text-soft);
+}
+
+/* On casse l’effet “3 cartes” */
+.target-columns {
+  display: block; /* plus de grid */
+}
+
+.target-columns > div {
+  margin-bottom: 2rem;
+}
+
+.target-columns h3 {
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-bottom: 0.6rem;
+
+  text-transform: uppercase;
+  letter-spacing: 1px;
+
+  color: var(--accent-1);
+}
+
+.target-columns p {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+}
+.mc-copy {
+  max-width: 520px;
 }
 
 
