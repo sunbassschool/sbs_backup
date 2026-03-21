@@ -417,6 +417,8 @@ saveFeedbackToCache(list) {
 ,
 
         async deleteFeedback(id) {
+          const auth = useAuthStore() // 🔥 AJOUT
+
   if (!confirm("❗ Supprimer ce feedback ?")) return;
 
 if (!auth.jwt) return
@@ -533,26 +535,28 @@ nettoyerContenu(contenu) {
 }
 
 ,
-    async sendReply(feedbackId) {
+async sendReply(feedbackId) {
+  const auth = useAuthStore()
+
   const texte = this.reponses[feedbackId]?.trim();
   if (!texte) return;
 
   this.sendingReply[feedbackId] = true;
 
-if (!auth.jwt) return
+  if (!auth.jwt) return
 
   const url = getProxyPostURL()
 
-const payload = {
-  route: "replytofeedback",
-  jwt: auth.jwt,
-  feedback_id: Number(String(feedbackId).replace("ID", "")),
-  contenu: texte,
-id_eleve: auth.user?.id || auth.user?.email,
-  prenom: auth.user?.prenom,
-  email: auth.user?.email,   // 🔥 obligatoire !
-  type: "Élève"
-};
+  const payload = {
+    route: "replytofeedback",
+    jwt: auth.jwt,
+    feedback_id: Number(String(feedbackId).replace("ID", "")),
+    contenu: texte,
+    id_eleve: auth.user?.id || auth.user?.email,
+    prenom: auth.user?.prenom,
+    email: auth.user?.email,
+    type: "Élève"
+  };
 
 
 
@@ -786,6 +790,7 @@ if (realIndex !== -1) {
 
 ,
 async markAsRead(feedbackId) {
+
   console.log("📤 feedbackId reçu dans front :", feedbackId, typeof feedbackId);
 
 const auth = useAuthStore()

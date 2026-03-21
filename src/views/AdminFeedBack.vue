@@ -174,14 +174,17 @@
 
 
 <!-- 💬 Liste des feedbacks -->
-<div v-if="readyToShowFeedbacks && showGlobalFeedbacks && selectedEleve">
+<div v-if="showGlobalFeedbacks && selectedEleve">
 
 
 
+<!-- 🔒 Gate strict -->
+<SBSLoading
+  v-if="isLoadingFeedbacks || !readyToShowFeedbacks"
+  label="Chargement des feedbacks…"
+/>
 
-<div v-if="isLoadingFeedbacks" class="d-flex justify-content-center my-3">
-  <div class="spinner-border text-danger spinner-border-sm" role="status" style="width: 1.5rem; height: 1.5rem;"></div>
-</div>
+<div v-else>
 
 
 
@@ -422,7 +425,7 @@
         </div>
 
 
-</div>
+</div></div>
 <!-- 🔽 Afficher plus / Réduire -->
 <div v-if="filteredFeedbacksByMonth.length > defaultFeedbackDisplayLimit" class="text-center mt-3">
   <!-- Afficher plus -->
@@ -468,7 +471,7 @@ export default {
 
       eleves: [],
           elevesHorsInscrits: [], // ⬅️ Ajout ici
-
+planningCache: {},
       showUnread: false,
       isLoadingFeedbacks: false,
 feedbackDisplayLimit: 2,
@@ -547,13 +550,14 @@ canSendFeedback() {
 
 
   },
+
 async mounted() {
   const hasCache = this.loadFromCache()
 
-  // affichage immédiat
-  this.readyToShowFeedbacks = true
+this.readyToShowFeedbacks = false
+  const ok = await this.waitForProfId()
+  if (!ok) return
 
-  // refresh silencieux
   this.fetchEleves({ silent: hasCache })
   this.fetchAllFeedbacks({ silent: hasCache })
 }
@@ -567,6 +571,20 @@ async mounted() {
 }
 
 ,
+  async waitForProfId() {
+    const timeout = 3000
+    const start = Date.now()
+
+    while (!this.auth?.user?.prof_id) {
+      if (Date.now() - start > timeout) {
+        console.warn("⛔ prof_id toujours absent après attente")
+        return false
+      }
+      await new Promise(r => setTimeout(r, 50))
+    }
+
+    return true
+  },
 normalizeId(raw) {
     if (raw === "" || raw === null || raw === undefined) return null
     const n = Number(String(raw).replace("ID", ""))
@@ -791,42 +809,61 @@ async handleEleveSelect() {
     this.selectedEleve = null;
 
    await this.fetchAllFeedbacks({ silent: true });
-this.feedbacks = this.feedbacksAll.reverse();
+this.feedbacks = [...this.feedbacksAll].reverse()
 
     this.readyToShowFeedbacks = true;
-    this.feedbacks = this.feedbacksAll.reverse();
+    this.feedbacks = [...this.feedbacksAll].reverse()
+} else {
+  const eleve =
+    this.eleves.find(e => e.email === this.selectedEleveEmail) ||
+    this.elevesHorsInscrits.find(e => e.email === this.selectedEleveEmail);
+
+  if (!eleve) return;
+
+  // 🔥 TOKEN anti race
+  const token = Date.now();
+  this._lastToken = token;
+
+  // 🔥 RESET AVANT TOUT
+  this.isLoadingFeedbacks = true;
+  this.readyToShowFeedbacks = false;
+
+  this.feedbacks = [];
+  this.reponsesMap = {};
+  this.availableMonths = [];
+  this.selectedMonth = "ALL";
+  this.openedFeedbacks = [];
+
+  await this.$nextTick();
+
+  // 🔥 assignation APRÈS reset
+  this.selectedEleve = eleve;
+
+  if (eleve.statut === "inscrit") {
+    await this.fetchPlanningForEleve(eleve.email, eleve.prenom);
   } else {
-    // 🛠️ CHANGEMENT ICI
-    const eleve =
-      this.eleves.find(e => e.email === this.selectedEleveEmail) ||
-      this.elevesHorsInscrits.find(e => e.email === this.selectedEleveEmail);
-
-    if (!eleve) return;
-
-    this.selectedEleve = eleve;
-
-    if (eleve.statut === "inscrit") {
-      await this.fetchPlanningForEleve(eleve.email, eleve.prenom);
-    } else {
-      this.datesCoursEleve = []; // 💡 vide car pas de planning
-    }
-
-    this.searchTerm = `${eleve.prenom} ${eleve.nom}`;
-    this.filteredEleves = [];
-    this.nouveauFeedback = localStorage.getItem(`feedback_draft_${eleve.email}`) || "";
-
-    this.isLoadingFeedbacks = true;
-
-    if (!this.feedbacksAll.length) {
-      await this.fetchAllFeedbacks();
-    }
-
-    this.filterFeedbacksForEleve(eleve);
-    this.selectedMonth = "ALL";
-
-    this.isLoadingFeedbacks = false;
-    this.readyToShowFeedbacks = true;
+    this.datesCoursEleve = [];
   }
+
+  this.searchTerm = `${eleve.prenom} ${eleve.nom}`;
+  this.filteredEleves = [];
+  this.nouveauFeedback =
+    localStorage.getItem(`feedback_draft_${eleve.email}`) || "";
+
+
+
+  // 🔒 anti race
+  if (this._lastToken !== token) return;
+
+  this.filterFeedbacksForEleve(eleve);
+
+  // 🔒 anti race
+  if (this._lastToken !== token) return;
+
+  // 🔥 affichage final
+  this.readyToShowFeedbacks = true;
+  this.isLoadingFeedbacks = false;
+}
 }
 
 
@@ -834,32 +871,42 @@ this.feedbacks = this.feedbacksAll.reverse();
 
 ,
 async fetchPlanningForEleve(emailVal, prenomVal) {
-  const jwt = await getValidToken();
-const profId = this.auth?.user?.prof_id;
 
-const proxyUrl = getProxyGetURL(
-  `route=planning` +
-  `&email=${encodeURIComponent(emailVal)}` +
-  `&prenom=${encodeURIComponent(prenomVal)}` +
-  `&prof_id=${encodeURIComponent(profId)}` +
-  `&jwt=${encodeURIComponent(jwt)}`
-)
+  if (this.planningCache[emailVal]) {
+    this.datesCoursEleve = this.planningCache[emailVal]
+    return
+  }
+
+  const jwt = await getValidToken();
+  const profId = this.auth?.user?.prof_id;
+
+  const proxyUrl = getProxyGetURL(
+    `route=planning` +
+    `&email=${encodeURIComponent(emailVal)}` +
+    `&prenom=${encodeURIComponent(prenomVal)}` +
+    `&prof_id=${encodeURIComponent(profId)}` +
+    `&jwt=${encodeURIComponent(jwt)}`
+  )
 
   try {
     const res = await fetch(proxyUrl);
     const data = await res.json();
+
     if (data.success && Array.isArray(data.planning)) {
-      this.datesCoursEleve = data.planning
+      const dates = data.planning
         .map(c => new Date(c.date))
         .filter(dt => !isNaN(dt))
         .sort((a, b) => b - a)
         .map(dt => dt.toISOString());
+
+      this.planningCache[emailVal] = dates
+      this.datesCoursEleve = dates
     } else {
-      this.datesCoursEleve = [];
+      this.datesCoursEleve = []
     }
+
   } catch (err) {
-    console.error("❌ Erreur fetchPlanningForEleve :", err);
-    this.datesCoursEleve = [];
+    this.datesCoursEleve = []
   }
 }
 ,
@@ -917,11 +964,18 @@ async fetchEleves({ silent = false } = {}) {
     const jwt = await getValidToken()
 const proxyUrl = getProxyPostURL()
 
-    const payload = {
-      route: "getelevesbyprof",
-      jwt,
-      prof_id: this.auth?.user?.prof_id
-    }
+const profId = this.auth?.user?.prof_id
+
+if (!profId) {
+  console.warn("⛔ prof_id manquant — appel bloqué")
+  return
+}
+
+const payload = {
+  route: "getelevesbyprof",
+  jwt,
+  prof_id: profId
+}
 
     console.log("📡 fetchEleves POST → payload =", payload)
     console.log("🌐 proxyUrl =", proxyUrl)
@@ -937,13 +991,27 @@ const proxyUrl = getProxyPostURL()
     const data = await res.json()
     console.log("📥 getelevesbyprof RESPONSE =", data)
 
-    if (!data.success || !Array.isArray(data.eleves)) {
-      console.warn("⚠️ format inattendu getelevesbyprof")
-      return
-    }
+ if (!data?.success) {
+  console.warn("⚠️ getelevesbyprof failed", data)
+  return
+}
+
+// 🔥 normalisation
+let eleves = []
+
+if (Array.isArray(data.eleves)) {
+  eleves = data.eleves
+} else if (Array.isArray(data.data)) {
+  eleves = data.data
+} else if (Array.isArray(data.result)) {
+  eleves = data.result
+} else {
+  console.warn("⚠️ format inattendu getelevesbyprof", data)
+  return
+}
 
     // 🧹 filtre admins
-    const nonAdmins = data.eleves.filter(
+   const nonAdmins = eleves.filter(
       e => !e.role || e.role.toLowerCase() !== "admin"
     )
 
