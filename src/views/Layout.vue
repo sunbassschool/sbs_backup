@@ -267,6 +267,19 @@
   :class="{ active: showMenu }"
   @click.stop
 >
+
+
+  <!-- 🔴 CTA GLOBAL -->
+  <router-link
+    to="/eleve/offres"
+    class="nav-link nav-cta-cours"
+  >
+    <i class="bi bi-play-circle-fill"></i>
+    <span>Prendre un cours</span>
+  </router-link>
+
+  <hr class="cta-separator" />
+
       <!-- 🔵 PUBLIC (non connecté) -->
 <template v-if="!isLoggedIn">
 
@@ -1887,7 +1900,37 @@ body.loading-active {
   }
 }
 
+/* CTA principal menu mobile */
+.nav-cta-cours {
+  background: linear-gradient(135deg, #ff7a18, #ff3d00);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  margin: 12px 16px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 6px 18px rgba(255, 61, 0, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
 
+.nav-cta-cours i {
+  font-size: 1.2rem;
+}
+
+.nav-cta-cours:active {
+  transform: scale(0.97);
+  box-shadow: 0 3px 10px rgba(255, 61, 0, 0.25);
+}
+
+/* séparation visuelle */
+.cta-separator {
+  border: none;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 8px 0 12px;
+}
 
 
 </style>

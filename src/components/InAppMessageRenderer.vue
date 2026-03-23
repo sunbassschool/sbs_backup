@@ -62,9 +62,10 @@ watch(
 )
 
 watch(
-  () => auth.authReady,
-  async ready => {
+  () => [auth.authReady, auth.jwt],
+  async ([ready, jwt]) => {
     if (!ready) return
+    if (!jwt) return
     if (inAppFetched.value) return
 
     if (route.path.startsWith("/onboarding")) return
@@ -72,8 +73,7 @@ watch(
 
     inAppFetched.value = true
 
-    await store.fetchMessages(false)
-
+await store.fetchMessages(true)
 if (!store.current) {
   message.value = store.selectMessage({
     trigger: "on_route",
